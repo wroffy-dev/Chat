@@ -1,0 +1,31 @@
+# Local development infrastructure only. Not for production (see docs/16-deployment-and-operations.md).
+#
+# Usage (from the repository root):
+#   cp deploy/.env.dev.example deploy/.env.dev   # then set a local password
+#   docker compose --env-file deploy/.env.dev -f deploy/docker-compose.dev.yml up -d
+#
+# PostgreSQL is published on 127.0.0.1 only, so it is not reachable from other machines.
+# LiveKit is added in Phase 3 (calling).
+
+name: vaultchat-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: vaultchat
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in deploy/.env.dev}
+      POSTGRES_DB: vaultchat
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - vaultchat-dev-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vaultchat -d vaultchat"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  vaultchat-dev-pg:

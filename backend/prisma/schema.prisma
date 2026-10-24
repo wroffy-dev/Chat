@@ -1,0 +1,15 @@
+// Vault Chat database schema. Source of truth for the design: docs/13-database-design.md.
+//
+// Phase 1 (foundation) intentionally defines no models: only connectivity and migration
+// tooling are set up. Tables are added by the phase that needs them, through migrations.
+
+generator client {
+  provider               = "prisma-client"
+  output                 = "../src/generated/prisma"
+  moduleFormat           = "esm"
+  importFileExtension    = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
