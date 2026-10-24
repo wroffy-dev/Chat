@@ -61,7 +61,7 @@ object Push {
         if (!configured) return
         val messaging = FirebaseMessaging.getInstance()
         messaging.isAutoInitEnabled = true
-        val token = suspendCancellableCoroutine { cont ->
+        val token = suspendCancellableCoroutine<String?> { cont ->
             messaging.token.addOnCompleteListener { task -> cont.resume(if (task.isSuccessful) task.result else null) }
         } ?: return
         api.register(token)
