@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { authOf, requestMeta, requireUser } from "../auth/plugin.js";
 import type { AuthService, LoginResult } from "../auth/service.js";
+import type { ConnectionService } from "../connections/service.js";
+import { connectionSchema } from "./connections.js";
 
 const tokenResponse = {
   type: "object",
@@ -26,8 +28,8 @@ function toBody(r: LoginResult) {
 const MINUTE = 60_000;
 
 /** Routes under /api/v1 for app users (docs/14-api-contracts.md §2). */
-export async function authRoutes(app: FastifyInstance, opts: { auth: AuthService }) {
-  const { auth } = opts;
+export async function authRoutes(app: FastifyInstance, opts: { auth: AuthService; connections?: ConnectionService }) {
+  const { auth, connections } = opts;
 
   app.post<{ Body: { username: string; password: string; device?: { model?: string; appVersionCode?: number } } }>(
     "/auth/login",
@@ -132,8 +134,7 @@ export async function authRoutes(app: FastifyInstance, opts: { auth: AuthService
               id: { type: "string" },
               username: { type: "string" },
               mustChangePassword: { type: "boolean" },
-              // Pairing arrives with the QR-connection phase; always null until then.
-              connection: { type: "null" },
+              connection: { anyOf: [{ type: "null" }, connectionSchema] },
             },
           },
         },
@@ -141,7 +142,13 @@ export async function authRoutes(app: FastifyInstance, opts: { auth: AuthService
     },
     async (request) => {
       const { user } = authOf(request);
-      return { id: user.id, username: user.username, mustChangePassword: user.mustChangePassword, connection: null };
+      const c = connections ? await connections.connectionFor(user.id) : null;
+      return {
+        id: user.id,
+        username: user.username,
+        mustChangePassword: user.mustChangePassword,
+        connection: c ? { ...c, createdAt: c.createdAt.toISOString() } : null,
+      };
     },
   );
 }

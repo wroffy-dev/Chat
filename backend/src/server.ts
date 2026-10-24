@@ -4,6 +4,7 @@ import { AdminService } from "./admin/service.js";
 import { buildApp } from "./app.js";
 import { PasswordHasher } from "./auth/passwords.js";
 import { AuthService } from "./auth/service.js";
+import { ConnectionService } from "./connections/service.js";
 import { ConfigError, loadConfig } from "./config/env.js";
 import { PrismaDatabase } from "./db/database.js";
 
@@ -24,14 +25,22 @@ async function main() {
   const hasher = new PasswordHasher({ memoryCost: config.ARGON2_MEMORY_KIB, timeCost: config.ARGON2_TIME_COST });
   const auth = new AuthService(database.prisma, hasher);
   const admin = new AdminService(database.prisma, hasher, config.ADMIN_TOTP_ENC_KEY);
-  const app = buildApp({ config, database, auth });
+  const connections = new ConnectionService(database.prisma);
+  const app = buildApp({ config, database, auth, connections });
   // The database is owned (and closed) by the public app; the admin app shares it.
   const adminApp = buildAdminApp({ config, prisma: database.prisma, database, auth, admin });
+
+  // Hourly housekeeping of spent QR tokens; failures are logged and retried next hour.
+  const housekeeping = setInterval(() => {
+    connections.cleanup().catch((err: unknown) => app.log.warn({ err }, "qr token cleanup failed"));
+  }, 60 * 60 * 1000);
+  housekeeping.unref();
 
   let shuttingDown = false;
   const shutdown = (signal: string) => {
     if (shuttingDown) return;
     shuttingDown = true;
+    clearInterval(housekeeping);
     app.log.info({ signal }, "shutting down");
     const force = setTimeout(() => {
       app.log.error("shutdown timed out, forcing exit");

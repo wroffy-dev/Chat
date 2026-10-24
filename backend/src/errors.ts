@@ -15,6 +15,10 @@ export type ErrorCode =
   | "NOT_FOUND"
   | "METHOD_NOT_ALLOWED"
   | "CONFLICT"
+  | "ALREADY_CONNECTED"
+  | "REQUEST_ALREADY_PENDING"
+  | "REQUEST_NOT_PENDING"
+  | "QR_INVALID_OR_EXPIRED"
   | "PAYLOAD_TOO_LARGE"
   | "UNSUPPORTED_MEDIA_TYPE"
   | "RATE_LIMITED"
@@ -68,6 +72,10 @@ export const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   NOT_FOUND: "Not found.",
   METHOD_NOT_ALLOWED: "Method not allowed.",
   CONFLICT: "The request conflicts with the current state.",
+  ALREADY_CONNECTED: "You are already connected.",
+  REQUEST_ALREADY_PENDING: "A connection request is already waiting for an answer.",
+  REQUEST_NOT_PENDING: "This request has already been answered or has expired.",
+  QR_INVALID_OR_EXPIRED: "This code is no longer valid. Ask for a new one.",
   PAYLOAD_TOO_LARGE: "The request is too large.",
   UNSUPPORTED_MEDIA_TYPE: "Unsupported content type.",
   RATE_LIMITED: "Too many requests. Try again later.",

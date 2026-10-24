@@ -207,7 +207,11 @@ export function buildAdminApp(deps: AdminAppDeps): FastifyInstance {
             <input id="nu" name="username" required maxlength="32" pattern="[a-zA-Z0-9._-]{3,32}">
             <p><button class="primary">Create with temporary password</button></p></form></div>`
       : `<p class="muted">Both user accounts exist. No more can be created.</p>`;
-    return html(reply, page("Users", `<h1>Users</h1>
+    const connection = await prisma.connection.findFirst({ include: { userA: true, userB: true } });
+    const connectionLine = connection
+      ? `<p>Connected: <strong>${esc(connection.userA.username)}</strong> ↔ <strong>${esc(connection.userB.username)}</strong> since ${fmt(connection.createdAt)}. Connections are permanent in this version.</p>`
+      : `<p class="muted">The users are not connected yet (they pair by scanning a QR code in the app).</p>`;
+    return html(reply, page("Users", `<h1>Users</h1>${connectionLine}
       <table><thead><tr><th>Slot</th><th>Username</th><th>Status</th><th>Last seen</th><th>Active sessions</th><th>Actions</th></tr></thead>
       <tbody>${rows.join("") || `<tr><td colspan="6" class="muted">No users yet.</td></tr>`}</tbody></table>${create}`, nav(request)));
   });

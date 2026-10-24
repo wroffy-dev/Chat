@@ -1,7 +1,7 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 
 /** 256-bit random token, base64url, with a short prefix that makes leaked tokens recognisable. */
-export function generateToken(prefix: "vca_" | "vcr_" | "vcadm_"): string {
+export function generateToken(prefix: "vca_" | "vcr_" | "vcadm_" | "vcq_"): string {
   return prefix + randomBytes(32).toString("base64url");
 }
 

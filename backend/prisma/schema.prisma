@@ -4,10 +4,10 @@
 // tooling are set up. Tables are added by the phase that needs them, through migrations.
 
 generator client {
-  provider               = "prisma-client"
-  output                 = "../src/generated/prisma"
-  moduleFormat           = "esm"
-  importFileExtension    = "js"
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
 }
 
 datasource db {
@@ -38,21 +38,28 @@ model User {
 
   sessions Session[]
 
+  ownedQrTokens              QrToken[]           @relation("QrOwner")
+  consumedQrTokens           QrToken[]           @relation("QrConsumer")
+  sentConnectionRequests     ConnectionRequest[] @relation("RequestRequester")
+  receivedConnectionRequests ConnectionRequest[] @relation("RequestOwner")
+  connectionsAsA             Connection[]        @relation("ConnectionA")
+  connectionsAsB             Connection[]        @relation("ConnectionB")
+
   @@map("users")
 }
 
 model AdminAccount {
-  id                 String    @id @default(uuid()) @db.Uuid
+  id               String    @id @default(uuid()) @db.Uuid
   /// Always true and unique: exactly one administrator can exist.
-  singleton          Boolean   @default(true) @unique
-  username           String    @unique
-  passwordHash       String    @map("password_hash")
-  totpSecretEnc      Bytes     @map("totp_secret_enc")
-  totpLastUsedStep   BigInt?   @map("totp_last_used_step")
-  failedLoginCount   Int       @default(0) @map("failed_login_count")
-  throttledUntil     DateTime? @map("throttled_until") @db.Timestamptz(3)
-  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  singleton        Boolean   @unique @default(true)
+  username         String    @unique
+  passwordHash     String    @map("password_hash")
+  totpSecretEnc    Bytes     @map("totp_secret_enc")
+  totpLastUsedStep BigInt?   @map("totp_last_used_step")
+  failedLoginCount Int       @default(0) @map("failed_login_count")
+  throttledUntil   DateTime? @map("throttled_until") @db.Timestamptz(3)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   sessions AdminSession[]
 
@@ -115,4 +122,60 @@ model AuditEvent {
   @@index([occurredAt(sort: Desc)])
   @@index([action, occurredAt(sort: Desc)])
   @@map("audit_events")
+}
+
+// ---------------------------------------------------------------------------------------------
+// QR connection phase (docs/06-qr-connection.md, docs/13-database-design.md §3.5–3.7).
+// The chat `conversations` table is added with the chat phase.
+// ---------------------------------------------------------------------------------------------
+
+model QrToken {
+  id               String    @id @default(uuid()) @db.Uuid
+  ownerUserId      String    @map("owner_user_id") @db.Uuid
+  tokenHash        Bytes     @unique @map("token_hash")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt        DateTime  @map("expires_at") @db.Timestamptz(3)
+  supersededAt     DateTime? @map("superseded_at") @db.Timestamptz(3)
+  consumedAt       DateTime? @map("consumed_at") @db.Timestamptz(3)
+  consumedByUserId String?   @map("consumed_by_user_id") @db.Uuid
+
+  owner      User               @relation("QrOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  consumedBy User?              @relation("QrConsumer", fields: [consumedByUserId], references: [id], onDelete: SetNull)
+  request    ConnectionRequest?
+
+  @@map("qr_tokens")
+}
+
+model ConnectionRequest {
+  id              String    @id @default(uuid()) @db.Uuid
+  qrTokenId       String?   @unique @map("qr_token_id") @db.Uuid
+  requesterUserId String    @map("requester_user_id") @db.Uuid
+  ownerUserId     String    @map("owner_user_id") @db.Uuid
+  /// pending | accepted | rejected | cancelled | expired (CHECK in SQL)
+  status          String    @default("pending")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt       DateTime  @map("expires_at") @db.Timestamptz(3)
+  decidedAt       DateTime? @map("decided_at") @db.Timestamptz(3)
+
+  qrToken    QrToken?    @relation(fields: [qrTokenId], references: [id], onDelete: SetNull)
+  requester  User        @relation("RequestRequester", fields: [requesterUserId], references: [id], onDelete: Cascade)
+  owner      User        @relation("RequestOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  connection Connection?
+
+  @@map("connection_requests")
+}
+
+model Connection {
+  id                   String   @id @default(uuid()) @db.Uuid
+  userAId              String   @map("user_a_id") @db.Uuid
+  userBId              String   @map("user_b_id") @db.Uuid
+  createdFromRequestId String?  @unique @map("created_from_request_id") @db.Uuid
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  userA       User               @relation("ConnectionA", fields: [userAId], references: [id], onDelete: Restrict)
+  userB       User               @relation("ConnectionB", fields: [userBId], references: [id], onDelete: Restrict)
+  fromRequest ConnectionRequest? @relation(fields: [createdFromRequestId], references: [id], onDelete: SetNull)
+
+  @@unique([userAId, userBId])
+  @@map("connections")
 }
