@@ -4,8 +4,9 @@ A private, Android-only app for **exactly two pre-approved people**: high-qualit
 calls, plus text-only chat whose messages disappear for both users when either leaves the chat.
 Distributed as a privately signed APK, not on Google Play.
 
-> **Project status: 3 of 7 phases done** (foundation, accounts/admin, QR pairing). Verified with tests, CI
-> and against a real backend — not yet on physical phones. Calls and chat are not built yet. Live status:
+> **Project status: 3 of 7 phases done** (foundation, accounts/admin, QR pairing); **calling in progress** —
+> server and app logic built and tested, but no real call has been made yet (no LiveKit server or phones
+> available in the build environment). Chat not built yet. Live status:
 > [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
 
 ## Repository layout

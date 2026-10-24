@@ -15,7 +15,7 @@ Last updated: 2026-10-24 (UTC), after the QR-connection phase.
 | 1 | Foundation | **Done** — backend verified locally and in CI; Android builds, unit-tests and lints in CI. Not yet launched on an emulator/device |
 | 2 | Authentication and Admin Console | **Done (backend verified; Android verified in CI, not yet on a device)** — see below |
 | 3 | QR connection (moved before calling, Q-1) | **Done (backend verified; Android logic verified on JVM and against the real backend; screens compiled in CI, not yet on a device)** |
-| 4 | Calling | Not started — next |
+| 4 | Calling | **In progress (first slice built)** — server + app logic verified; real media untested (no LiveKit server or phones available here). See below |
 | 5 | Text chat | Not started — D-01/D-02 decided 2026-10-24, no longer blocked |
 | 6 | Security and reliability | Not started |
 | 7 | Private release | Not started |
@@ -171,11 +171,46 @@ user. Server logs scanned afterwards: no passwords or tokens present.
 - [x] Edge cases from docs/06 §6 covered by tests (simultaneous scans, refresh after scan, cross-scans, expiry, wrong user).
 - [ ] Two phones pair by actually scanning each other's screen — **not yet done** (needs devices).
 
+## Phase 4 — Calling (first slice)
+
+### Backend
+
+| Item | Status | Evidence |
+|---|---|---|
+| Migration `calls`: `calls`, `call_diagnostics`; one live call per connection (partial unique index) | Done (verified) | Applied locally; tests |
+| LiveKit token issuing: identity = user id, 10-min TTL, one room, camera + microphone only, no data/screen share/room create/admin | Done (verified) | Test decodes the real JWT and checks every grant |
+| Backend-only room creation (`maxParticipants: 2`); `room.auto_create: false` in LiveKit config | Done (code) — LiveKit server not run here | RoomService calls go to a recording fake in tests |
+| Call state machine: start (caller pre-joins), accept/decline/cancel, idempotent end, fresh token, current call | Done (verified) | Integration tests incl. both users calling at once (one 201, one 409) |
+| Ring timeout 45 s → missed; accepted but nobody joined in 30 s → failed (sweep every 5 s) | Done (verified) | Tests with injected clock |
+| LiveKit webhooks: signature verified on the raw body; participant_joined → active; room_finished → ended | Done (verified) | Tests sign with the real SDK; forged and tampered requests → 401 |
+| Diagnostics summary (numbers/labels only, ≤ 40 keys) | Done (verified) | Nested objects rejected |
+| Calling disabled cleanly without LiveKit config (`503 MEDIA_UNAVAILABLE`) | Done (verified) | Test |
+| Local LiveKit in `deploy/docker-compose.dev.yml` (pinned v1.13.7, dev config, keys from `.env.dev`) | Done (config validated with `docker compose config`) — not run: no Docker daemon here | |
+
+### Android
+
+| Item | Status | Evidence |
+|---|---|---|
+| `CallController` (ringing, accept/decline, polling, remote join/leave, reconnect + 30 s give-up, join watchdog, one cleanup path, diagnostics) | Done (verified on JVM) | 10 tests with virtual time |
+| `RemoteCallRepository` | Done (compiled on JVM) | |
+| `LiveKitMediaSession` (adaptive stream + dynacast, mic/camera, switch camera, speaker/earpiece, video tracks) | Done — CI compile pending at time of writing | API names checked against SDK v2.29.1 source |
+| Call screen (all phases, controls, permission prompts, keep-screen-on, Back = hang up), Home call buttons | Done — CI compile pending | Not run on a device |
+
+### Known limitations of this slice (planned next)
+
+- **Calls ring only while the callee's app is open** (polling `GET /calls/current` every 3 s). FCM push,
+  full-screen incoming-call UI and `core-telecom` integration are not built yet.
+- **No foreground service yet:** a call may be cut off if the app goes to the background.
+- **No real media test yet:** no LiveKit server or phones were available in this environment. The first
+  real call needs a local LiveKit (`deploy/docker-compose.dev.yml`) or the VPS, plus two devices.
+- Quality settings (1080p capability check, codec choice, thermal caps) and detailed WebRTC stats are not
+  wired yet; LiveKit defaults (720p capture, simulcast) apply.
+
 ## Next task
 
-1. Run on two emulators/phones against a local backend: login → Show QR on one, Scan on the other →
-   accept → both Home screens show the connection.
-2. Calling phase, first slice: LiveKit in `deploy/docker-compose.dev.yml` (dev mode, local only),
-   `calls` table, `POST /calls` + accept/decline/cancel/end + LiveKit token issuing with room-scoped
-   grants and `room.auto_create: false`, webhook verification; Android LiveKit SDK, call screens,
-   core-telecom spike (S-2).
+1. Confirm the CI result for the Android calling code and fix any compile issues.
+2. First real call: run PostgreSQL + LiveKit locally (`deploy/docker-compose.dev.yml`), backend with
+   LiveKit env vars, two emulators or phones; record results against docs/09 (T-SETUP-1, T-CLEAN).
+3. Calling slice 2: foreground service with `phoneCall|camera|microphone` types, core-telecom (spike S-2),
+   FCM wake-up for incoming calls, 1080p capability check, WebRTC stats in diagnostics.
+4. Then chat (D-01/D-02 decided).

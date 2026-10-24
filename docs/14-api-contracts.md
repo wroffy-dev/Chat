@@ -151,7 +151,7 @@ All routes require the caller to be the caller or callee of `{id}` (else `404`).
 ### POST /calls
 - **Request:** `{ "connectionId": uuid, "kind": "video"|"voice" }`
 - **Response 201:** `{ "callId", "status": "ringing", "livekitUrl": "wss://rtc.<domain>", "livekitToken", "maxVideoQuality", "ringTimeoutSeconds" }`
-- **Errors:** `404` (not a member of the connection), `409 CALL_IN_PROGRESS` (`{ "callId" }` of the existing call), `503 MEDIA_UNAVAILABLE` (LiveKit unreachable).
+- **Errors:** `404` (not a member of the connection), `409 CALL_IN_PROGRESS` (the app then reads `GET /calls/current`), `503 MEDIA_UNAVAILABLE` (LiveKit not configured or unreachable).
 - **Side effects:** creates LiveKit room (max 2), call row; WS `call.incoming` + FCM `call` to callee. **Audit:** none (calls table is the record).
 - **Rate limit:** 10/min per user.
 
@@ -171,6 +171,9 @@ All routes require the caller to be the caller or callee of `{id}` (else `404`).
 
 ### POST /calls/{id}/token
 - Only while `accepted`/`active` (caller also while `ringing`). Returns a fresh `livekitToken`. **Rate limit:** 10/min per user.
+
+### GET /calls/current
+- Returns `{ "call": <call> | null }` — the user's ringing/accepted/active call. Polled by the app while open until push notifications exist.
 
 ### GET /calls/{id}
 - **Response:** `{ "id", "kind", "status", "callerId", "calleeId", "createdAt", "acceptedAt", "endedAt", "endReason" }`.
