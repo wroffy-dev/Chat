@@ -15,7 +15,7 @@ Last updated: 2026-10-24 (UTC), after the QR-connection phase.
 | 1 | Foundation | **Done** — backend verified locally and in CI; Android builds, unit-tests and lints in CI. Not yet launched on an emulator/device |
 | 2 | Authentication and Admin Console | **Done (backend verified; Android verified in CI, not yet on a device)** — see below |
 | 3 | QR connection (moved before calling, Q-1) | **Done (backend verified; Android logic verified on JVM and against the real backend; screens compiled in CI, not yet on a device)** |
-| 4 | Calling | **In progress (first slice built)** — server + app logic verified; real media untested (no LiveKit server or phones available here). See below |
+| 4 | Calling | **In progress (slices 1–2 built)** — server + app logic verified; real media and real push untested (no LiveKit server, Firebase project or phones available here). See below |
 | 5 | Text chat | Not started — D-01/D-02 decided 2026-10-24, no longer blocked |
 | 6 | Security and reliability | Not started |
 | 7 | Private release | Not started |
@@ -206,10 +206,24 @@ user. Server logs scanned afterwards: no passwords or tokens present.
 - Quality settings (1080p capability check, codec choice, thermal caps) and detailed WebRTC stats are not
   wired yet; LiveKit defaults (720p capture, simulcast) apply.
 
+## Phase 4 — Calling, slice 2
+
+| Item | Status | Evidence |
+|---|---|---|
+| Backend `PUT/DELETE /api/v1/devices/push-token` (token on the session, moved if re-registered, cleared on revoke/logout) | Done (verified) | `test/push.integration.test.ts` |
+| Backend FCM sender (firebase-admin 14.4.0, HTTP v1) enabled by `FCM_CREDENTIALS_FILE`; opaque `{t, id}` data messages, high priority, TTL = ring timeout; dead tokens cleared | Done (verified with a recording transport) | Tests; **not sent to real FCM** (no Firebase project) |
+| Wake-up on call start; `call_end` on cancel and missed | Done (verified) | Tests |
+| Android: Firebase initialised from build properties only; auto-init off until login; token registration after login, deletion on logout | Done (CI compile pending at time of writing) | Needs a Firebase project to exercise |
+| Android: incoming-call notification (CallStyle + full-screen intent, generic text), Decline without opening the app, tap opens the call screen | Done (CI compile pending) | Not run on a device |
+| Android: `CallForegroundService` (microphone/camera types) during connected calls | Done (CI compile pending) | Not run on a device |
+| 1080p capture only on capable, cool phones without power saving (`VideoQualityPolicy` + Camera2 capability check) | Policy verified on JVM; capability check compile pending | `VideoQualityPolicyTest` |
+| core-telecom integration (system call UI, Bluetooth/car controls) | **Not started** — spike S-2 | |
+| WebRTC stats (RTT, jitter, loss, resolution) in diagnostics | **Not started** | |
+
 ## Next task
 
-1. First real call: run PostgreSQL + LiveKit locally (`deploy/docker-compose.dev.yml`), backend with
-   LiveKit env vars, two emulators or phones; record results against docs/09 (T-SETUP-1, T-CLEAN).
-2. Calling slice 2: foreground service with `phoneCall|camera|microphone` types, core-telecom (spike S-2),
-   FCM wake-up for incoming calls, 1080p capability check, WebRTC stats in diagnostics.
-3. Then chat (D-01/D-02 decided).
+1. **Owner actions to test for real:** create a Firebase project (android/README.md "Push notifications"),
+   then run PostgreSQL + LiveKit locally (`deploy/docker-compose.dev.yml`) and make a call between two
+   phones; record results against docs/09 (T-SETUP-1/2, T-CLEAN, T-BG-VOICE/VIDEO).
+2. Chat phase (D-01 option D, D-02 60 s lease / 24 h backstop) — next build phase.
+3. Calling later: core-telecom (S-2), WebRTC stats in diagnostics, quality benchmarks (D-13).

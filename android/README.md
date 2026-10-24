@@ -31,3 +31,23 @@ cd android
 Release signing material is never committed. On the release machine only, add to
 `~/.gradle/gradle.properties`: `vaultchat.signing.storeFile`, `vaultchat.signing.storePassword`,
 `vaultchat.signing.keyAlias`, `vaultchat.signing.keyPassword`. Without them, release builds are unsigned.
+
+## Push notifications (optional)
+
+Incoming calls ring on a closed app only with Firebase Cloud Messaging. Nothing Firebase-related is
+committed. To enable it on the release/build machine:
+
+1. Create a Firebase project (console.firebase.google.com) and add an Android app with the package name
+   (`app.vaultchat`, or `app.vaultchat.dev` for debug builds).
+2. From the app's settings, copy these values into `~/.gradle/gradle.properties`:
+   ```
+   vaultchat.fcm.projectId=<project id>
+   vaultchat.fcm.appId=<mobilesdk app id, 1:…:android:…>
+   vaultchat.fcm.apiKey=<current api key>
+   vaultchat.fcm.senderId=<project number>
+   ```
+3. On the server, create a service-account key with permission to send FCM messages, mount it as a file,
+   and set `FCM_CREDENTIALS_FILE` (backend/.env.example).
+
+Without these, the app works but incoming calls ring only while it is open. FCM needs Google Play
+services on the phone (open decision D-08).

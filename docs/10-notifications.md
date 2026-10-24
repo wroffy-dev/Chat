@@ -1,7 +1,6 @@
 # 10 — Notifications (Firebase Cloud Messaging)
 
-Status: **Proposed**. Firebase facts are **to be verified against current Firebase documentation
-before implementation** (`firebase.google.com` was not reachable from the documentation environment).
+Status: **Implemented for calls** (see docs/IMPLEMENTATION_PLAN.md, calling slice 2); not yet exercised against a real Firebase project. Message notifications come with the chat phase. Firebase facts remain **to be verified** against current Firebase documentation (`firebase.google.com` was not reachable from the build environment).
 
 ## 1. Why FCM
 
