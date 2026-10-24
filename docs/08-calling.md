@@ -1,0 +1,319 @@
+# 08 — Video and Audio Calling (Highest Priority)
+
+Status: **Proposed**. Not implemented. Facts about LiveKit come from its source repositories,
+checked 2026-10-24 (see [16 §15](16-deployment-and-operations.md#15-sources-checked)).
+
+## 1. Goals
+
+| Goal | Meaning |
+|---|---|
+| Up to 1080p @ 30 fps | Used **only when both devices and the network can sustain it**. Never forced |
+| Audio first | When bandwidth drops, video resolution/frame rate falls (or video pauses) before audio suffers |
+| Low latency, fast setup | Caller pre-connects while ringing; target setup times in [09](09-call-quality-test-plan.md) |
+| Recovery | Survives Wi-Fi ↔ mobile switches and short outages without user action |
+| Clean exit | Camera, mic, audio mode, foreground service, LiveKit room all released on every end path |
+
+Voice calls are the same flow with the camera off (no video track published).
+
+## 2. Why an SFU (LiveKit) for a 1:1 app
+
+| Factor | LiveKit SFU on the VPS | Direct P2P WebRTC |
+|---|---|---|
+| Connectivity | Each phone only needs to reach **one** server with a public IP. Works behind carrier-grade NAT, which is common on mobile data | Fails when both sides are behind restrictive/symmetric NAT; then it needs TURN relay anyway |
+| Adaptation | SFU congestion control, simulcast layer selection per receiver, dynacast, pause/resume video under congestion | Only end-to-end bandwidth estimation |
+| Reconnection | SDK + server handle ICE restart and session resume | Must be built by hand |
+| Latency | Extra hop via the VPS. **If the VPS is far from both users (e.g. in Europe while both users are in India), every packet travels there and back** — often the largest latency factor | Shortest path when a direct route exists |
+| Server cost | Uses VPS bandwidth ([03](03-capacity-bandwidth-and-cost.md)) | ~₹0 when direct; relay traffic when not |
+| Privacy | Media is decrypted at the SFU (hop-by-hop encryption) | DTLS-SRTP end to end between the phones (unless relayed through TURN, which still cannot decrypt) |
+
+Decision: **LiveKit SFU only in the MVP.** One calling architecture, not two. Direct P2P may be
+benchmarked later as a separate experiment; it is not assumed to be better.
+
+Action: confirm the VPS data-centre region. If it is far from both users, measure RTT (test T-RTT) early —
+it decides whether the existing VPS is suitable for media.
+
+## 3. Media flow
+
+```
+ Phone A                         VPS: LiveKit SFU                         Phone B
+ camera+mic ─► encoder ─► SRTP ═══ UDP 7882 (or TCP 7881 / TURN) ══► SFU ══► SRTP ─► decoder ─► screen+speaker
+ screen+speaker ◄─ decoder ◄─ SRTP ◄══════════════════════════════════ SFU ◄══ SRTP ◄─ encoder ◄─ camera+mic
+```
+
+- Each phone publishes one audio track and (for video calls) one video track with simulcast layers.
+- The SFU forwards packets; it does not transcode. It chooses which simulcast layer to forward to the
+  receiver based on the receiver's bandwidth and rendered size (adaptive stream).
+- Signalling (SDP/ICE/track events) runs over a WebSocket to `wss://rtc.<domain>` through Traefik.
+  Media never uses the HTTP proxy.
+
+## 4. Signalling and call state
+
+The app backend owns "who is calling whom". LiveKit owns the media session.
+
+### 4.1 Call state machine (`calls.status`)
+
+```
+           ┌──────────── cancel (caller) ───────────► cancelled
+           │──────────── decline (callee) ──────────► declined
+ ringing ──┼──────────── ring timeout (45 s) ───────► missed
+           │──────────── setup error ───────────────► failed
+           └── accept ──► accepted ── both joined (webhook) ──► active ── end / room_finished ──► ended
+                              └── no join within 30 s ──► failed
+```
+
+Only one non-final call may exist per connection (partial unique index). If A and B call each other at
+the same moment, the second `POST /calls` returns `409 CALL_IN_PROGRESS` with the existing call ID;
+the second caller's app switches to showing that call as incoming.
+
+### 4.2 Sequence
+
+```
+A app                 Backend                         LiveKit                 FCM / WS          B app
+  │ POST /calls ──────►│ authz: A connected to B          │                       │                 │
+  │                    │ createRoom(call_<uuid>,           │                       │                 │
+  │                    │   maxParticipants 2) ────────────►│                       │                 │
+  │                    │ status=ringing                    │                       │                 │
+  │◄── 201 {callId, livekitUrl, token(A)} ─────────────────│                       │                 │
+  │ connect + publish ─────────────────────────────────────►│ (A waits alone)       │                 │
+  │                    │── call.incoming ─────────────────────────────────────────►│ WS, else FCM ──►│
+  │                    │◄──────────────────────────────────────────────────── POST /calls/{id}/accept│
+  │                    │ status=accepted ──► 200 {token(B)} ──────────────────────────────────────────►│
+  │                    │                                   │◄──────────────────────── connect+publish│
+  │                    │◄── webhook participant_joined ────│                       │                 │
+  │                    │ status=active; call.active to both│                       │                 │
+  │ ════════════════ media ═══════════════════════════════ │ ═════════════════════════════ media ═══ │
+  │ POST /calls/{id}/end ►│ deleteRoom ───────────────────►│ disconnects both      │                 │
+  │                    │ status=ended; call.ended to both   │                       │                 │
+```
+
+Caller pre-connection (joining the room and publishing while ringing) removes connection time from the
+callee's perceived setup time. The caller's outgoing video is not sent to anyone until B subscribes.
+
+## 5. Connectivity: STUN, TURN, UDP, TCP and NAT
+
+The VPS has a public IP, so phones normally connect straight to the SFU. Candidate order, best first:
+
+| Path | Port (proposed) | Notes |
+|---|---|---|
+| UDP to SFU (UDP mux) | `7882/udp` (`rtc.udp_port`) | Best quality. One UDP port instead of the default `50000–60000` range — easier firewall and Docker setup |
+| ICE over TCP to SFU | `7881/tcp` (`rtc.tcp_port`) | Used when UDP is blocked. Works, but packet loss causes head-of-line delay, so quality is worse |
+| TURN over UDP (embedded) | `3478/udp` (`turn.udp_port`) | For networks that block the SFU's UDP port but allow 3478 |
+| TURN over TLS (embedded) — **phase 2, only if tests require it** | `5349/tcp` (`turn.tls_port`), or `443` via Traefik TCP SNI routing | For networks that allow only HTTPS-like traffic. Needs a TLS certificate for `turn.<domain>` ([16 §8.3](16-deployment-and-operations.md#83-turn)) |
+
+- `rtc.use_external_ip: true` lets LiveKit discover the public IP via STUN; if discovery is wrong, set
+  `NODE_IP` / `rtc.node_ip` explicitly.
+- **TURN credentials** are generated per participant by LiveKit and delivered through the authenticated
+  signalling connection. No static TURN username/password exists in the APK.
+- TURN abuse controls (from LiveKit config): `turn.per_user_relay_allocation_limit` (default 12),
+  restricted/private peer CIDRs denied by default (`allow_restricted_peer_cidrs` empty), optional `deny_peer_cidrs`.
+- `rtc.allow_tcp_fallback` (default true) lets clients fall back to TCP/TURN when UDP is unstable.
+- Restrictive mobile networks: test every carrier the users actually use (T-NET tests). Only add the
+  TURN/TLS-on-443 work if a real network fails without it.
+
+Full port/firewall table: [16 §7](16-deployment-and-operations.md#7-firewall-and-ports).
+
+## 6. LiveKit tokens and room authorization
+
+Issued by the backend with `livekit-server-sdk` (`AccessToken` + `VideoGrant`).
+
+| Field | Value | Why |
+|---|---|---|
+| `identity` | The user's UUID (`users.id`) | Stable, not the username; a second join with the same identity replaces the first (reconnect from a new process) |
+| `ttl` | 10 minutes | Short window to connect; the SDK default is 6 hours, which is too long |
+| `room` | `calls.livekit_room` (e.g. `call_<random uuid>`) | Unguessable, one room per call |
+| `roomJoin` | true | |
+| `canPublish` / `canSubscribe` | true / true | |
+| `canPublishSources` | `[camera, microphone]` | No screen share |
+| `canPublishData` | false | Chat uses the app backend, not LiveKit data channels |
+| `canUpdateOwnMetadata`, `roomCreate`, `roomAdmin`, `hidden` | false | Least privilege |
+
+Rules:
+- Tokens are issued only to the caller or callee of that call, and only while the call is `ringing`
+  (caller), `accepted` or `active`.
+- `room.auto_create: false` in LiveKit config — rooms exist only if the backend created them, so a
+  leaked token cannot create new rooms.
+- Rooms are created with `maxParticipants: 2`, short `emptyTimeout` and `departureTimeout`.
+- `POST /calls/{id}/token` returns a fresh token for re-joining an active call (e.g. after the app process restarted).
+- Token expiry vs. long calls: LiveKit is designed to keep connected participants working after the join
+  token's expiry by refreshing credentials over the signalling connection — **verify with the pinned
+  server/SDK versions**. The app also handles a rejected reconnect by fetching a new token from the backend.
+
+### LiveKit → backend webhooks
+
+LiveKit sends `participant_joined`, `participant_left`, `room_finished` to
+`http://backend:3000/internal/livekit/webhook` over the internal Docker network. The backend verifies the
+signed `Authorization` header (`WebhookReceiver`) before trusting it. Webhooks drive `active`/`ended`
+status and act as a backstop when clients fail to report the end of a call.
+
+## 7. Call lifecycle and cleanup
+
+Every end path runs the same cleanup on the device:
+
+1. `room.disconnect()`; release local tracks (camera, microphone).
+2. Telecom call `disconnect()`; stop the foreground service; cancel call notifications.
+3. Restore audio mode/routing; release proximity wake lock; clear keep-screen-on.
+4. Post the diagnostics summary (best effort, §11).
+
+| End path | Server action |
+|---|---|
+| User taps End | `POST /calls/{id}/end` → `deleteRoom` → `ended (hangup)` |
+| Remote ended | Client receives `call.ended` (WS) and/or LiveKit disconnect |
+| Ring timeout | Job sets `missed`, deletes room, notifies both, posts "Missed call" notification to callee |
+| Both dropped (crash/network) | LiveKit `departureTimeout` → `room_finished` webhook → `ended (room_finished)` |
+| Network not recovered in 30 s | Client gives up, calls `/end` with reason `network_lost` (if reachable) |
+| Backend restart | On startup, calls in `ringing/accepted` older than their timeouts are closed; `active` calls are checked against LiveKit `ListRooms` |
+
+## 8. Adaptive quality policy
+
+LiveKit Android SDK defaults (checked in source): `adaptiveStream = false`, `dynacast = false`,
+simulcast = true, video codec VP8, capture 720p, audio 48 kbps with DTX and RED.
+
+Proposed configuration:
+
+| Setting | Proposed value | Reason |
+|---|---|---|
+| `RoomOptions.adaptiveStream` | **true** | Receive only the resolution actually rendered (e.g. smaller in picture-in-picture) |
+| `RoomOptions.dynacast` | **true** | Sender stops encoding layers nobody watches — saves uplink, CPU and battery |
+| Capture | 1080p30 on devices that pass a capability check; otherwise 720p30 | Do not hard-code 1080p |
+| Simulcast layers | Default (`H180`, `H360`) + top layer; benchmark `H360`+`H720` as an alternative for 1:1 | Lets the SFU drop to a lower layer instantly when the receiver's network weakens |
+| Degradation preference | Benchmark `MAINTAIN_FRAMERATE` vs `BALANCED` | For faces, smoother motion at lower resolution usually looks better than sharp, stuttering video |
+| Codec | Benchmark VP8 (default) vs H.264 (hardware encoders common on Android) vs VP9 SVC. Pick one for MVP | Battery/thermal and quality differ by device |
+| Server cap | `call.max_video_quality` from Admin settings, returned with the token | Emergency bandwidth control |
+| Data saver (user setting) | On mobile data: cap at 540p (or 360p) | Mobile data cost ([03](03-capacity-bandwidth-and-cost.md#per-phone-mobile-data)) |
+| Audio | Opus, DTX + RED on (SDK defaults), echo cancellation / noise suppression / AGC on | Clear speech under loss |
+| Congestion | LiveKit `congestion_control.enabled: true`, `allow_pause: true` (defaults) | Under heavy congestion the SFU pauses video before audio fails |
+
+When bandwidth is insufficient the order of degradation is: lower video layer → lower frame rate →
+video paused (UI shows "Video paused — poor connection") → audio continues. Audio is never deliberately
+dropped to keep video.
+
+### Device capability check (1080p eligibility)
+
+1080p capture is allowed only if: the camera reports a 1920×1080 output at ≥ 30 fps; a hardware encoder
+for the chosen codec supports 1080p30; the thermal status is below `MODERATE`; the device is not in power
+saver mode. The result is cached per app version and re-evaluated when thermal status changes.
+
+## 9. Network recovery
+
+- The LiveKit SDK handles transient failures: it first attempts a quick resume (ICE restart), then a full
+  reconnect. The app listens for `RoomEvent.Reconnecting` / `Reconnected` / `Disconnected`.
+- UI: a "Reconnecting…" banner on the call screen; video freezes on the last frame; audio resumes automatically.
+- Wi-Fi ↔ mobile handover: the app also registers a `ConnectivityManager.NetworkCallback`; on a default-network
+  change during a call it logs the event for diagnostics (the SDK performs the ICE restart).
+- Give-up rule: if not reconnected within 30 s, end the call with reason `network_lost` and offer "Call again".
+- The app WebSocket and LiveKit connection are independent; losing the app socket does not end a call.
+
+## 10. Android integration
+
+### 10.1 Permissions
+
+| Permission | When | If denied |
+|---|---|---|
+| `RECORD_AUDIO` (runtime) | First call | Calls cannot start; explain why; link to app settings if permanently denied |
+| `CAMERA` (runtime) | First video call | Offer voice call instead; camera button disabled with explanation |
+| `POST_NOTIFICATIONS` (runtime, Android 13+) | After login | Incoming calls will not ring when app is closed; persistent warning in Settings |
+| `BLUETOOTH_CONNECT` (runtime, Android 12+) | When a Bluetooth headset is present | Bluetooth audio routing unavailable |
+| `MANAGE_OWN_CALLS`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_PHONE_CALL`, `FOREGROUND_SERVICE_CAMERA`, `FOREGROUND_SERVICE_MICROPHONE` | Manifest only | — |
+| `USE_FULL_SCREEN_INTENT` | Manifest; on Android 14+ check `NotificationManager.canUseFullScreenIntent()` | Ask the user to enable it via `ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT`; otherwise incoming calls show as a heads-up notification only |
+| `WAKE_LOCK` | Manifest | Proximity screen-off in voice calls |
+
+Permissions are requested at the moment they are needed, with a one-line explanation first.
+
+### 10.2 System call integration (androidx `core-telecom`)
+
+- `CallsManager.registerAppWithTelecom(CAPABILITY_BASELINE or CAPABILITY_SUPPORTS_VIDEO_CALLING)`.
+- Each call is added with `addCall(...)`; callbacks handle answer/disconnect/hold from the notification,
+  Bluetooth headsets, and watches.
+- A `NotificationCompat.CallStyle` notification must be posted within 5 s of adding the call.
+- The call runs in a foreground service with `foregroundServiceType="phoneCall|camera|microphone"`.
+- Android 14+: camera and microphone foreground services **cannot be started from the background**. The
+  "Answer" action must bring an activity to the foreground (full-screen intent / activity launch) before
+  starting camera/mic capture.
+- Audio routing (earpiece, speaker, Bluetooth, wired) uses the Telecom call endpoints. Google's guidance is
+  not to mix Telecom with `AudioManager.setCommunicationDevice`/`startBluetoothSco`.
+  **Integration risk:** the LiveKit SDK has its own audio-switching logic; how it should defer to
+  core-telecom must be proven in spike S-2 ([18](18-roadmap.md)).
+- Incoming GSM/VoIP call during our call: Telecom `onSetCallInactive` → mute mic and pause video; on
+  resume → unmute (if it was unmuted) and resume video.
+
+### 10.3 Backgrounding
+
+- Voice call: continues in the background via the foreground service.
+- Video call: when the user leaves the app, outgoing video is paused (privacy and battery) and the call
+  enters picture-in-picture if supported; audio continues. Video resumes when the app returns.
+- The app never captures camera or microphone outside an active call. Capture starts only after the
+  user starts or accepts a call and stops in cleanup. There is no recording of calls.
+
+### 10.4 Camera switching and controls
+
+Controls: mute/unmute mic, camera on/off, switch front/back, speaker/earpiece/Bluetooth picker, end call.
+Camera switch uses the SDK's camera switching on the local video track (CameraX module optional).
+
+## 11. Call statistics and diagnostics
+
+Collected in memory during the call (every 2 s from WebRTC stats via the SDK) and summarised at the end.
+
+| Metric | Source (WebRTC stats) |
+|---|---|
+| Connection path | Selected candidate pair: `host`/`srflx`/`relay`, `udp`/`tcp` |
+| RTT | `currentRoundTripTime` on the candidate pair / `remote-inbound-rtp` |
+| Jitter | `inbound-rtp.jitter` (audio and video) |
+| Packet loss | `packetsLost` / `packetsReceived` deltas |
+| Bitrate | `bytesSent` / `bytesReceived` deltas |
+| Resolution / FPS | `frameWidth`, `frameHeight`, `framesPerSecond` (outbound and inbound) |
+| Why quality was limited | `outbound-rtp.qualityLimitationReason` (`bandwidth`, `cpu`, `none`) |
+| Video freezes | `freezeCount`, `totalFreezesDuration` |
+| Audio interruptions | `concealedSamples`, `concealmentEvents`, `insertedSamplesForDeceleration` |
+| Connection quality | LiveKit `ConnectionQuality` events |
+| Reconnects | Count and duration of `Reconnecting` → `Reconnected` |
+| Device | Thermal status changes, battery % start/end, network type changes |
+
+At call end the app posts a summary (min/avg/max, not raw time series) to `POST /calls/{id}/diagnostics`.
+No media, no IP addresses, no location. A hidden "debug overlay" shows live values during testing.
+Exact stats API names in the Android SDK must be checked against the pinned SDK version.
+
+## 12. Battery and thermal
+
+- Use hardware encoders where available; verify with the codec benchmark.
+- Listen to `PowerManager.addThermalStatusListener` (API 29+):
+  `MODERATE` → cap at 720p; `SEVERE` → cap at 540p/15 fps; `CRITICAL` → suggest turning video off.
+- Keep the screen on only during video calls; use the proximity sensor to turn the screen off in voice calls
+  held to the ear.
+- Stop all capture immediately at call end; verify no camera/mic indicator remains (test T-CLEAN).
+
+## 13. LiveKit server configuration (proposed values)
+
+Keys verified against `livekit/livekit` `config-sample.yaml` (2026-10-24):
+
+```yaml
+port: 7880                      # signalling + RoomService API (behind Traefik TLS)
+rtc:
+  tcp_port: 7881
+  udp_port: 7882                # UDP mux; do not set port_range_start/end with this
+  use_external_ip: true
+  # allow_tcp_fallback: true    # default
+turn:
+  enabled: true
+  domain: turn.<domain>
+  udp_port: 3478
+  tls_port: 5349                # only opened in the firewall if TURN/TLS is enabled (see doc 16 §8.3)
+  # cert via LIVEKIT_TURN_CERT / LIVEKIT_TURN_KEY env vars, or external_tls behind a TCP TLS terminator.
+  # Verify whether the pinned version needs a certificate even when only TURN/UDP is used.
+room:
+  auto_create: false
+  max_participants: 2
+  empty_timeout: 60
+  departure_timeout: 20
+webhook:
+  api_key: <livekit-api-key>    # placeholder; must match one of `keys`
+  urls:
+    - http://backend:3000/internal/livekit/webhook
+logging:
+  level: info
+# keys: supplied via LIVEKIT_KEYS env var ("<key>: <secret>"), never committed
+# redis: not configured — single node does not need it
+```
+
+## 14. Costs
+
+Bandwidth per call and monthly hours: [03-capacity-bandwidth-and-cost.md](03-capacity-bandwidth-and-cost.md).

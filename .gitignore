@@ -1,0 +1,24 @@
+# Secrets — never commit (see docs/16-deployment-and-operations.md §10)
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+google-services.json
+*service-account*.json
+livekit.yaml
+!livekit.yaml.example
+
+# Build output
+node_modules/
+dist/
+build/
+.gradle/
+local.properties
+*.apk
+*.aab
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
