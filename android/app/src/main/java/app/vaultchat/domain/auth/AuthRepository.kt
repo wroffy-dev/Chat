@@ -1,5 +1,7 @@
 package app.vaultchat.domain.auth
 
+import app.vaultchat.domain.connection.Connection
+
 /** The signed-in user as last confirmed by the server. */
 data class SessionUser(val id: String, val username: String, val mustChangePassword: Boolean)
 
@@ -29,7 +31,8 @@ sealed interface ChangePasswordResult {
 enum class ChangePasswordFailure { WRONG_CURRENT_PASSWORD, WEAK_PASSWORD, RATE_LIMITED, SESSION_ENDED, NETWORK, UNEXPECTED }
 
 sealed interface MeResult {
-    data class Success(val user: SessionUser) : MeResult
+    /** [connection] is null until the two users have paired. */
+    data class Success(val user: SessionUser, val connection: Connection?) : MeResult
     data object PasswordChangeRequired : MeResult
     /** Logged out, revoked, expired or disabled: the stored session has been cleared. */
     data object SessionEnded : MeResult

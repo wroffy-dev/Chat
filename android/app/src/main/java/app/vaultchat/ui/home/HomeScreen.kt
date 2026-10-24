@@ -13,6 +13,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import app.vaultchat.ui.components.PrimaryButton
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,9 +38,15 @@ fun HomeScreen(
     onChangePassword: () -> Unit,
     onSignedOut: () -> Unit,
     onPasswordChangeRequired: () -> Unit,
+    onOpenInbox: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
+    // Re-check on return from pairing screens so a new connection shows immediately.
+    LifecycleResumeEffect(viewModel) {
+        viewModel.refresh()
+        onPauseOrDispose { }
+    }
     LaunchedEffect(state.navigation) {
         when (state.navigation) {
             HomeNavigation.LOGIN -> onSignedOut()
@@ -80,10 +88,19 @@ fun HomeScreen(
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
-            EmptyState(
-                title = stringResource(R.string.home_not_connected_title),
-                body = stringResource(R.string.home_not_connected_body),
-            )
+            val connection = state.connection
+            if (connection != null) {
+                EmptyState(
+                    title = stringResource(R.string.home_connected_title, connection.peerUsername),
+                    body = stringResource(R.string.home_connected_body),
+                )
+            } else {
+                EmptyState(
+                    title = stringResource(R.string.home_not_connected_title),
+                    body = stringResource(R.string.home_not_connected_body),
+                    action = { PrimaryButton(stringResource(R.string.home_connect), onOpenInbox) },
+                )
+            }
         }
     }
 }

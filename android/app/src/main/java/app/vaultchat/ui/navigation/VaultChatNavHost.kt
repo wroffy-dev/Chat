@@ -11,6 +11,12 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import app.vaultchat.AppContainer
+import app.vaultchat.ui.connect.InboxScreen
+import app.vaultchat.ui.connect.InboxViewModel
+import app.vaultchat.ui.connect.ScanQrScreen
+import app.vaultchat.ui.connect.ScanQrViewModel
+import app.vaultchat.ui.connect.ShowQrScreen
+import app.vaultchat.ui.connect.ShowQrViewModel
 import app.vaultchat.ui.home.HomeScreen
 import app.vaultchat.ui.home.HomeViewModel
 import app.vaultchat.ui.login.LoginOutcome
@@ -28,6 +34,15 @@ data object HomeRoute
 
 @Serializable
 data class ChangePasswordRoute(val forced: Boolean)
+
+@Serializable
+data object InboxRoute
+
+@Serializable
+data object ShowQrRoute
+
+@Serializable
+data object ScanQrRoute
 
 /** Clears the whole back stack, so Back never returns to a screen from the previous state. */
 private fun NavHostController.replaceAll(route: Any) {
@@ -86,6 +101,42 @@ fun VaultChatNavHost(container: AppContainer) {
                 onChangePassword = { navController.navigate(ChangePasswordRoute(forced = false)) },
                 onSignedOut = { navController.replaceAll(LoginRoute) },
                 onPasswordChangeRequired = { navController.replaceAll(ChangePasswordRoute(forced = true)) },
+                onOpenInbox = { navController.navigate(InboxRoute) },
+            )
+        }
+        composable<InboxRoute> {
+            val viewModel: InboxViewModel = viewModel(
+                factory = viewModelFactory { initializer { InboxViewModel(container.connectionRepository) } },
+            )
+            InboxScreen(
+                viewModel = viewModel,
+                onShowQr = { navController.navigate(ShowQrRoute) },
+                onScanQr = { navController.navigate(ScanQrRoute) },
+                onSessionEnded = { navController.replaceAll(LoginRoute) },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable<ShowQrRoute> {
+            val viewModel: ShowQrViewModel = viewModel(
+                factory = viewModelFactory { initializer { ShowQrViewModel(container.connectionRepository) } },
+            )
+            ShowQrScreen(
+                viewModel = viewModel,
+                onConnected = { navController.replaceAll(HomeRoute) },
+                onSessionEnded = { navController.replaceAll(LoginRoute) },
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable<ScanQrRoute> {
+            val viewModel: ScanQrViewModel = viewModel(
+                factory = viewModelFactory { initializer { ScanQrViewModel(container.connectionRepository) } },
+            )
+            ScanQrScreen(
+                viewModel = viewModel,
+                permissionPreferences = container.permissionPreferences,
+                onConnected = { navController.replaceAll(HomeRoute) },
+                onSessionEnded = { navController.replaceAll(LoginRoute) },
+                onBack = { navController.popBackStack() },
             )
         }
     }

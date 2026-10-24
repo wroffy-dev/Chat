@@ -49,8 +49,49 @@
     <string name="password_error_wrong_current">The current password is incorrect</string>
     <string name="password_error_weak">That password is too common. Choose another.</string>
 
+    <string name="home_connect">Connect</string>
+    <string name="home_connected_title">Connected with %1</string>
+    <string name="home_connected_body">Chat and calls will appear here in a later version of the app.</string>
+    <string name="action_back">Back</string>
+    <string name="action_accept">Accept</string>
+    <string name="action_reject">Reject</string>
+
+    <string name="inbox_title">Inbox</string>
+    <string name="inbox_how_it_works">To connect, one of you shows a QR code and the other scans it. The person who showed the code then accepts.</string>
+    <string name="inbox_show_qr">Show my QR code</string>
+    <string name="inbox_scan_qr">Scan a QR code</string>
+    <string name="inbox_requests">Requests</string>
+    <string name="inbox_no_requests">No pending requests.</string>
+    <string name="inbox_incoming">%1 wants to connect</string>
+    <string name="inbox_outgoing">Waiting for %1 to accept</string>
+    <string name="inbox_connected_with">You are connected with %1.</string>
+
+    <string name="show_qr_title">My QR code</string>
+    <string name="show_qr_instructions">Ask the other person to scan this code. It changes every minute and works only once.</string>
+    <string name="show_qr_countdown">New code in %1 s</string>
+    <string name="show_qr_image_description">QR code for connecting. Valid for one minute.</string>
+    <string name="show_qr_accept_explainer">If you accept, you will be connected permanently.</string>
+
+    <string name="scan_qr_title">Scan QR code</string>
+    <string name="scan_qr_instructions">Point the camera at the other person\'s QR code.</string>
+    <string name="scan_qr_camera_rationale">The camera is needed to scan the QR code.</string>
+    <string name="scan_qr_camera_privacy">Camera frames are read on this phone only and are never saved or uploaded.</string>
+    <string name="scan_qr_allow_camera">Allow camera</string>
+    <string name="scan_qr_camera_denied">Camera access is turned off for this app. You can turn it on in Settings.</string>
+    <string name="scan_qr_waiting">Request sent. Waiting for %1 to accept…</string>
+    <string name="scan_qr_not_our_code">This isn\'t a Vault Chat code.</string>
+    <string name="scan_qr_rejected">The request was rejected.</string>
+    <string name="scan_qr_expired">The request expired. Ask for a new code.</string>
+    <string name="scan_qr_cancelled">The request was cancelled.</string>
+    <string name="scan_qr_again">Scan again</string>
+
+    <string name="connect_error_already_connected">You are already connected.</string>
+    <string name="connect_error_qr_invalid">This code has expired or was already used. Ask for a new one.</string>
+    <string name="connect_error_already_pending">You already sent a request. Wait for an answer.</string>
+    <string name="connect_error_not_pending">This request was already answered or has expired.</string>
+
     <string name="home_not_connected_title">You\'re not connected yet</string>
-    <string name="home_not_connected_body">Connect with the other person by scanning a QR code.</string>
+    <string name="home_not_connected_body">Connect with the other person using a QR code.</string>
 
     <string name="loading">Loading</string>
 </resources>

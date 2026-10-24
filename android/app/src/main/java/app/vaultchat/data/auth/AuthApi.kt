@@ -1,5 +1,6 @@
 package app.vaultchat.data.auth
 
+import app.vaultchat.data.connection.ConnectionDto
 import app.vaultchat.data.network.ApiResult
 import app.vaultchat.data.network.HttpJson
 import kotlinx.serialization.Serializable
@@ -26,7 +27,12 @@ data class UserDto(val id: String, val username: String, val mustChangePassword:
 data class TokenResponse(val accessToken: String, val accessExpiresAt: String, val refreshToken: String, val user: UserDto)
 
 @Serializable
-data class MeResponse(val id: String, val username: String, val mustChangePassword: Boolean)
+data class MeResponse(
+    val id: String,
+    val username: String,
+    val mustChangePassword: Boolean,
+    val connection: ConnectionDto? = null,
+)
 
 /** Typed calls for the auth endpoints and GET api/v1/me. Holds no state. */
 class AuthApi(private val http: HttpJson) {

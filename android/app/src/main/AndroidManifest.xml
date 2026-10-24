@@ -2,8 +2,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Camera, microphone, notification and Bluetooth permissions are declared in the phase that
-         uses them (calling, notifications). See docs/08-calling.md §10.1. -->
+    <!-- Camera: used only on the Scan QR screen for now (and later for video calls). -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <!-- Microphone, notification and Bluetooth permissions are declared in the phase that uses
+         them (calling, notifications). See docs/08-calling.md §10.1. -->
 
     <!-- allowBackup=false and the extraction rules keep session tokens out of cloud and
          device-transfer backups (docs/04-accounts-and-authentication.md §4). -->

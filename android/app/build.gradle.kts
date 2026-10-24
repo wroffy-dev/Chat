@@ -87,6 +87,11 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)
+    // QR encode/decode entirely on-device (no ML Kit / Google services).
+    implementation(libs.zxing.core)
+    implementation(libs.camerax.camera2)
+    implementation(libs.camerax.lifecycle)
+    implementation(libs.camerax.view)
 
     debugImplementation(libs.compose.ui.tooling)
 
