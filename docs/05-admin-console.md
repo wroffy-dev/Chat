@@ -63,7 +63,7 @@ Only keys in this allow-list can be changed. Each has a validated type and range
 |---|---|---|---|
 | `call.max_video_quality` | `1080p` \| `720p` \| `540p` \| `360p` | `1080p` | Server-side cap sent to clients with call tokens |
 | `call.ring_timeout_seconds` | 20–90 | 45 | How long an incoming call rings |
-| `chat.unread_backstop_hours` | 1–168, or null | **unset — depends on D-01/D-02** | Maximum lifetime for messages that are never cleared by an exit |
+| `chat.unread_backstop_hours` | 1–168 | **24** (D-02) | Maximum lifetime of any message |
 | `app.min_supported_version_code` | integer | 1 | Older APKs are told to update |
 | `app.latest_version_code` / `app.latest_apk_sha256` | integer / hex | — | Shown to users for manual update verification |
 | `push.enabled` | boolean | true | Emergency switch to stop all FCM sends |

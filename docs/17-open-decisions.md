@@ -5,8 +5,6 @@ recommendation is given, it is labelled as such and still needs sign-off.
 
 | ID | Decision | Options | Recommendation (not decided) | Blocks |
 |---|---|---|---|---|
-| **D-01** | What happens to messages sent while the recipient is not in the chat? | A strict clear on any exit · B clear only seen messages · C live-only chat · D = B + short backstop ([07 §6](07-chat-and-disappearing-messages.md#6-unresolved-product-decision-d-01--messages-when-the-recipient-is-not-in-the-chat)) | **None given** — this is the core product behaviour and must be the owner's choice | Chat implementation (clear scope, push for messages, UI notice text) |
-| **D-02** | Does backgrounding the app count as leaving the chat? Max message lifetime (backstop)? | Immediate · after lease expiry (~60–75 s) · never (explicit exit only); backstop none / 24 h / 7 d | Lease-expiry behaviour is the natural result of the crash-safe design; backstop depends on D-01 | Chat implementation |
 | D-03 | Administrator identity | Separate operational identity (proposed) · one of the two users is also admin | Separate identity | Auth implementation |
 | D-04 | Sessions per user | One active session (new login revokes old) · allow 2 devices | One session — **implemented that way; owner has not explicitly confirmed** | Auth implementation |
 | D-05 | Admin Console access | Localhost + SSH tunnel (proposed) · public subdomain + IP allow-list + TOTP | Localhost + SSH tunnel | Deployment |
@@ -30,6 +28,8 @@ recommendation is given, it is labelled as such and still needs sign-off.
 | ID | Decision | Date | By |
 |---|---|---|---|
 | Q-1 | Build QR connection before calling | 2026-10-24 | Owner ("Go" to the recommendation) |
+| D-01 | **Option D.** On any exit, delete messages the recipient has already seen. Unseen messages wait for the recipient, and are deleted on the next exit after they are seen. | 2026-10-24 | Owner |
+| D-02 | **Exit after about a minute.** The chat holds a 60 s presence lease renewed every 20 s; when it lapses (background, crash, power or network loss) the server applies the exit rule. **Backstop: every message is deleted at most 24 h after it was sent**, seen or not. | 2026-10-24 | Owner |
 
 ## How to record a decision
 

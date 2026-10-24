@@ -1,6 +1,6 @@
 # 07 — Text Chat and Disappearing Messages
 
-Status: **Proposed**. Not implemented. Contains **unresolved product decisions D-01 and D-02**.
+Status: **Designed, not implemented.** Decisions D-01 and D-02 were made on 2026-10-24 — see §6 and §7.
 
 ## 1. Scope
 
@@ -118,7 +118,7 @@ displaying the returned messages.
 | Toolbar back arrow | Yes |
 | Logout while in chat | Yes (leave sent before logout) |
 | Starting a call from the chat screen | **No** — the chat stays open beneath the call screen (proposed) |
-| App sent to background (Home, app switcher, screen off) | **Open decision D-02** — see §5 |
+| App sent to background (Home, app switcher, screen off) | Yes, once the 60 s presence lease lapses (D-02) |
 | App killed, crash, phone loses power or network | Handled by the presence lease (§5) |
 
 The app sends `leave` from its own navigation handling, **and** the server enforces exits through the
@@ -132,7 +132,7 @@ Crashes, power loss, the OS killing the app, or losing network mean the `leave` 
 |---|---|
 | **Presence lease** | `POST /conversations/{id}/enter` returns a `leaseId` with a TTL (proposed 60 s). While the chat screen is visible, the app sends `chat.heartbeat` over the WebSocket every 20 s. A server job runs every 15 s. Any lease whose `lease_expires_at` has passed is treated as an exit and runs the same clear transaction (audit/system actor `system:lease_expired`). Leases are stored in PostgreSQL, so a backend restart does not lose them — on startup the job processes leases that expired during downtime |
 | **Pending-leave flag** | When the user exits, the app writes a small "leave pending" record (conversation ID + `leaveId`, **no message content**) to DataStore before sending. If sending fails, it retries on next launch/reconnect. Idempotent by `leaveId` |
-| **Backstop expiry** (depends on D-01/D-02) | A maximum message lifetime (`chat.unread_backstop_hours`) after which messages are deleted even if no exit was recorded |
+| **Backstop expiry** (D-02: 24 h) | Every message is deleted 24 h after it was sent, even if no exit was recorded |
 
 **Honest limits:**
 - Between the crash and lease expiry (up to ~75 s), messages still exist on the server and on the other
@@ -143,7 +143,10 @@ Crashes, power loss, the OS killing the app, or losing network mean the `leave` 
 
 ## 6. Unresolved product decision D-01 — messages when the recipient is not in the chat
 
-**Not decided. Must be chosen by the product owner before implementation.**
+**Decided 2026-10-24: option D.** On any exit, delete only messages the recipient has already displayed
+(`seq <= recipient.last_read_seq`); unseen messages wait for the recipient and are deleted on the next exit
+after they are seen; and every message is deleted at most 24 hours after it was sent (D-02 backstop).
+The options considered are kept below for the record.
 
 Question: User A sends messages while B is **not** inside the chat (app closed, or on another screen).
 Then A leaves the chat. What happens to those messages?
@@ -163,7 +166,13 @@ What each option changes technically:
 All options use the same tables, epoch logic and lease mechanism, so the decision can be made late
 without changing the schema.
 
-## 7. Related open decision D-02 — backgrounding and backstop
+## 7. Decision D-02 — backgrounding and backstop
+
+**Decided 2026-10-24:** leaving the app counts as exiting the chat **after the presence lease lapses**
+(60 s lease, renewed every 20 s while the chat is visible). The same rule covers crashes, power loss and
+network loss. **Backstop: 24 hours** — a scheduled job deletes any message older than 24 h, seen or not.
+
+The original question, for the record:
 
 1. Does moving the app to the background count as leaving the chat? Options: (a) yes, immediately;
    (b) yes, after the lease expires (≈ 60–75 s) — the natural result of the lease design; (c) no, only

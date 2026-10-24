@@ -8,8 +8,8 @@ The owner has authorised implementation, one phase at a time, in the order liste
 `docs/IMPLEMENTATION_PLAN.md`. That file is the record of what is actually built and verified —
 update it with every change and never mark something done without evidence (tests, build output).
 
-Start with `README.md`, `docs/IMPLEMENTATION_PLAN.md`, then `docs/17-open-decisions.md` — several
-product decisions are intentionally unresolved and must not be decided silently.
+Start with `README.md`, `docs/IMPLEMENTATION_PLAN.md`, then `docs/17-open-decisions.md` — product
+decisions there are either recorded as decided or still open; never decide an open one silently.
 
 ## Working in the code
 
@@ -27,7 +27,7 @@ product decisions are intentionally unresolved and must not be decided silently.
 - No public signup, no user search, no profiles, no profile photos, no media uploads, no file
   attachments, no voice notes. Text chat only.
 - Exactly two app users. The administrator is a separate operational identity, not a third app user.
-- Do not decide the "messages sent while neither user is in the chat" policy — it is open decision D-01.
+- Chat deletion follows decisions D-01 (option D) and D-02 (60 s lease, 24 h backstop) in docs/17 — do not change them without the owner.
 - Location sharing is a **proposal requiring approval**; do not implement it without sign-off.
 - Do not claim end-to-end encryption, screenshot prevention, or guaranteed deletion.
 - Do not claim the VPS supports N simultaneous calls or 1080p without real-device test results.

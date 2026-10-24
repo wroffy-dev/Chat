@@ -16,7 +16,7 @@ Last updated: 2026-10-24 (UTC), after the QR-connection phase.
 | 2 | Authentication and Admin Console | **Done (backend verified; Android verified in CI, not yet on a device)** — see below |
 | 3 | QR connection (moved before calling, Q-1) | **Done (backend verified; Android logic verified on JVM and against the real backend; screens compiled in CI, not yet on a device)** |
 | 4 | Calling | Not started — next |
-| 5 | Text chat | Not started — needs decision D-01 / D-02 |
+| 5 | Text chat | Not started — D-01/D-02 decided 2026-10-24, no longer blocked |
 | 6 | Security and reliability | Not started |
 | 7 | Private release | Not started |
 
