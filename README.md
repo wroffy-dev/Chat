@@ -4,9 +4,10 @@ A private, Android-only app for **exactly two pre-approved people**: high-qualit
 calls, plus text-only chat whose messages disappear for both users when either leaves the chat.
 Distributed as a privately signed APK, not on Google Play.
 
-> **Project status: Phase 1 (foundation) in progress.** The backend foundation (config, logging, errors,
-> health checks, database connectivity) is built and tested. The Android app shell is written but has not
-> been compiled yet. No user-facing features work yet. Live status:
+> **Project status: Phases 1–2 done.** Backend foundation, accounts, sessions, admin console and CLI are
+> built and tested; the Android app signs in, stores its session encrypted and handles password changes
+> (verified in CI and against a real backend, not yet on a phone). Pairing, chat and calls are not built
+> yet. Live status:
 > [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
 
 ## Repository layout

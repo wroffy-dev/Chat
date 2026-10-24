@@ -6,14 +6,14 @@ This file tracks what has **actually** been built and verified. Design lives in 
 Status words: **Done (verified)** = built and checked by the tests/commands listed; **Done (unverified)** =
 written but not compiled or run; **Not started**; **Blocked**.
 
-Last updated: 2026-10-24 (UTC).
+Last updated: 2026-10-24 (UTC), after Phase 2.
 
 ## Phase order
 
 | # | Phase | Status |
 |---|---|---|
-| 1 | Foundation | **In progress** — backend verified; Android written but not compiled (see blockers) |
-| 2 | Authentication and Admin Console | Not started |
+| 1 | Foundation | **Done** — backend verified locally and in CI; Android builds, unit-tests and lints in CI. Not yet launched on an emulator/device |
+| 2 | Authentication and Admin Console | **Done (backend verified; Android verified in CI, not yet on a device)** — see below |
 | 3 | Calling | Not started — **see ordering question Q-1** |
 | 4 | QR connection | Not started |
 | 5 | Text chat | Not started — needs decision D-01 / D-02 |
@@ -63,14 +63,14 @@ itself is unchanged. Until approved, Phase 2 is unaffected and comes next either
 | Permission architecture (`AppPermission`, `PermissionStatusResolver`, `rememberPermissionRequest`, `openAppSettings`) | Done (unverified for Android parts) | Resolver logic verified by JVM unit tests |
 | Release hardening: HTTPS-only network config, cleartext only in debug for the emulator host, no backups, R8 | Done (unverified) | |
 | Platform-independent code (`domain/`, `data/`) | Done (verified on plain JVM) | Compiled with Kotlin 2.1.0 + serialization plugin; 16 JUnit tests pass; `ApiClient.checkHealth()` returned `Reachable` against the real local backend |
-| CI (`.github/workflows/ci.yml`) runs `testDebugUnitTest`, `assembleDebug`, `lintDebug` on GitHub's runner (which has the Android SDK) | Added, **not yet run** | Will be the first real Android build |
+| CI (`.github/workflows/ci.yml`) runs `testDebugUnitTest`, `assembleDebug`, `lintDebug` on GitHub's runner (which has the Android SDK) | Done (verified) | CI run #1 (commit 0a2bb32): backend and android jobs both green |
 
 ### Development environment
 
 | Item | Status |
 |---|---|
 | `deploy/docker-compose.dev.yml` (PostgreSQL 16 bound to 127.0.0.1) | Done; `docker compose config` validates. Not run (no Docker daemon in this environment) |
-| CI backend job with a PostgreSQL service | Added, not yet run |
+| CI backend job with a PostgreSQL service | Done (verified): green in CI run #1 |
 
 ### Commands used to verify (2026-10-24)
 
@@ -91,8 +91,7 @@ Android JVM-only check (scratch, outside the repo): `kotlinc` 2.1.0 (embeddable 
 - [x] Backend starts, validates config, serves health/readiness, shuts down cleanly — verified.
 - [x] Database connectivity and migration tooling — verified against local PostgreSQL 16.
 - [x] Automated backend tests — 26 passing.
-- [ ] **Android project builds and unit tests pass with the Android toolchain** — blocked here; to be
-      confirmed by CI or a local Android Studio build.
+- [x] **Android project builds and unit tests pass with the Android toolchain** — CI run #1 green.
 - [ ] Android app launches on an emulator/device and shows the login screen — not yet done.
 
 ### Blockers
@@ -102,9 +101,52 @@ Android JVM-only check (scratch, outside the repo): `kotlinc` 2.1.0 (embeddable 
 | Android SDK / Google Maven unreachable from this environment | Android code not compiled | CI run on GitHub, or a build in Android Studio. Library versions may then be bumped to current stable |
 | No Docker daemon here | Dev compose file not exercised | Run locally |
 
+## Phase 2 — Authentication and Admin Console
+
+### Backend
+
+| Item | Status | Evidence |
+|---|---|---|
+| Migration `phase2_accounts_sessions_audit`: `users`, `admin_accounts`, `sessions`, `admin_sessions`, `audit_events` + CHECKs (slot ∈ {1,2}, singleton admin, username format, revoke reasons) and partial indexes | Done (verified) | Applied to local PostgreSQL 16; inserting a third user (slot 3) rejected by the database |
+| Argon2id (m=46 MiB, t=1, p=1) with rehash-on-login, dummy verification for unknown usernames, common-password list | Done (verified) | Unit + integration tests. Measured ≈73 ms per verify in this container — below the 100–500 ms target in docs/04; **re-benchmark on the VPS** and raise `ARGON2_TIME_COST` if similar |
+| Opaque access (15 min) / refresh tokens, SHA-256 hashed at rest; rotation with reuse detection; 30-day idle / 90-day absolute | Done (verified) | `test/auth.integration.test.ts` |
+| One active session per user (D-04, still *proposed*) | Done (verified) | Integration test; easy to relax if D-04 is decided otherwise |
+| Restricted session until temporary password changed (`403 PASSWORD_CHANGE_REQUIRED`) | Done (verified) | Integration + end-to-end smoke |
+| Brute-force protection: account backoff after 5 failures with `Retry-After`, same behaviour for unknown usernames, per-IP route limits (`@fastify/rate-limit`, in-memory) | Done (verified) | Integration tests |
+| `POST /api/v1/auth/login`, `/refresh`, `/logout`, `/change-password`; `GET /api/v1/me` | Done (verified) | Integration tests; `/me` returns `connection: null` until the QR phase |
+| Admin password reset / revoke sessions / disable–enable (sessions revoked) | Done (verified) | Integration tests (service + console) |
+| Admin Console (loopback listener `ADMIN_PORT`): password + TOTP login (replay-protected, throttled), CSRF tokens, `HttpOnly; Secure; SameSite=Strict` cookie, strict CSP, Users / Health / Audit log pages | Done (verified) | `test/admin.integration.test.ts`; real HTTP login in smoke test |
+| Server CLI: `admin:create` (TOTP enrolment, confirm code), `admin:reset`, `user:create`, `user:reset-password`, `user:list` | Done (verified) | End-to-end smoke run of the compiled CLI |
+| Audit events for logins, failures, throttling, refresh reuse, resets, revocations, status changes, admin login/logout | Done (verified) | Integration tests read them back |
+| Console pages for per-session revoke, settings, error events, calls | Not started | Need `app_settings` / `error_events` / `calls` tables from later phases |
+| `UPGRADE_REQUIRED` app-version check, FCM token endpoints | Not started | Notifications / release phases |
+
+### Android
+
+| Item | Status | Evidence |
+|---|---|---|
+| `RemoteAuthRepository` (login, `/me`, change password, logout, one serialised refresh-and-retry on `TOKEN_EXPIRED`, local session cleared on revoke/disable) | Done (verified on JVM) | 8 scripted-backend tests + opt-in test that passed against the real local backend (login → forced change → `/me` → logout) |
+| `KeystoreTokenStore` (AES-256-GCM, non-exportable Keystore key, ciphertext only) | Done (CI compile pending) | Needs a device/emulator to exercise the Keystore |
+| Forced change-password screen, optional change from Home, Home with log out, start destination from stored session | Done (CI compile pending) | Not yet run on a device |
+
+### End-to-end check performed (2026-10-24)
+
+Compiled backend + real CLI against local PostgreSQL: `admin:create` (TOTP code computed from the printed
+secret) → `user:create` → login with temporary password (restricted) → `/me` refused → change password →
+`/me` OK → admin console login over HTTP on the loopback port (password + TOTP) → users page lists the
+user. Server logs scanned afterwards: no passwords or tokens present.
+
+### Phase 2 exit criteria
+
+- [x] Exactly two accounts enforceable; no signup endpoint exists.
+- [x] Secure login, sessions, refresh, revocation, password change and admin reset — tested.
+- [x] Restricted admin access (loopback + TOTP + CSRF) — tested.
+- [ ] Android app signs in on a real device/emulator against a running backend — **not yet done**.
+
 ## Next task
 
-1. Get the Android build green (CI or local) and fix any compile errors; launch on an emulator.
-2. Phase 2, first slice: `users`, `sessions` tables + migration; `POST /api/v1/auth/login`, `/auth/refresh`,
-   `/auth/logout` with Argon2id, rate limiting and throttling; server CLI `user:create` / `admin:create`;
-   replace `NotYetAvailableAuthRepository` with the real client and Keystore-encrypted token storage.
+1. Run the app on an emulator or phone against a local backend and walk through: login with a
+   temporary password → forced change → Home → log out; admin reset while logged in → app returns to login.
+2. Answer **Q-1** (QR connection before calling?). Then start that phase: `qr_tokens`,
+   `connection_requests`, `connections`, `conversations` tables; QR generate/redeem/accept/reject API with
+   the transactions in docs/06; Android QR display (ZXing) and scanning (CameraX + ML Kit).

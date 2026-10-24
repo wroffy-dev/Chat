@@ -2,7 +2,7 @@
 
 Guidance for AI assistants and contributors working in this repository.
 
-## Current phase: implementation, Phase 1 (foundation)
+## Current phase: implementation (Phases 1–2 done; see docs/IMPLEMENTATION_PLAN.md)
 
 The owner has authorised implementation, one phase at a time, in the order listed in
 `docs/IMPLEMENTATION_PLAN.md`. That file is the record of what is actually built and verified —
@@ -43,7 +43,7 @@ product decisions are intentionally unresolved and must not be decided silently.
 ## Documentation conventions
 
 - Mark status explicitly: **Proposed**, **Planned**, **Requires verification**, **Open decision**,
-  **Implemented** (nothing is implemented yet).
+  **Implemented** (check docs/IMPLEMENTATION_PLAN.md for what is).
 - Timestamps are UTC. Units: Mbps = megabits per second, GB = 10^9 bytes.
 - When a third-party fact (port, config key, env var) is added, cite the official source and date.
 - Keep the docs consistent: table names in `docs/13-database-design.md` and routes in

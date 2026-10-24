@@ -1,6 +1,6 @@
 # 13 — Database Design (PostgreSQL + Prisma)
 
-Status: **Proposed schema.** No migrations exist. This document is the source of truth for table and
+Status: **Partly implemented.** §3.1–3.4 and §3.13 exist as migration `phase2_accounts_sessions_audit`; the other tables are still proposed. This document is the source of truth for table and
 column names used in the other docs.
 
 ## 1. Conventions
@@ -117,7 +117,7 @@ On revoke, `fcm_token` is set to NULL immediately.
 
 ### 3.4 admin_sessions
 
-`id`, `admin_id` FK, `token_hash` (UNIQUE), `csrf_secret`, `created_at`, `last_used_at`,
+`id`, `admin_id` FK, `token_hash` (UNIQUE), `csrf_token` (per-session random value echoed in forms), `created_at`, `last_used_at`,
 `idle_expires_at` (+15 min), `absolute_expires_at` (+8 h), `revoked_at`. Retention: deleted 7 days after expiry.
 
 ### 3.5 qr_tokens
