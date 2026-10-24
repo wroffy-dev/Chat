@@ -5,6 +5,8 @@ import { buildApp } from "./app.js";
 import { PasswordHasher } from "./auth/passwords.js";
 import { AuthService } from "./auth/service.js";
 import { ConnectionService } from "./connections/service.js";
+import { CallService } from "./calls/service.js";
+import { LiveKitGateway } from "./calls/media.js";
 import { ConfigError, loadConfig } from "./config/env.js";
 import { PrismaDatabase } from "./db/database.js";
 
@@ -26,7 +28,12 @@ async function main() {
   const auth = new AuthService(database.prisma, hasher);
   const admin = new AdminService(database.prisma, hasher, config.ADMIN_TOTP_ENC_KEY);
   const connections = new ConnectionService(database.prisma);
-  const app = buildApp({ config, database, auth, connections });
+  const media =
+    config.LIVEKIT_PUBLIC_URL && config.LIVEKIT_API_URL && config.LIVEKIT_API_KEY && config.LIVEKIT_API_SECRET
+      ? new LiveKitGateway(config.LIVEKIT_PUBLIC_URL, config.LIVEKIT_API_URL, config.LIVEKIT_API_KEY, config.LIVEKIT_API_SECRET)
+      : null;
+  const calls = new CallService(database.prisma, media, config.CALL_RING_TIMEOUT_SECONDS);
+  const app = buildApp({ config, database, auth, connections, calls, media });
   // The database is owned (and closed) by the public app; the admin app shares it.
   const adminApp = buildAdminApp({ config, prisma: database.prisma, database, auth, admin });
 
@@ -35,12 +42,18 @@ async function main() {
     connections.cleanup().catch((err: unknown) => app.log.warn({ err }, "qr token cleanup failed"));
   }, 60 * 60 * 1000);
   housekeeping.unref();
+  // Ring timeouts and stuck calls: checked every 5 seconds.
+  const callSweep = setInterval(() => {
+    calls.sweep().catch((err: unknown) => app.log.warn({ err }, "call sweep failed"));
+  }, 5_000);
+  callSweep.unref();
 
   let shuttingDown = false;
   const shutdown = (signal: string) => {
     if (shuttingDown) return;
     shuttingDown = true;
     clearInterval(housekeeping);
+    clearInterval(callSweep);
     app.log.info({ signal }, "shutting down");
     const force = setTimeout(() => {
       app.log.error("shutdown timed out, forcing exit");
@@ -71,6 +84,7 @@ async function main() {
 
   // Start even if the database is down, so liveness works and /readyz reports the problem.
   const readiness = await database.checkReadiness(config.READINESS_DB_TIMEOUT_MS);
+  if (!media) app.log.warn("LiveKit not configured: calling returns 503 MEDIA_UNAVAILABLE");
   if (readiness.ready) app.log.info("database ready");
   else app.log.warn({ problems: readiness.problems }, "database not ready at startup");
 }

@@ -5,7 +5,7 @@
 #   docker compose --env-file deploy/.env.dev -f deploy/docker-compose.dev.yml up -d
 #
 # PostgreSQL is published on 127.0.0.1 only, so it is not reachable from other machines.
-# LiveKit is added in Phase 3 (calling).
+# LiveKit uses deploy/livekit/livekit.dev.yaml with keys from deploy/.env.dev (local only).
 
 name: vaultchat-dev
 
@@ -26,6 +26,24 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  livekit:
+    image: livekit/livekit-server:v1.13.7   # pinned; read release notes before changing
+    restart: unless-stopped
+    command: ["--config", "/etc/livekit.yaml", "--bind", "0.0.0.0"]
+    environment:
+      # "<key>: <secret>" from deploy/.env.dev (git-ignored). The secret must be 32+ characters.
+      LIVEKIT_KEYS: ${LIVEKIT_KEYS:?Set LIVEKIT_KEYS in deploy/.env.dev}
+    volumes:
+      - ./livekit/livekit.dev.yaml:/etc/livekit.yaml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:7880:7880"     # signalling + RoomService API
+      - "127.0.0.1:7881:7881"     # ICE over TCP
+      - "127.0.0.1:7882:7882/udp" # media
+    # Phones on the LAN need these ports bound to the LAN address instead of 127.0.0.1, and the
+    # backend's LIVEKIT_PUBLIC_URL must then use the machine's LAN IP.
 
 volumes:
   vaultchat-dev-pg:

@@ -1,0 +1,20 @@
+# LiveKit server configuration TEMPLATE (docs/08-calling.md §13, docs/16-deployment-and-operations.md §8).
+# Keys verified against github.com/livekit/livekit config-sample.yaml (2026-10-24).
+# API key/secret are NOT in this file: pass them as LIVEKIT_KEYS="<key>: <secret>".
+port: 7880
+rtc:
+  tcp_port: 7881
+  udp_port: 7882            # single UDP port (mux) instead of the 50000-60000 range
+  use_external_ip: true     # set false for a purely local dev machine
+room:
+  auto_create: false        # only the backend creates rooms
+  max_participants: 2
+  empty_timeout: 60
+  departure_timeout: 20
+webhook:
+  api_key: <livekit-api-key>          # must match the key in LIVEKIT_KEYS
+  urls:
+    - http://backend:3000/internal/livekit/webhook
+logging:
+  level: info
+# turn: see docs/16 §8.3 before enabling in production.

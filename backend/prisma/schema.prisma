@@ -44,6 +44,9 @@ model User {
   receivedConnectionRequests ConnectionRequest[] @relation("RequestOwner")
   connectionsAsA             Connection[]        @relation("ConnectionA")
   connectionsAsB             Connection[]        @relation("ConnectionB")
+  callsMade                  Call[]              @relation("CallCaller")
+  callsReceived              Call[]              @relation("CallCallee")
+  callDiagnostics            CallDiagnostic[]
 
   @@map("users")
 }
@@ -175,7 +178,52 @@ model Connection {
   userA       User               @relation("ConnectionA", fields: [userAId], references: [id], onDelete: Restrict)
   userB       User               @relation("ConnectionB", fields: [userBId], references: [id], onDelete: Restrict)
   fromRequest ConnectionRequest? @relation(fields: [createdFromRequestId], references: [id], onDelete: SetNull)
+  calls       Call[]
 
   @@unique([userAId, userBId])
   @@map("connections")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Calling phase (docs/08-calling.md, docs/13-database-design.md §3.11–3.12).
+// ---------------------------------------------------------------------------------------------
+
+model Call {
+  id           String    @id @default(uuid()) @db.Uuid
+  connectionId String    @map("connection_id") @db.Uuid
+  callerUserId String    @map("caller_user_id") @db.Uuid
+  calleeUserId String    @map("callee_user_id") @db.Uuid
+  /// "video" | "voice" (CHECK in SQL)
+  kind         String
+  livekitRoom  String    @unique @map("livekit_room")
+  /// ringing | accepted | active | ended | declined | cancelled | missed | failed (CHECK in SQL)
+  status       String    @default("ringing")
+  endReason    String?   @map("end_reason")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  acceptedAt   DateTime? @map("accepted_at") @db.Timestamptz(3)
+  activeAt     DateTime? @map("active_at") @db.Timestamptz(3)
+  endedAt      DateTime? @map("ended_at") @db.Timestamptz(3)
+
+  connection  Connection       @relation(fields: [connectionId], references: [id], onDelete: Restrict)
+  caller      User             @relation("CallCaller", fields: [callerUserId], references: [id], onDelete: Cascade)
+  callee      User             @relation("CallCallee", fields: [calleeUserId], references: [id], onDelete: Cascade)
+  diagnostics CallDiagnostic[]
+
+  @@index([createdAt])
+  @@map("calls")
+}
+
+model CallDiagnostic {
+  id        String   @id @default(uuid()) @db.Uuid
+  callId    String   @map("call_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  /// Quality summary (no media, IPs or location). Validated by the API schema.
+  summary   Json
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  call Call @relation(fields: [callId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([callId, userId])
+  @@map("call_diagnostics")
 }

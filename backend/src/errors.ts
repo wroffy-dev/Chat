@@ -19,6 +19,9 @@ export type ErrorCode =
   | "REQUEST_ALREADY_PENDING"
   | "REQUEST_NOT_PENDING"
   | "QR_INVALID_OR_EXPIRED"
+  | "CALL_IN_PROGRESS"
+  | "CALL_NOT_ACTIVE"
+  | "MEDIA_UNAVAILABLE"
   | "PAYLOAD_TOO_LARGE"
   | "UNSUPPORTED_MEDIA_TYPE"
   | "RATE_LIMITED"
@@ -76,6 +79,9 @@ export const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   REQUEST_ALREADY_PENDING: "A connection request is already waiting for an answer.",
   REQUEST_NOT_PENDING: "This request has already been answered or has expired.",
   QR_INVALID_OR_EXPIRED: "This code is no longer valid. Ask for a new one.",
+  CALL_IN_PROGRESS: "A call is already in progress.",
+  CALL_NOT_ACTIVE: "This call is no longer ringing or active.",
+  MEDIA_UNAVAILABLE: "Calling is temporarily unavailable.",
   PAYLOAD_TOO_LARGE: "The request is too large.",
   UNSUPPORTED_MEDIA_TYPE: "Unsupported content type.",
   RATE_LIMITED: "Too many requests. Try again later.",

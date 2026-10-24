@@ -36,7 +36,22 @@ const envSchema = z.object({
   // Argon2id cost (docs/04-accounts-and-authentication.md §3). Tests may lower these.
   ARGON2_MEMORY_KIB: z.coerce.number().int().min(1024).max(1_048_576).default(47_104),
   ARGON2_TIME_COST: z.coerce.number().int().min(1).max(10).default(1),
+
+  // LiveKit (docs/08-calling.md, docs/16 §4). All four or none: without them calling returns
+  // 503 MEDIA_UNAVAILABLE and everything else keeps working.
+  LIVEKIT_PUBLIC_URL: z.string().regex(/^wss?:\/\//, "must be a ws:// or wss:// URL").optional(),
+  LIVEKIT_API_URL: z.string().regex(/^https?:\/\//, "must be an http(s):// URL").optional(),
+  LIVEKIT_API_KEY: z.string().min(1).optional(),
+  LIVEKIT_API_SECRET: z.string().min(32, "must be at least 32 characters").optional(),
+  CALL_RING_TIMEOUT_SECONDS: z.coerce.number().int().min(20).max(90).default(45),
 }).superRefine((env, ctx) => {
+  const livekit = [env.LIVEKIT_PUBLIC_URL, env.LIVEKIT_API_URL, env.LIVEKIT_API_KEY, env.LIVEKIT_API_SECRET];
+  if (livekit.some(Boolean) && !livekit.every(Boolean)) {
+    ctx.addIssue({ code: "custom", path: ["LIVEKIT_API_KEY"], message: "set all of LIVEKIT_PUBLIC_URL, LIVEKIT_API_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET, or none" });
+  }
+  if (env.NODE_ENV === "production" && env.LIVEKIT_PUBLIC_URL?.startsWith("ws://")) {
+    ctx.addIssue({ code: "custom", path: ["LIVEKIT_PUBLIC_URL"], message: "must use wss:// in production" });
+  }
   if (env.NODE_ENV === "production" && env.ARGON2_MEMORY_KIB < 19_456) {
     ctx.addIssue({ code: "custom", path: ["ARGON2_MEMORY_KIB"], message: "must be at least 19456 in production" });
   }
