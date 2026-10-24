@@ -37,6 +37,21 @@ class HttpJson(baseUrl: String, private val http: OkHttpClient, private val json
         accessToken,
     )
 
+    suspend fun <B, R> put(
+        path: String,
+        body: B,
+        bodySerializer: KSerializer<B>,
+        responseSerializer: KSerializer<R>?,
+        accessToken: String? = null,
+    ): ApiResult<R> = execute(
+        Request.Builder().url(base.resolve(path)!!).put(json.encodeToString(bodySerializer, body).toRequestBody(jsonType)),
+        responseSerializer,
+        accessToken,
+    )
+
+    suspend fun delete(path: String, accessToken: String? = null): ApiResult<Unit> =
+        execute(Request.Builder().url(base.resolve(path)!!).delete(), null, accessToken)
+
     suspend fun <R> get(path: String, responseSerializer: KSerializer<R>, accessToken: String? = null): ApiResult<R> =
         execute(Request.Builder().url(base.resolve(path)!!).get(), responseSerializer, accessToken)
 

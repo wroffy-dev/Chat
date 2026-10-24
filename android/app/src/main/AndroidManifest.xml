@@ -9,8 +9,12 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-feature android:name="android.hardware.microphone" android:required="true" />
-    <!-- Notification and Bluetooth permissions come with the notifications / telecom work
-         (docs/08-calling.md §10). -->
+    <!-- Incoming-call notifications (FCM wake-up) and keeping calls alive in the background. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
 
     <!-- allowBackup=false and the extraction rules keep session tokens out of cloud and
          device-transfer backups (docs/04-accounts-and-authentication.md §4). -->
@@ -26,9 +30,30 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.VaultChat">
 
+        <!-- FCM must not start until the user signs in (docs/10-notifications.md §7). -->
+        <meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false" />
+
+        <service
+            android:name=".platform.push.VaultChatMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <receiver
+            android:name=".platform.push.DeclineCallReceiver"
+            android:exported="false" />
+
+        <service
+            android:name=".platform.call.CallForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="microphone|camera" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

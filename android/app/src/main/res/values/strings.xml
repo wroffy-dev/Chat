@@ -51,7 +51,7 @@
 
     <string name="home_connect">Connect</string>
     <string name="home_connected_title">Connected with %1</string>
-    <string name="home_connected_body">Calls ring only while the app is open, for now. Chat comes in a later version.</string>
+    <string name="home_connected_body">Chat comes in a later version.</string>
     <string name="home_video_call">Video call</string>
     <string name="home_voice_call">Voice call</string>
     <string name="action_back">Back</string>
@@ -92,6 +92,11 @@
     <string name="connect_error_already_pending">You already sent a request. Wait for an answer.</string>
     <string name="connect_error_not_pending">This request was already answered or has expired.</string>
 
+    <string name="channel_calls">Incoming calls</string>
+    <string name="channel_ongoing_call">Ongoing call</string>
+    <string name="call_ongoing">Call in progress</string>
+    <string name="home_notifications_off">Notifications are off, so calls can\'t ring when the app is closed.</string>
+    <string name="home_enable">Enable</string>
     <string name="call_starting">Starting call…</string>
     <string name="call_ringing">Ringing…</string>
     <string name="call_incoming">Incoming call</string>

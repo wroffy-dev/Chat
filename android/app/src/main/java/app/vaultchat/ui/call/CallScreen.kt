@@ -1,6 +1,9 @@
 package app.vaultchat.ui.call
 
+import android.app.Activity
 import androidx.activity.compose.BackHandler
+import app.vaultchat.platform.call.CallForegroundService
+import app.vaultchat.platform.push.Push
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -78,6 +81,26 @@ fun CallScreen(
         view.keepScreenOn = true
         onDispose { view.keepScreenOn = false }
     }
+    // While this screen is shown, the call may appear over the lock screen (incoming calls).
+    DisposableEffect(context) {
+        val activity = context as? Activity
+        activity?.setShowWhenLocked(true)
+        activity?.setTurnScreenOn(true)
+        Push.cancelIncomingCall(context)
+        onDispose {
+            activity?.setShowWhenLocked(false)
+            activity?.setTurnScreenOn(false)
+        }
+    }
+
+    // Keep connected calls alive in the background: the foreground service is started here, while
+    // the app is visible, as Android 14+ requires for camera and microphone services.
+    val inCall = state.phase == CallPhase.CONNECTING || state.phase == CallPhase.ACTIVE || state.phase == CallPhase.RECONNECTING
+    DisposableEffect(inCall) {
+        if (inCall) CallForegroundService.start(context, video = kind == CallKind.VIDEO)
+        onDispose { if (inCall) CallForegroundService.stop(context) }
+    }
+
     // Back hangs up rather than leaving a call running behind the app.
     BackHandler(enabled = state.phase != CallPhase.ENDED) { viewModel.controller.hangup() }
 

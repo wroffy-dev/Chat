@@ -20,6 +20,12 @@ android {
     compileSdk = 35
 
     defaultConfig {
+        // Firebase client identifiers for FCM (not secrets, but kept out of git). Empty = push disabled.
+        // Set vaultchat.fcm.* in ~/.gradle/gradle.properties (values from the Firebase console).
+        listOf("projectId", "appId", "apiKey", "senderId").forEach { key ->
+            val value = findProperty("vaultchat.fcm.$key")?.toString() ?: ""
+            buildConfigField("String", "FCM_${key.uppercase()}", "\"$value\"")
+        }
         // Working application ID; final name is open decision D-14 (docs/17-open-decisions.md).
         applicationId = "app.vaultchat"
         // Proposed floor; final value depends on the two users' phones (open decision D-09).
@@ -94,6 +100,9 @@ dependencies {
     implementation(libs.camerax.view)
     // WebRTC calls through the self-hosted LiveKit SFU (docs/08-calling.md).
     implementation(libs.livekit.android)
+    // FCM only (no Analytics/Crashlytics). Initialised manually from build properties; see docs/10.
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
 
     debugImplementation(libs.compose.ui.tooling)
 

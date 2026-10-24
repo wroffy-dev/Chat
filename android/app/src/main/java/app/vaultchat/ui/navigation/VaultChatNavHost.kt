@@ -12,7 +12,11 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import app.vaultchat.AppContainer
 import android.app.Application
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.vaultchat.domain.call.CallResult
+import app.vaultchat.platform.push.Push
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.currentBackStackEntryAsState
 import app.vaultchat.domain.call.CallInfo
@@ -91,6 +95,24 @@ fun VaultChatNavHost(container: AppContainer) {
     // Rings only while the app is open (no push notifications yet).
     IncomingCallWatcher(container.callRepository, enabled = signedIn && !onCallScreen) { call ->
         navController.navigate(CallRoute(video = call.kind == CallKind.VIDEO, peerUsername = call.peerUsername, callId = call.id))
+    }
+
+    // Register this device for call wake-ups once signed in (no-op when FCM is not configured).
+    LaunchedEffect(signedIn) {
+        if (signedIn) Push.registerAfterLogin(container.pushTokenApi)
+    }
+
+    // A tapped incoming-call notification: open the call screen if the call is still ringing.
+    val pendingCallId by container.pendingIncomingCallId.collectAsStateWithLifecycle()
+    LaunchedEffect(pendingCallId, signedIn) {
+        val id = pendingCallId ?: return@LaunchedEffect
+        if (!signedIn) return@LaunchedEffect
+        container.pendingIncomingCallId.value = null
+        Push.cancelIncomingCall(context)
+        val call = (container.callRepository.get(id) as? CallResult.Ok)?.value ?: return@LaunchedEffect
+        if (call.status == CallStatus.RINGING && !call.isCaller && !onCallScreen) {
+            navController.navigate(CallRoute(video = call.kind == CallKind.VIDEO, peerUsername = call.peerUsername, callId = call.id))
+        }
     }
 
     NavHost(navController = navController, startDestination = start) {

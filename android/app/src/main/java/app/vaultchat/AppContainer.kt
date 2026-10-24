@@ -5,6 +5,8 @@ import android.os.Build
 import app.vaultchat.data.auth.AuthApi
 import app.vaultchat.data.auth.AuthorizedCaller
 import app.vaultchat.data.call.RemoteCallRepository
+import app.vaultchat.data.push.PushTokenApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import app.vaultchat.data.connection.ConnectionApi
 import app.vaultchat.domain.call.CallRepository
 import app.vaultchat.data.connection.RemoteConnectionRepository
@@ -41,6 +43,11 @@ class AppContainer(context: Context) {
     val connectionRepository: ConnectionRepository = RemoteConnectionRepository(ConnectionApi(httpJson), caller)
 
     val callRepository: CallRepository = RemoteCallRepository(httpJson, caller)
+
+    val pushTokenApi = PushTokenApi(httpJson, caller)
+
+    /** Set when the user taps an incoming-call notification; the navigation host consumes it. */
+    val pendingIncomingCallId = MutableStateFlow<String?>(null)
 
     val permissionPreferences = PermissionPreferences(appContext)
 }

@@ -13,6 +13,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import android.os.Build
+import androidx.compose.ui.platform.LocalContext
+import app.vaultchat.VaultChatApplication
+import app.vaultchat.domain.permissions.AppPermission
+import app.vaultchat.domain.permissions.PermissionStatus
+import app.vaultchat.platform.push.Push
+import app.vaultchat.ui.permissions.openAppSettings
+import app.vaultchat.ui.permissions.rememberPermissionRequest
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import app.vaultchat.ui.components.PrimaryButton
 import androidx.compose.runtime.getValue
@@ -79,6 +87,25 @@ fun HomeScreen(
                 }
                 TextButton(onClick = onChangePassword) { Text(stringResource(R.string.home_change_password)) }
                 TextButton(onClick = viewModel::logout) { Text(stringResource(R.string.action_log_out)) }
+            }
+            // Incoming calls can only ring when the app is closed if notifications are allowed.
+            val context = LocalContext.current
+            if (Push.configured && Build.VERSION.SDK_INT >= 33) {
+                val prefs = (context.applicationContext as VaultChatApplication).container.permissionPreferences
+                val notifications = rememberPermissionRequest(AppPermission.NOTIFICATIONS, prefs)
+                if (notifications.status != PermissionStatus.Granted) {
+                    StatusBanner(
+                        kind = BannerKind.WARNING,
+                        title = stringResource(R.string.home_notifications_off),
+                        actionLabel = stringResource(
+                            if (notifications.status == PermissionStatus.PermanentlyDenied) R.string.action_open_settings else R.string.home_enable,
+                        ),
+                        onAction = {
+                            if (notifications.status == PermissionStatus.PermanentlyDenied) openAppSettings(context) else notifications.request()
+                        },
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    )
+                }
             }
             if (state.offline) {
                 StatusBanner(

@@ -1,6 +1,15 @@
 package app.vaultchat.platform.call
 
 import android.content.Context
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraManager
+import android.os.PowerManager
+import android.util.Size
+import app.vaultchat.domain.call.CaptureQuality
+import app.vaultchat.domain.call.VideoQualityPolicy
+import io.livekit.android.room.participant.VideoTrackPublishDefaults
+import io.livekit.android.room.track.LocalVideoTrackOptions
+import io.livekit.android.room.track.VideoPreset169
 import app.vaultchat.domain.call.MediaEvent
 import app.vaultchat.domain.call.MediaSession
 import com.twilio.audioswitch.AudioDevice
@@ -31,7 +40,18 @@ import kotlinx.coroutines.launch
 class LiveKitMediaSession(appContext: Context) : MediaSession {
     // Adaptive stream: receive only the resolution actually shown. Dynacast: stop encoding layers
     // nobody watches. Both are off by default in the SDK (docs/08-calling.md §8).
-    val room: Room = LiveKit.create(appContext, RoomOptions(adaptiveStream = true, dynacast = true))
+    val quality: CaptureQuality = chooseQuality(appContext)
+
+    val room: Room = LiveKit.create(
+        appContext,
+        RoomOptions(
+            adaptiveStream = true,
+            dynacast = true,
+            videoTrackCaptureDefaults = LocalVideoTrackOptions(captureParams = preset(quality).capture),
+            // Simulcast lets the server drop to a lower layer instantly when the receiver's network weakens.
+            videoTrackPublishDefaults = VideoTrackPublishDefaults(videoEncoding = preset(quality).encoding, simulcast = true),
+        ),
+    )
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val _events = MutableSharedFlow<MediaEvent>(extraBufferCapacity = 32)
@@ -96,6 +116,12 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
         }
     }
 
+    private fun preset(q: CaptureQuality) = when (q) {
+        CaptureQuality.P1080 -> VideoPreset169.H1080
+        CaptureQuality.P720 -> VideoPreset169.H720
+        CaptureQuality.P540 -> VideoPreset169.H540
+    }
+
     override fun disconnect() {
         if (released) return
         released = true
@@ -105,4 +131,23 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
         room.release()
         scope.cancel()
     }
+}
+
+/** Device capability check for 1080p capture (docs/08-calling.md §8). */
+private fun chooseQuality(context: Context): CaptureQuality {
+    val power = context.getSystemService(PowerManager::class.java)
+    val supports1080p30 = try {
+        val cameras = context.getSystemService(CameraManager::class.java)
+        cameras.cameraIdList.any { id ->
+            val chars = cameras.getCameraCharacteristics(id)
+            val map = chars.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP) ?: return@any false
+            val fhd = Size(1920, 1080)
+            val sizes = map.getOutputSizes(android.graphics.SurfaceTexture::class.java)?.toList().orEmpty()
+            // Minimum frame duration in ns; ≤ 33.4 ms means at least 30 fps at that size.
+            fhd in sizes && map.getOutputMinFrameDuration(android.graphics.SurfaceTexture::class.java, fhd) <= 33_400_000L
+        }
+    } catch (_: Exception) {
+        false
+    }
+    return VideoQualityPolicy.choose(supports1080p30, power?.currentThermalStatus ?: 0, power?.isPowerSaveMode == true)
 }

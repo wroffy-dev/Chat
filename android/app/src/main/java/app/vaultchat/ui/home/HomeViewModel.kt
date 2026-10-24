@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import app.vaultchat.domain.auth.AuthRepository
 import app.vaultchat.domain.auth.MeResult
 import app.vaultchat.domain.connection.Connection
+import app.vaultchat.platform.push.Push
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,6 +45,7 @@ class HomeViewModel(private val auth: AuthRepository) : ViewModel() {
 
     fun logout() {
         viewModelScope.launch {
+            Push.forgetOnDevice()
             auth.logout()
             _state.update { it.copy(navigation = HomeNavigation.LOGIN) }
         }
