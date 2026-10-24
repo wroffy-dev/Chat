@@ -44,6 +44,10 @@ const envSchema = z.object({
   LIVEKIT_API_KEY: z.string().min(1).optional(),
   LIVEKIT_API_SECRET: z.string().min(32, "must be at least 32 characters").optional(),
   CALL_RING_TIMEOUT_SECONDS: z.coerce.number().int().min(20).max(90).default(45),
+
+  // Firebase Cloud Messaging service-account JSON (mounted file, never committed). Optional:
+  // without it no pushes are sent and calls ring only while the app is open.
+  FCM_CREDENTIALS_FILE: z.string().min(1).optional(),
 }).superRefine((env, ctx) => {
   const livekit = [env.LIVEKIT_PUBLIC_URL, env.LIVEKIT_API_URL, env.LIVEKIT_API_KEY, env.LIVEKIT_API_SECRET];
   if (livekit.some(Boolean) && !livekit.every(Boolean)) {

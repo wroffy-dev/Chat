@@ -14,6 +14,8 @@ const SENSITIVE_KEYS = [
   "refreshToken",
   "livekitToken",
   "fcmToken",
+  "credentials",
+  "private_key",
   "secret",
   "text",
   "body",

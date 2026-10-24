@@ -5,6 +5,7 @@ import type { AuthService } from "./auth/service.js";
 import type { ConnectionService } from "./connections/service.js";
 import type { CallService } from "./calls/service.js";
 import type { MediaGateway } from "./calls/media.js";
+import type { PushService } from "./push/service.js";
 import type { Config } from "./config/env.js";
 import type { Database } from "./db/database.js";
 import { buildLoggerOptions } from "./logger.js";
@@ -12,6 +13,7 @@ import { registerErrorHandling } from "./plugins/error-handler.js";
 import { authRoutes } from "./routes/auth.js";
 import { connectionRoutes } from "./routes/connections.js";
 import { callRoutes, livekitWebhookRoutes } from "./routes/calls.js";
+import { deviceRoutes } from "./routes/devices.js";
 import { healthRoutes } from "./routes/health.js";
 import { AppError } from "./errors.js";
 
@@ -24,11 +26,12 @@ export interface AppDeps {
   calls?: CallService;
   /** LiveKit gateway; needed only to verify webhooks. */
   media?: MediaGateway | null;
+  push?: PushService;
   /** Overrides the logger (tests pass `false` or a capturing stream). */
   logger?: FastifyServerOptions["logger"];
 }
 
-export function buildApp({ config, database, auth, connections, calls, media, logger }: AppDeps): FastifyInstance {
+export function buildApp({ config, database, auth, connections, calls, media, push, logger }: AppDeps): FastifyInstance {
   const app = Fastify({
     logger: logger ?? buildLoggerOptions(config),
     // Client-supplied request IDs are not trusted; every request gets a fresh one.
@@ -67,6 +70,7 @@ export function buildApp({ config, database, auth, connections, calls, media, lo
       await api.register(authRoutes, connections ? { auth, connections } : { auth });
       if (connections) await api.register(connectionRoutes, { auth, connections });
       if (calls) await api.register(callRoutes, { auth, calls });
+      if (push) await api.register(deviceRoutes, { auth, push });
     }, { prefix: "/api/v1" });
   }
 

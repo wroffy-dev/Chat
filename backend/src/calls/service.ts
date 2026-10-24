@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Call, PrismaClient, Prisma } from "../generated/prisma/client.js";
 import { type AppError, appError } from "../errors.js";
 import type { MediaGateway, MediaWebhookEvent } from "./media.js";
+import type { PushService } from "../push/service.js";
 
 const SECOND = 1000;
 
@@ -38,7 +39,16 @@ export class CallService {
     private readonly media: MediaGateway | null,
     private readonly ringTimeoutSeconds: number,
     private readonly now: () => Date = () => new Date(),
+    private readonly push: PushService | null = null,
   ) {}
+
+  /** Fire-and-forget push; failures are logged inside PushService and never affect the call. */
+  private notify(userId: string, payload: { t: "call" | "call_end"; id: string }) {
+    if (!this.push) return;
+    void this.push
+      .notifyUser(userId, payload, { highPriority: true, ttlSeconds: this.ringTimeoutSeconds })
+      .catch(() => undefined);
+  }
 
   /** Starts a call to the connected peer. The caller joins the room while it rings (faster setup). */
   async start(userId: string, connectionId: string, kind: CallKind): Promise<JoinInfo> {
@@ -73,6 +83,7 @@ export class CallService {
       }
       throw err;
     }
+    this.notify(calleeUserId, { t: "call", id: call.id });
     return this.joinInfo(call, userId);
   }
 
@@ -106,6 +117,7 @@ export class CallService {
   async cancel(userId: string, callId: string): Promise<void> {
     const call = await this.transition(callId, userId, "caller", ["ringing"], { status: "cancelled", endedAt: this.now() });
     await this.closeRoom(call);
+    this.notify(call.calleeUserId, { t: "call_end", id: call.id });
   }
 
   /** Either participant hangs up. Idempotent: ending an already-ended call is a no-op. */
@@ -176,7 +188,10 @@ export class CallService {
         where: { id: call.id, status: call.status },
         data: { status: missed ? "missed" : "failed", endReason: "timeout", endedAt: new Date(now) },
       });
-      if (r.count === 1) await this.closeRoom(call);
+      if (r.count === 1) {
+        await this.closeRoom(call);
+        if (missed) this.notify(call.calleeUserId, { t: "call_end", id: call.id });
+      }
     }
     return stale.length;
   }

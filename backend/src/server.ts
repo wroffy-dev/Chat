@@ -7,6 +7,7 @@ import { AuthService } from "./auth/service.js";
 import { ConnectionService } from "./connections/service.js";
 import { CallService } from "./calls/service.js";
 import { LiveKitGateway } from "./calls/media.js";
+import { createFcmTransport, PushService } from "./push/service.js";
 import { ConfigError, loadConfig } from "./config/env.js";
 import { PrismaDatabase } from "./db/database.js";
 
@@ -32,8 +33,12 @@ async function main() {
     config.LIVEKIT_PUBLIC_URL && config.LIVEKIT_API_URL && config.LIVEKIT_API_KEY && config.LIVEKIT_API_SECRET
       ? new LiveKitGateway(config.LIVEKIT_PUBLIC_URL, config.LIVEKIT_API_URL, config.LIVEKIT_API_KEY, config.LIVEKIT_API_SECRET)
       : null;
-  const calls = new CallService(database.prisma, media, config.CALL_RING_TIMEOUT_SECONDS);
-  const app = buildApp({ config, database, auth, connections, calls, media });
+  const transport = config.FCM_CREDENTIALS_FILE ? await createFcmTransport(config.FCM_CREDENTIALS_FILE) : null;
+  let logPush: (msg: string, extra?: Record<string, unknown>) => void = () => {};
+  const push = new PushService(database.prisma, transport, (msg, extra) => logPush(msg, extra));
+  const calls = new CallService(database.prisma, media, config.CALL_RING_TIMEOUT_SECONDS, undefined, push);
+  const app = buildApp({ config, database, auth, connections, calls, media, push });
+  logPush = (msg, extra) => app.log.warn(extra ?? {}, msg);
   // The database is owned (and closed) by the public app; the admin app shares it.
   const adminApp = buildAdminApp({ config, prisma: database.prisma, database, auth, admin });
 
@@ -85,6 +90,7 @@ async function main() {
   // Start even if the database is down, so liveness works and /readyz reports the problem.
   const readiness = await database.checkReadiness(config.READINESS_DB_TIMEOUT_MS);
   if (!media) app.log.warn("LiveKit not configured: calling returns 503 MEDIA_UNAVAILABLE");
+  if (!push.enabled) app.log.warn("FCM not configured: incoming calls ring only while the app is open");
   if (readiness.ready) app.log.info("database ready");
   else app.log.warn({ problems: readiness.problems }, "database not ready at startup");
 }
