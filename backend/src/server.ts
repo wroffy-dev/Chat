@@ -1,5 +1,9 @@
 import { resolve } from "node:path";
+import { buildAdminApp } from "./admin/app.js";
+import { AdminService } from "./admin/service.js";
 import { buildApp } from "./app.js";
+import { PasswordHasher } from "./auth/passwords.js";
+import { AuthService } from "./auth/service.js";
 import { ConfigError, loadConfig } from "./config/env.js";
 import { PrismaDatabase } from "./db/database.js";
 
@@ -17,7 +21,12 @@ async function main() {
   }
 
   const database = new PrismaDatabase(config, resolve(config.MIGRATIONS_DIR));
-  const app = buildApp({ config, database });
+  const hasher = new PasswordHasher({ memoryCost: config.ARGON2_MEMORY_KIB, timeCost: config.ARGON2_TIME_COST });
+  const auth = new AuthService(database.prisma, hasher);
+  const admin = new AdminService(database.prisma, hasher, config.ADMIN_TOTP_ENC_KEY);
+  const app = buildApp({ config, database, auth });
+  // The database is owned (and closed) by the public app; the admin app shares it.
+  const adminApp = buildAdminApp({ config, prisma: database.prisma, database, auth, admin });
 
   let shuttingDown = false;
   const shutdown = (signal: string) => {
@@ -29,8 +38,9 @@ async function main() {
       process.exit(1);
     }, config.SHUTDOWN_TIMEOUT_MS);
     force.unref();
-    app
+    adminApp
       .close()
+      .then(() => app.close())
       .then(() => {
         app.log.info("shutdown complete");
         process.exit(0);
@@ -48,6 +58,7 @@ async function main() {
   });
 
   await app.listen({ host: config.HOST, port: config.PORT });
+  await adminApp.listen({ host: config.ADMIN_HOST, port: config.ADMIN_PORT });
 
   // Start even if the database is down, so liveness works and /readyz reports the problem.
   const readiness = await database.checkReadiness(config.READINESS_DB_TIMEOUT_MS);

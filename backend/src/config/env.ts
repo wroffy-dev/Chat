@@ -24,6 +24,22 @@ const envSchema = z.object({
   SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60_000).default(10_000),
   READINESS_DB_TIMEOUT_MS: z.coerce.number().int().min(100).max(30_000).default(2000),
   MIGRATIONS_DIR: z.string().min(1).default("prisma/migrations"),
+
+  // Admin Console listener (docs/05-admin-console.md §2). Bound to loopback; reached via SSH tunnel.
+  ADMIN_HOST: z.string().min(1).default("127.0.0.1"),
+  ADMIN_PORT: port.default(3001),
+  // 32 random bytes, base64. Encrypts admin TOTP secrets at rest.
+  ADMIN_TOTP_ENC_KEY: z
+    .string()
+    .refine((v) => Buffer.from(v, "base64").length === 32, "must be 32 bytes, base64-encoded"),
+
+  // Argon2id cost (docs/04-accounts-and-authentication.md §3). Tests may lower these.
+  ARGON2_MEMORY_KIB: z.coerce.number().int().min(1024).max(1_048_576).default(47_104),
+  ARGON2_TIME_COST: z.coerce.number().int().min(1).max(10).default(1),
+}).superRefine((env, ctx) => {
+  if (env.NODE_ENV === "production" && env.ARGON2_MEMORY_KIB < 19_456) {
+    ctx.addIssue({ code: "custom", path: ["ARGON2_MEMORY_KIB"], message: "must be at least 19456 in production" });
+  }
 });
 
 export type Config = z.infer<typeof envSchema>;

@@ -13,3 +13,106 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+// ---------------------------------------------------------------------------------------------
+// Phase 2 — accounts, sessions, admin, audit (docs/13-database-design.md §3.1–3.4, §3.13).
+// CHECK constraints, partial indexes and role grants that Prisma cannot express live in the
+// migration SQL.
+// ---------------------------------------------------------------------------------------------
+
+model User {
+  id                 String    @id @default(uuid()) @db.Uuid
+  /// 1 or 2 (CHECK in SQL); unique, so at most two app users can ever exist.
+  slot               Int       @unique @db.SmallInt
+  username           String    @unique
+  passwordHash       String    @map("password_hash")
+  passwordChangedAt  DateTime  @map("password_changed_at") @db.Timestamptz(3)
+  mustChangePassword Boolean   @default(true) @map("must_change_password")
+  /// "active" | "disabled" (CHECK in SQL)
+  status             String    @default("active")
+  failedLoginCount   Int       @default(0) @map("failed_login_count")
+  throttledUntil     DateTime? @map("throttled_until") @db.Timestamptz(3)
+  lastSeenAt         DateTime? @map("last_seen_at") @db.Timestamptz(3)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  sessions Session[]
+
+  @@map("users")
+}
+
+model AdminAccount {
+  id                 String    @id @default(uuid()) @db.Uuid
+  /// Always true and unique: exactly one administrator can exist.
+  singleton          Boolean   @default(true) @unique
+  username           String    @unique
+  passwordHash       String    @map("password_hash")
+  totpSecretEnc      Bytes     @map("totp_secret_enc")
+  totpLastUsedStep   BigInt?   @map("totp_last_used_step")
+  failedLoginCount   Int       @default(0) @map("failed_login_count")
+  throttledUntil     DateTime? @map("throttled_until") @db.Timestamptz(3)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  sessions AdminSession[]
+
+  @@map("admin_accounts")
+}
+
+model Session {
+  id                       String    @id @default(uuid()) @db.Uuid
+  userId                   String    @map("user_id") @db.Uuid
+  accessTokenHash          Bytes     @unique @map("access_token_hash")
+  accessExpiresAt          DateTime  @map("access_expires_at") @db.Timestamptz(3)
+  refreshTokenHash         Bytes     @unique @map("refresh_token_hash")
+  previousRefreshTokenHash Bytes?    @map("previous_refresh_token_hash")
+  idleExpiresAt            DateTime  @map("idle_expires_at") @db.Timestamptz(3)
+  absoluteExpiresAt        DateTime  @map("absolute_expires_at") @db.Timestamptz(3)
+  restricted               Boolean   @default(false)
+  fcmToken                 String?   @map("fcm_token")
+  fcmTokenUpdatedAt        DateTime? @map("fcm_token_updated_at") @db.Timestamptz(3)
+  appVersionCode           Int?      @map("app_version_code")
+  deviceModel              String?   @map("device_model")
+  createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastUsedAt               DateTime  @default(now()) @map("last_used_at") @db.Timestamptz(3)
+  revokedAt                DateTime? @map("revoked_at") @db.Timestamptz(3)
+  revokeReason             String?   @map("revoke_reason")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([previousRefreshTokenHash])
+  @@map("sessions")
+}
+
+model AdminSession {
+  id                String    @id @default(uuid()) @db.Uuid
+  adminId           String    @map("admin_id") @db.Uuid
+  tokenHash         Bytes     @unique @map("token_hash")
+  csrfToken         String    @map("csrf_token")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastUsedAt        DateTime  @default(now()) @map("last_used_at") @db.Timestamptz(3)
+  idleExpiresAt     DateTime  @map("idle_expires_at") @db.Timestamptz(3)
+  absoluteExpiresAt DateTime  @map("absolute_expires_at") @db.Timestamptz(3)
+  revokedAt         DateTime? @map("revoked_at") @db.Timestamptz(3)
+
+  admin AdminAccount @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@map("admin_sessions")
+}
+
+model AuditEvent {
+  id          BigInt   @id @default(autoincrement())
+  occurredAt  DateTime @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  /// "user" | "admin" | "system"
+  actorType   String   @map("actor_type")
+  actorId     String?  @map("actor_id") @db.Uuid
+  action      String
+  targetType  String?  @map("target_type")
+  targetId    String?  @map("target_id") @db.Uuid
+  ipTruncated String?  @map("ip_truncated") @db.Inet
+  metadata    Json?
+
+  @@index([occurredAt(sort: Desc)])
+  @@index([action, occurredAt(sort: Desc)])
+  @@map("audit_events")
+}

@@ -1,19 +1,25 @@
 import { randomUUID } from "node:crypto";
+import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
+import type { AuthService } from "./auth/service.js";
 import type { Config } from "./config/env.js";
 import type { Database } from "./db/database.js";
 import { buildLoggerOptions } from "./logger.js";
 import { registerErrorHandling } from "./plugins/error-handler.js";
+import { authRoutes } from "./routes/auth.js";
 import { healthRoutes } from "./routes/health.js";
+import { AppError } from "./errors.js";
 
 export interface AppDeps {
   config: Config;
   database: Database;
+  /** App-user authentication. When omitted (some tests), the /api/v1 routes are not registered. */
+  auth?: AuthService;
   /** Overrides the logger (tests pass `false` or a capturing stream). */
   logger?: FastifyServerOptions["logger"];
 }
 
-export function buildApp({ config, database, logger }: AppDeps): FastifyInstance {
+export function buildApp({ config, database, auth, logger }: AppDeps): FastifyInstance {
   const app = Fastify({
     logger: logger ?? buildLoggerOptions(config),
     // Client-supplied request IDs are not trusted; every request gets a fresh one.
@@ -40,6 +46,18 @@ export function buildApp({ config, database, logger }: AppDeps): FastifyInstance
   registerErrorHandling(app);
 
   app.register(healthRoutes, { database, readinessTimeoutMs: config.READINESS_DB_TIMEOUT_MS });
+
+  if (auth) {
+    app.register(async (api) => {
+      // Per-route limits only (in-memory store: a single backend instance, docs/02 ADR-07).
+      await api.register(rateLimit, {
+        global: false,
+        errorResponseBuilder: (_req, context) =>
+          new AppError(429, "RATE_LIMITED", "Too many requests. Try again later.", undefined, Math.ceil(context.ttl / 1000)),
+      });
+      await api.register(authRoutes, { auth });
+    }, { prefix: "/api/v1" });
+  }
 
   app.addHook("onClose", async () => {
     await database.close();

@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { ConfigError, loadConfig } from "../src/config/env.js";
 
-const base = { DATABASE_URL: "postgresql://u:p@localhost:5432/db" };
+const base = {
+  DATABASE_URL: "postgresql://u:p@localhost:5432/db",
+  ADMIN_TOTP_ENC_KEY: Buffer.alloc(32).toString("base64"),
+};
 
 describe("loadConfig", () => {
   it("applies defaults", () => {
@@ -29,6 +32,12 @@ describe("loadConfig", () => {
       expect(problems).toContain("PORT");
       expect(problems).toContain("NODE_ENV");
     }
+  });
+
+  it("requires a 32-byte admin TOTP key and production-grade Argon2 settings", () => {
+    expect(() => loadConfig({ ...base, ADMIN_TOTP_ENC_KEY: "dG9vIHNob3J0" })).toThrow(/ADMIN_TOTP_ENC_KEY/);
+    expect(() => loadConfig({ ...base, NODE_ENV: "production", ARGON2_MEMORY_KIB: "1024" })).toThrow(/ARGON2_MEMORY_KIB/);
+    expect(loadConfig({ ...base, NODE_ENV: "production" }).ARGON2_MEMORY_KIB).toBe(47_104);
   });
 
   it("never echoes the value of an invalid variable", () => {

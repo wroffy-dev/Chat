@@ -37,6 +37,7 @@ function validationDetails(error: FastifyError): ErrorDetail[] {
 export function registerErrorHandling(app: FastifyInstance) {
   app.setErrorHandler((error: FastifyError, request, reply) => {
     if (error instanceof AppError) {
+      if (error.retryAfterSeconds !== undefined) reply.header("Retry-After", String(error.retryAfterSeconds));
       return send(reply, request, error.statusCode, error.code, error.message, error.details);
     }
 

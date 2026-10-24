@@ -5,7 +5,13 @@ export type ErrorCode =
   | "BAD_REQUEST"
   | "VALIDATION_FAILED"
   | "UNAUTHENTICATED"
+  | "INVALID_CREDENTIALS"
+  | "TOKEN_EXPIRED"
+  | "SESSION_REVOKED"
   | "FORBIDDEN"
+  | "ACCOUNT_DISABLED"
+  | "PASSWORD_CHANGE_REQUIRED"
+  | "WEAK_PASSWORD"
   | "NOT_FOUND"
   | "METHOD_NOT_ALLOWED"
   | "CONFLICT"
@@ -29,6 +35,10 @@ export interface ErrorBody {
   };
 }
 
+export function appError(statusCode: number, code: ErrorCode, details?: ErrorDetail[]): AppError {
+  return new AppError(statusCode, code, DEFAULT_MESSAGES[code], details);
+}
+
 /** An error whose code and message are safe to show to the client. */
 export class AppError extends Error {
   constructor(
@@ -36,6 +46,8 @@ export class AppError extends Error {
     public readonly code: ErrorCode,
     message: string,
     public readonly details?: ErrorDetail[],
+    /** Sent as the Retry-After header (seconds) for 429 responses. */
+    public readonly retryAfterSeconds?: number,
   ) {
     super(message);
     this.name = "AppError";
@@ -46,7 +58,13 @@ export const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   BAD_REQUEST: "The request could not be read.",
   VALIDATION_FAILED: "The request is not valid.",
   UNAUTHENTICATED: "Authentication is required.",
+  INVALID_CREDENTIALS: "Username or password is incorrect.",
+  TOKEN_EXPIRED: "Your session token has expired. Refresh it and try again.",
+  SESSION_REVOKED: "Your session has ended. Log in again.",
   FORBIDDEN: "You are not allowed to do this.",
+  ACCOUNT_DISABLED: "This account is disabled.",
+  PASSWORD_CHANGE_REQUIRED: "You must change your password before continuing.",
+  WEAK_PASSWORD: "Choose a longer or less common password.",
   NOT_FOUND: "Not found.",
   METHOD_NOT_ALLOWED: "Method not allowed.",
   CONFLICT: "The request conflicts with the current state.",

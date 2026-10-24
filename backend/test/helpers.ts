@@ -8,6 +8,9 @@ export function testConfig(overrides: Record<string, string> = {}): Config {
     NODE_ENV: "test",
     DATABASE_URL: "postgresql://user:test-only-password@localhost:5432/test",
     LOG_LEVEL: "info",
+    // Test-only key (32 zero bytes) and cheap Argon2 settings to keep tests fast.
+    ADMIN_TOTP_ENC_KEY: Buffer.alloc(32).toString("base64"),
+    ARGON2_MEMORY_KIB: "1024",
     ...overrides,
   });
 }
@@ -33,4 +36,13 @@ export function captureLogs(config: Config) {
     },
   });
   return { lines, logger: { ...buildLoggerOptions(config), stream } };
+}
+
+export const TEST_DB_URL = process.env["TEST_DATABASE_URL"];
+
+/** Empties the Phase 2 tables. Only ever pointed at the disposable TEST_DATABASE_URL. */
+export async function resetDatabase(prisma: { $executeRawUnsafe(sql: string): Promise<unknown> }) {
+  await prisma.$executeRawUnsafe(
+    'TRUNCATE "audit_events", "admin_sessions", "admin_accounts", "sessions", "users" RESTART IDENTITY CASCADE',
+  );
 }
