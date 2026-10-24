@@ -2,14 +2,22 @@
 
 Guidance for AI assistants and contributors working in this repository.
 
-## Current phase: documentation only
+## Current phase: implementation, Phase 1 (foundation)
 
-The repository contains design documentation for **Vault Chat** (working name), a private
-Android video-calling and text-chat app for exactly two pre-approved users. **No application code
-exists yet.** Do not start implementing unless the owner explicitly asks for implementation.
+The owner has authorised implementation, one phase at a time, in the order listed in
+`docs/IMPLEMENTATION_PLAN.md`. That file is the record of what is actually built and verified —
+update it with every change and never mark something done without evidence (tests, build output).
 
-Start with `README.md`, then `docs/17-open-decisions.md` — several product decisions are
-intentionally unresolved and must not be decided silently.
+Start with `README.md`, `docs/IMPLEMENTATION_PLAN.md`, then `docs/17-open-decisions.md` — several
+product decisions are intentionally unresolved and must not be decided silently.
+
+## Working in the code
+
+- Backend (`backend/`): `npm run typecheck`, `npm run lint`, `npm test` must pass. DB integration tests
+  need `TEST_DATABASE_URL` pointing at a disposable database — never a production URL.
+- Android (`android/`): `./gradlew :app:testDebugUnitTest :app:assembleDebug`. Keep `domain/` and `data/`
+  free of Android imports so they stay testable on a plain JVM.
+- Only add database tables in the phase that needs them, through Prisma migrations.
 
 ## Non-negotiable rules
 

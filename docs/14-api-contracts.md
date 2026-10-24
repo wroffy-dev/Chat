@@ -26,13 +26,15 @@ No stack traces, SQL errors or internal names are ever returned.
 
 | HTTP | Codes |
 |---|---|
-| 400 | `VALIDATION_FAILED` (with `details: [{path, rule}]`) |
+| 400 | `VALIDATION_FAILED` (with `details: [{path, rule}]`), `BAD_REQUEST` (unreadable body, e.g. malformed JSON) |
 | 401 | `UNAUTHENTICATED`, `INVALID_CREDENTIALS`, `TOKEN_EXPIRED`, `SESSION_REVOKED` |
 | 403 | `FORBIDDEN`, `ACCOUNT_DISABLED`, `PASSWORD_CHANGE_REQUIRED`, `UPGRADE_REQUIRED` |
 | 404 | `NOT_FOUND` (also used when the resource exists but the caller is not a member) |
-| 409 | `ALREADY_CONNECTED`, `REQUEST_ALREADY_PENDING`, `REQUEST_NOT_PENDING`, `CONVERSATION_CLEARED`, `CALL_IN_PROGRESS`, `CALL_NOT_ACTIVE`, `SHARING_DISABLED`, `PEER_NOT_IN_CHAT` (only if D-01 = option C) |
+| 405 | `METHOD_NOT_ALLOWED` |
+| 409 | `CONFLICT` (generic), `ALREADY_CONNECTED`, `REQUEST_ALREADY_PENDING`, `REQUEST_NOT_PENDING`, `CONVERSATION_CLEARED`, `CALL_IN_PROGRESS`, `CALL_NOT_ACTIVE`, `SHARING_DISABLED`, `PEER_NOT_IN_CHAT` (only if D-01 = option C) |
 | 410 | `QR_INVALID_OR_EXPIRED` |
 | 413 | `PAYLOAD_TOO_LARGE` |
+| 415 | `UNSUPPORTED_MEDIA_TYPE` (request body is not JSON) |
 | 422 | `MESSAGE_TOO_LONG`, `WEAK_PASSWORD` |
 | 429 | `RATE_LIMITED` (+ `Retry-After` header) |
 | 500 / 503 | `INTERNAL_ERROR`, `SERVICE_UNAVAILABLE`, `MEDIA_UNAVAILABLE` |

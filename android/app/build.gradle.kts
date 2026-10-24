@@ -1,0 +1,95 @@
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
+}
+
+fun apiBaseUrl(buildType: String): String {
+    val url = (findProperty("vaultchat.apiBaseUrl") ?: findProperty("vaultchat.apiBaseUrl.$buildType"))
+        ?.toString()
+        ?: throw GradleException("Missing vaultchat.apiBaseUrl.$buildType in gradle.properties")
+    if (buildType == "release" && !url.startsWith("https://")) {
+        throw GradleException("Release builds must use an https:// API base URL")
+    }
+    return if (url.endsWith("/")) url else "$url/"
+}
+
+android {
+    namespace = "app.vaultchat"
+    compileSdk = 35
+
+    defaultConfig {
+        // Working application ID; final name is open decision D-14 (docs/17-open-decisions.md).
+        applicationId = "app.vaultchat"
+        // Proposed floor; final value depends on the two users' phones (open decision D-09).
+        minSdk = 29
+        targetSdk = 35
+        versionCode = 1
+        versionName = "0.1.0"
+    }
+
+    signingConfigs {
+        // Release signing material is never committed. Provide it on the release machine via
+        // ~/.gradle/gradle.properties (see docs/16-deployment-and-operations.md §9).
+        val storeFilePath = findProperty("vaultchat.signing.storeFile")?.toString()
+        if (storeFilePath != null) {
+            create("release") {
+                storeFile = file(storeFilePath)
+                storePassword = findProperty("vaultchat.signing.storePassword")?.toString()
+                keyAlias = findProperty("vaultchat.signing.keyAlias")?.toString()
+                keyPassword = findProperty("vaultchat.signing.keyPassword")?.toString()
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix = ".dev"
+            buildConfigField("String", "API_BASE_URL", "\"${apiBaseUrl("debug")}\"")
+        }
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            buildConfigField("String", "API_BASE_URL", "\"${apiBaseUrl("release")}\"")
+            signingConfig = signingConfigs.findByName("release")
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
+    packaging {
+        resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+    }
+}
+
+dependencies {
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.navigation.compose)
+    implementation(platform(libs.compose.bom))
+    implementation(libs.compose.ui)
+    implementation(libs.compose.ui.tooling.preview)
+    implementation(libs.compose.material3)
+    implementation(libs.compose.material.icons.core)
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.okhttp)
+
+    debugImplementation(libs.compose.ui.tooling)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
+}

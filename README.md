@@ -4,9 +4,19 @@ A private, Android-only app for **exactly two pre-approved people**: high-qualit
 calls, plus text-only chat whose messages disappear for both users when either leaves the chat.
 Distributed as a privately signed APK, not on Google Play.
 
-> **Project status: documentation only.** No application code exists yet. Everything in `docs/` is a
-> proposed design, not a description of working software. See
-> [docs/00-repository-assessment.md](docs/00-repository-assessment.md).
+> **Project status: Phase 1 (foundation) in progress.** The backend foundation (config, logging, errors,
+> health checks, database connectivity) is built and tested. The Android app shell is written but has not
+> been compiled yet. No user-facing features work yet. Live status:
+> [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
+
+## Repository layout
+
+| Path | Contents |
+|---|---|
+| `backend/` | Fastify + TypeScript + Prisma API ([README](backend/README.md)) |
+| `android/` | Kotlin + Jetpack Compose app ([README](android/README.md)) |
+| `deploy/` | Local development infrastructure (PostgreSQL) |
+| `docs/` | Design documentation and implementation status |
 
 ## Planned stack
 
@@ -39,7 +49,8 @@ Distributed as a privately signed APK, not on Google Play.
 | 15 | [Android UI and UX](docs/15-android-ui-ux.md) | Screens, states, accessibility |
 | 16 | [Deployment and operations](docs/16-deployment-and-operations.md) | Coolify services, ports/firewall, LiveKit, backups, releases, monitoring |
 | 17 | [Open decisions](docs/17-open-decisions.md) | Choices the product owner still has to make |
-| 18 | [Roadmap](docs/18-roadmap.md) | De-risking spikes and implementation phases (for later) |
+| 18 | [Roadmap](docs/18-roadmap.md) | De-risking spikes and implementation phases |
+| — | [Implementation plan and status](docs/IMPLEMENTATION_PLAN.md) | What is actually built and verified |
 
 ## Things this project will not claim
 
