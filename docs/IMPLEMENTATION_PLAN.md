@@ -213,10 +213,10 @@ user. Server logs scanned afterwards: no passwords or tokens present.
 | Backend `PUT/DELETE /api/v1/devices/push-token` (token on the session, moved if re-registered, cleared on revoke/logout) | Done (verified) | `test/push.integration.test.ts` |
 | Backend FCM sender (firebase-admin 14.4.0, HTTP v1) enabled by `FCM_CREDENTIALS_FILE`; opaque `{t, id}` data messages, high priority, TTL = ring timeout; dead tokens cleared | Done (verified with a recording transport) | Tests; **not sent to real FCM** (no Firebase project) |
 | Wake-up on call start; `call_end` on cancel and missed | Done (verified) | Tests |
-| Android: Firebase initialised from build properties only; auto-init off until login; token registration after login, deletion on logout | Done (CI compile pending at time of writing) | Needs a Firebase project to exercise |
-| Android: incoming-call notification (CallStyle + full-screen intent, generic text), Decline without opening the app, tap opens the call screen | Done (CI compile pending) | Not run on a device |
-| Android: `CallForegroundService` (microphone/camera types) during connected calls | Done (CI compile pending) | Not run on a device |
-| 1080p capture only on capable, cool phones without power saving (`VideoQualityPolicy` + Camera2 capability check) | Policy verified on JVM; capability check compile pending | `VideoQualityPolicyTest` |
+| Android: Firebase initialised from build properties only; auto-init off until login; token registration after login, deletion on logout | Done (compiles; CI run 40137301179) | Needs a Firebase project to exercise |
+| Android: incoming-call notification (CallStyle + full-screen intent, generic text), Decline without opening the app, tap opens the call screen | Done (compiles; CI run 40137301179) | Not run on a device |
+| Android: `CallForegroundService` (microphone/camera types) during connected calls | Done (compiles; CI run 40137301179) | Not run on a device |
+| 1080p capture only on capable, cool phones without power saving (`VideoQualityPolicy` + Camera2 capability check) | Policy verified on JVM; capability check compiles (CI run 40137301179) | `VideoQualityPolicyTest` |
 | core-telecom integration (system call UI, Bluetooth/car controls) | **Not started** — spike S-2 | |
 | WebRTC stats (RTT, jitter, loss, resolution) in diagnostics | **Not started** | |
 
