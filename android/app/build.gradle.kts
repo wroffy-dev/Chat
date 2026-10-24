@@ -92,6 +92,8 @@ dependencies {
     implementation(libs.camerax.camera2)
     implementation(libs.camerax.lifecycle)
     implementation(libs.camerax.view)
+    // WebRTC calls through the self-hosted LiveKit SFU (docs/08-calling.md).
+    implementation(libs.livekit.android)
 
     debugImplementation(libs.compose.ui.tooling)
 

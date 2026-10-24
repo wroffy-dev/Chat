@@ -51,7 +51,9 @@
 
     <string name="home_connect">Connect</string>
     <string name="home_connected_title">Connected with %1</string>
-    <string name="home_connected_body">Chat and calls will appear here in a later version of the app.</string>
+    <string name="home_connected_body">Calls ring only while the app is open, for now. Chat comes in a later version.</string>
+    <string name="home_video_call">Video call</string>
+    <string name="home_voice_call">Voice call</string>
     <string name="action_back">Back</string>
     <string name="action_accept">Accept</string>
     <string name="action_reject">Reject</string>
@@ -89,6 +91,37 @@
     <string name="connect_error_qr_invalid">This code has expired or was already used. Ask for a new one.</string>
     <string name="connect_error_already_pending">You already sent a request. Wait for an answer.</string>
     <string name="connect_error_not_pending">This request was already answered or has expired.</string>
+
+    <string name="call_starting">Starting call…</string>
+    <string name="call_ringing">Ringing…</string>
+    <string name="call_incoming">Incoming call</string>
+    <string name="call_connecting">Connecting…</string>
+    <string name="call_connected">Connected</string>
+    <string name="call_reconnecting">Reconnecting…</string>
+    <string name="call_ended">Call ended</string>
+    <string name="call_ended_declined">Call declined</string>
+    <string name="call_ended_no_answer">No answer</string>
+    <string name="call_ended_network">Call ended — connection lost</string>
+    <string name="call_ended_unavailable">Calling is temporarily unavailable</string>
+    <string name="call_ended_busy">A call is already in progress</string>
+    <string name="call_ended_failed">The call could not be connected</string>
+    <string name="call_ended_cancelled">Call cancelled</string>
+    <string name="call_accept">Accept</string>
+    <string name="call_allow_and_accept">Allow and accept</string>
+    <string name="call_decline">Decline</string>
+    <string name="call_close">Close</string>
+    <string name="call_end">End call</string>
+    <string name="call_mute">Mute</string>
+    <string name="call_unmute">Unmute</string>
+    <string name="call_speaker">Speaker</string>
+    <string name="call_earpiece">Earpiece</string>
+    <string name="call_camera_off">Camera off</string>
+    <string name="call_camera_on">Camera on</string>
+    <string name="call_switch_camera">Switch camera</string>
+    <string name="call_permission_needed">Calls need the microphone (and the camera for video). Nothing is recorded.</string>
+    <string name="call_permission_blocked">Microphone or camera access is turned off for this app. Turn it on in Settings to make calls.</string>
+    <string name="call_allow_microphone">Allow microphone</string>
+    <string name="call_allow_camera">Allow camera</string>
 
     <string name="home_not_connected_title">You\'re not connected yet</string>
     <string name="home_not_connected_body">Connect with the other person using a QR code.</string>

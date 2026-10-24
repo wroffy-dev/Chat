@@ -11,6 +11,16 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import app.vaultchat.AppContainer
+import android.app.Application
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.navigation.compose.currentBackStackEntryAsState
+import app.vaultchat.domain.call.CallInfo
+import app.vaultchat.domain.call.CallKind
+import app.vaultchat.domain.call.CallStatus
+import app.vaultchat.ui.call.CallScreen
+import app.vaultchat.ui.call.CallViewModel
+import app.vaultchat.ui.call.IncomingCallWatcher
 import app.vaultchat.ui.connect.InboxScreen
 import app.vaultchat.ui.connect.InboxViewModel
 import app.vaultchat.ui.connect.ScanQrScreen
@@ -44,6 +54,15 @@ data object ShowQrRoute
 @Serializable
 data object ScanQrRoute
 
+/** Outgoing: [connectionId] set, [callId] null. Incoming: [callId] set. */
+@Serializable
+data class CallRoute(
+    val video: Boolean,
+    val peerUsername: String,
+    val connectionId: String? = null,
+    val callId: String? = null,
+)
+
 /** Clears the whole back stack, so Back never returns to a screen from the previous state. */
 private fun NavHostController.replaceAll(route: Any) {
     navigate(route) {
@@ -63,6 +82,15 @@ fun VaultChatNavHost(container: AppContainer) {
             user.mustChangePassword -> ChangePasswordRoute(forced = true)
             else -> HomeRoute
         }
+    }
+
+    val context = LocalContext.current
+    val backStack by navController.currentBackStackEntryAsState()
+    val onCallScreen = backStack?.destination?.route?.contains("CallRoute") == true
+    val signedIn = backStack?.destination?.route?.let { r -> listOf("HomeRoute", "InboxRoute", "ShowQrRoute", "ScanQrRoute").any { r.contains(it) } } == true
+    // Rings only while the app is open (no push notifications yet).
+    IncomingCallWatcher(container.callRepository, enabled = signedIn && !onCallScreen) { call ->
+        navController.navigate(CallRoute(video = call.kind == CallKind.VIDEO, peerUsername = call.peerUsername, callId = call.id))
     }
 
     NavHost(navController = navController, startDestination = start) {
@@ -102,6 +130,33 @@ fun VaultChatNavHost(container: AppContainer) {
                 onSignedOut = { navController.replaceAll(LoginRoute) },
                 onPasswordChangeRequired = { navController.replaceAll(ChangePasswordRoute(forced = true)) },
                 onOpenInbox = { navController.navigate(InboxRoute) },
+                onCall = { connectionId, peer, video ->
+                    navController.navigate(CallRoute(video = video, peerUsername = peer, connectionId = connectionId))
+                },
+            )
+        }
+        composable<CallRoute> { entry ->
+            val route = entry.toRoute<CallRoute>()
+            val kind = if (route.video) CallKind.VIDEO else CallKind.VOICE
+            val viewModel: CallViewModel = viewModel(
+                factory = viewModelFactory {
+                    initializer { CallViewModel(context.applicationContext as Application, container.callRepository) }
+                },
+            )
+            CallScreen(
+                viewModel = viewModel,
+                permissionPreferences = container.permissionPreferences,
+                kind = kind,
+                incoming = route.callId != null,
+                onStart = {
+                    val callId = route.callId
+                    if (callId != null) {
+                        viewModel.showIncoming(CallInfo(callId, kind, CallStatus.RINGING, isCaller = false, peerUsername = route.peerUsername))
+                    } else if (route.connectionId != null) {
+                        viewModel.startOutgoing(route.connectionId, kind, route.peerUsername)
+                    }
+                },
+                onClose = { navController.popBackStack() },
             )
         }
         composable<InboxRoute> {

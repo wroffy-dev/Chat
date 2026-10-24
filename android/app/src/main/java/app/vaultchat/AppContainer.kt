@@ -4,7 +4,9 @@ import android.content.Context
 import android.os.Build
 import app.vaultchat.data.auth.AuthApi
 import app.vaultchat.data.auth.AuthorizedCaller
+import app.vaultchat.data.call.RemoteCallRepository
 import app.vaultchat.data.connection.ConnectionApi
+import app.vaultchat.domain.call.CallRepository
 import app.vaultchat.data.connection.RemoteConnectionRepository
 import app.vaultchat.domain.connection.ConnectionRepository
 import app.vaultchat.data.auth.DeviceDto
@@ -37,6 +39,8 @@ class AppContainer(context: Context) {
     )
 
     val connectionRepository: ConnectionRepository = RemoteConnectionRepository(ConnectionApi(httpJson), caller)
+
+    val callRepository: CallRepository = RemoteCallRepository(httpJson, caller)
 
     val permissionPreferences = PermissionPreferences(appContext)
 }

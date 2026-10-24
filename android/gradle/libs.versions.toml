@@ -13,6 +13,7 @@ serialization = "1.7.3"
 okhttp = "4.12.0"
 zxing = "3.5.3"
 camerax = "1.4.1"
+livekit = "2.29.1"
 junit = "4.13.2"
 
 [libraries]
@@ -35,6 +36,7 @@ zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" 
 camerax-camera2 = { group = "androidx.camera", name = "camera-camera2", version.ref = "camerax" }
 camerax-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "camerax" }
 camerax-view = { group = "androidx.camera", name = "camera-view", version.ref = "camerax" }
+livekit-android = { group = "io.livekit", name = "livekit-android", version.ref = "livekit" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 
 [plugins]

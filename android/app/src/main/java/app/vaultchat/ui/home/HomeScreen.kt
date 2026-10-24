@@ -39,6 +39,7 @@ fun HomeScreen(
     onSignedOut: () -> Unit,
     onPasswordChangeRequired: () -> Unit,
     onOpenInbox: () -> Unit,
+    onCall: (connectionId: String, peerUsername: String, video: Boolean) -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -93,6 +94,20 @@ fun HomeScreen(
                 EmptyState(
                     title = stringResource(R.string.home_connected_title, connection.peerUsername),
                     body = stringResource(R.string.home_connected_body),
+                    action = {
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            PrimaryButton(
+                                stringResource(R.string.home_video_call),
+                                { onCall(connection.id, connection.peerUsername, true) },
+                                modifier = Modifier.weight(1f),
+                            )
+                            PrimaryButton(
+                                stringResource(R.string.home_voice_call),
+                                { onCall(connection.id, connection.peerUsername, false) },
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    },
                 )
             } else {
                 EmptyState(
