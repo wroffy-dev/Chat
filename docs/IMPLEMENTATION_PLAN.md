@@ -193,8 +193,8 @@ user. Server logs scanned afterwards: no passwords or tokens present.
 |---|---|---|
 | `CallController` (ringing, accept/decline, polling, remote join/leave, reconnect + 30 s give-up, join watchdog, one cleanup path, diagnostics) | Done (verified on JVM) | 10 tests with virtual time |
 | `RemoteCallRepository` | Done (compiled on JVM) | |
-| `LiveKitMediaSession` (adaptive stream + dynacast, mic/camera, switch camera, speaker/earpiece, video tracks) | Done — CI compile pending at time of writing | API names checked against SDK v2.29.1 source |
-| Call screen (all phases, controls, permission prompts, keep-screen-on, Back = hang up), Home call buttons | Done — CI compile pending | Not run on a device |
+| `LiveKitMediaSession` (adaptive stream + dynacast, mic/camera, switch camera, speaker/earpiece, video tracks) | Done (compiled, unit-tested, linted in CI run 40132109201 attempt 2; attempt 1 failed on a Maven Central 429 before compiling) | API names checked against SDK v2.29.1 source |
+| Call screen (all phases, controls, permission prompts, keep-screen-on, Back = hang up), Home call buttons | Done (compiled in CI run 40132109201) | Not run on a device |
 
 ### Known limitations of this slice (planned next)
 
@@ -208,9 +208,8 @@ user. Server logs scanned afterwards: no passwords or tokens present.
 
 ## Next task
 
-1. Confirm the CI result for the Android calling code and fix any compile issues.
-2. First real call: run PostgreSQL + LiveKit locally (`deploy/docker-compose.dev.yml`), backend with
+1. First real call: run PostgreSQL + LiveKit locally (`deploy/docker-compose.dev.yml`), backend with
    LiveKit env vars, two emulators or phones; record results against docs/09 (T-SETUP-1, T-CLEAN).
-3. Calling slice 2: foreground service with `phoneCall|camera|microphone` types, core-telecom (spike S-2),
+2. Calling slice 2: foreground service with `phoneCall|camera|microphone` types, core-telecom (spike S-2),
    FCM wake-up for incoming calls, 1080p capability check, WebRTC stats in diagnostics.
-4. Then chat (D-01/D-02 decided).
+3. Then chat (D-01/D-02 decided).
