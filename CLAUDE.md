@@ -2,7 +2,7 @@
 
 Guidance for AI assistants and contributors working in this repository.
 
-## Current phase: implementation (Phases 1–2 done; see docs/IMPLEMENTATION_PLAN.md)
+## Current phase: implementation (foundation, accounts/admin, QR pairing done; see docs/IMPLEMENTATION_PLAN.md)
 
 The owner has authorised implementation, one phase at a time, in the order listed in
 `docs/IMPLEMENTATION_PLAN.md`. That file is the record of what is actually built and verified —

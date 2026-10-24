@@ -6,7 +6,7 @@ This file tracks what has **actually** been built and verified. Design lives in 
 Status words: **Done (verified)** = built and checked by the tests/commands listed; **Done (unverified)** =
 written but not compiled or run; **Not started**; **Blocked**.
 
-Last updated: 2026-10-24 (UTC), after Phase 2.
+Last updated: 2026-10-24 (UTC), after the QR-connection phase.
 
 ## Phase order
 
@@ -14,19 +14,16 @@ Last updated: 2026-10-24 (UTC), after Phase 2.
 |---|---|---|
 | 1 | Foundation | **Done** — backend verified locally and in CI; Android builds, unit-tests and lints in CI. Not yet launched on an emulator/device |
 | 2 | Authentication and Admin Console | **Done (backend verified; Android verified in CI, not yet on a device)** — see below |
-| 3 | Calling | Not started — **see ordering question Q-1** |
-| 4 | QR connection | Not started |
+| 3 | QR connection (moved before calling, Q-1) | **Done (backend verified; Android logic verified on JVM and against the real backend; screens compiled in CI, not yet on a device)** |
+| 4 | Calling | Not started — next |
 | 5 | Text chat | Not started — needs decision D-01 / D-02 |
 | 6 | Security and reliability | Not started |
 | 7 | Private release | Not started |
 
-### Q-1 (needs owner approval): run QR connection before calling?
+### Q-1 (decided 2026-10-24): QR connection before calling
 
-The requested order puts Calling (3) before QR connection (4). The approved design only allows a call
-between users who have an accepted connection (`POST /calls` takes a `connectionId`, docs/14 §6). Building
-calls first would need a temporary rule such as "the two accounts may always call each other", which is a
-product change. **Recommendation:** do Phase 4 (QR connection) before Phase 3 (Calling). The calling work
-itself is unchanged. Until approved, Phase 2 is unaffected and comes next either way.
+The owner replied "Go" to the recommendation, so QR connection was built before calling, because calls
+require an accepted connection. The calling design is unchanged.
 
 ## Phase 1 — Foundation
 
@@ -143,10 +140,42 @@ user. Server logs scanned afterwards: no passwords or tokens present.
 - [x] Restricted admin access (loopback + TOTP + CSRF) — tested.
 - [ ] Android app signs in on a real device/emulator against a running backend — **not yet done**.
 
+## Phase 3 — QR connection
+
+### Backend
+
+| Item | Status | Evidence |
+|---|---|---|
+| Migration `qr_connection`: `qr_tokens`, `connection_requests`, `connections`; CHECKs, one-pending-per-pair partial unique index, canonical pair order | Done (verified) | Applied locally; integration tests |
+| Connections permanent: database trigger refuses DELETE and changes to the pair | Done (verified) | Test: delete and swap both rejected by PostgreSQL |
+| 256-bit single-use QR tokens (hash stored), 60 s TTL, superseded on refresh, payload `vaultchat://connect?v=1&t=…` only | Done (verified) | Integration tests |
+| Atomic redemption; one generic `QR_INVALID_OR_EXPIRED` for unknown/expired/used/superseded/own token | Done (verified) | Simultaneous-scan test: exactly one 201, one 410 |
+| Accept / reject / cancel with role checks (404 for wrong user), 5-minute lazy expiry, cross-scan cancellation | Done (verified) | Integration tests |
+| Concurrency: both users accepting cross-scans at once | Done (verified) | Test found a **deadlock (500)**; fixed by locking all of the pair's requests in id order; test then passed 5/5 runs |
+| Per-user limits: 6 QR/min, 60/h; 10 redeems/min | Done (verified) | Test: 7th QR in a minute → 429 |
+| `/me` returns the connection; Admin users page shows whether the pair is connected | Done (verified) | Tests |
+| Hourly cleanup of QR tokens older than 24 h | Done (unit not separately tested) | Runs in `server.ts` |
+| Live push of new requests (WebSocket `connection_request.created`) | **Not started** — screens poll every 3 s while visible instead | WebSocket hub comes with calling/chat |
+
+### Android
+
+| Item | Status | Evidence |
+|---|---|---|
+| `RemoteConnectionRepository`, shared `AuthorizedCaller` (refresh once, app-wide) | Done (verified on JVM) | Scripted-backend tests; **real-backend pairing test passed** (generate → redeem → accept → both see the connection) |
+| QR encode/decode with ZXing on-device; strict payload parser | Done (verified on JVM) | Round-trip incl. padded camera rows; parser rejects links, other formats |
+| Inbox, Show my QR (auto-refresh, accept/reject card), Scan QR (CameraX, permission states, waiting) , Home shows connection | Done (compiled, unit-tested and linted in CI run 40130443280, commit b8b6279) | Not yet run on a device — camera scanning is untested on real hardware |
+
+### Exit criteria
+
+- [x] QR generation/expiry/single use, requests, accept/reject, permanent connection — tested on the backend.
+- [x] Edge cases from docs/06 §6 covered by tests (simultaneous scans, refresh after scan, cross-scans, expiry, wrong user).
+- [ ] Two phones pair by actually scanning each other's screen — **not yet done** (needs devices).
+
 ## Next task
 
-1. Run the app on an emulator or phone against a local backend and walk through: login with a
-   temporary password → forced change → Home → log out; admin reset while logged in → app returns to login.
-2. Answer **Q-1** (QR connection before calling?). Then start that phase: `qr_tokens`,
-   `connection_requests`, `connections`, `conversations` tables; QR generate/redeem/accept/reject API with
-   the transactions in docs/06; Android QR display (ZXing) and scanning (CameraX + ML Kit).
+1. Run on two emulators/phones against a local backend: login → Show QR on one, Scan on the other →
+   accept → both Home screens show the connection.
+2. Calling phase, first slice: LiveKit in `deploy/docker-compose.dev.yml` (dev mode, local only),
+   `calls` table, `POST /calls` + accept/decline/cancel/end + LiveKit token issuing with room-scoped
+   grants and `room.auto_create: false`, webhook verification; Android LiveKit SDK, call screens,
+   core-telecom spike (S-2).

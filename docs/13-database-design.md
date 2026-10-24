@@ -1,6 +1,6 @@
 # 13 — Database Design (PostgreSQL + Prisma)
 
-Status: **Partly implemented.** §3.1–3.4 and §3.13 exist as migration `phase2_accounts_sessions_audit`; the other tables are still proposed. This document is the source of truth for table and
+Status: **Partly implemented.** §3.1–3.4 and §3.13 exist as migration `phase2_accounts_sessions_audit`; §3.5–3.7 as `qr_connection` (permanence enforced by a trigger rather than role grants, because a separate app role is not set up yet). The other tables are still proposed. This document is the source of truth for table and
 column names used in the other docs.
 
 ## 1. Conventions

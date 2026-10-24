@@ -8,7 +8,7 @@ recommendation is given, it is labelled as such and still needs sign-off.
 | **D-01** | What happens to messages sent while the recipient is not in the chat? | A strict clear on any exit · B clear only seen messages · C live-only chat · D = B + short backstop ([07 §6](07-chat-and-disappearing-messages.md#6-unresolved-product-decision-d-01--messages-when-the-recipient-is-not-in-the-chat)) | **None given** — this is the core product behaviour and must be the owner's choice | Chat implementation (clear scope, push for messages, UI notice text) |
 | **D-02** | Does backgrounding the app count as leaving the chat? Max message lifetime (backstop)? | Immediate · after lease expiry (~60–75 s) · never (explicit exit only); backstop none / 24 h / 7 d | Lease-expiry behaviour is the natural result of the crash-safe design; backstop depends on D-01 | Chat implementation |
 | D-03 | Administrator identity | Separate operational identity (proposed) · one of the two users is also admin | Separate identity | Auth implementation |
-| D-04 | Sessions per user | One active session (new login revokes old) · allow 2 devices | One session | Auth implementation |
+| D-04 | Sessions per user | One active session (new login revokes old) · allow 2 devices | One session — **implemented that way; owner has not explicitly confirmed** | Auth implementation |
 | D-05 | Admin Console access | Localhost + SSH tunnel (proposed) · public subdomain + IP allow-list + TOTP | Localhost + SSH tunnel | Deployment |
 | **D-06** | Approve the consent-based location sharing feature? | Approve as specified · approve with changes · reject | Owner decision; should also be agreed with both users | Any location work ([11](11-location-sharing-proposal.md)) |
 | D-07 | Is the VPS region suitable for media latency? | Keep · move LiveKit to a VPS nearer the users | Decide after test T-RTT | Go-live |
@@ -24,6 +24,12 @@ recommendation is given, it is labelled as such and still needs sign-off.
 | D-17 | Offsite backup provider | Any S3-compatible provider with low/zero cost at this size | Choose by current pricing and region | Backups |
 | D-18 | Domain names | Reuse an existing domain's subdomains · new domain | Reuse existing domain (₹0) | DNS/TLS |
 | D-19 | Data saver default | Off · on for mobile data | Off, user-controlled | Calling |
+
+## Decided
+
+| ID | Decision | Date | By |
+|---|---|---|---|
+| Q-1 | Build QR connection before calling | 2026-10-24 | Owner ("Go" to the recommendation) |
 
 ## How to record a decision
 
