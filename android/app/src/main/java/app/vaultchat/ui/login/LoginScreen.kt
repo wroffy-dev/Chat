@@ -44,11 +44,11 @@ import app.vaultchat.ui.components.PrimaryButton
 import app.vaultchat.ui.components.StatusBanner
 
 @Composable
-fun LoginScreen(viewModel: LoginViewModel, onLoggedIn: () -> Unit) {
+fun LoginScreen(viewModel: LoginViewModel, onLoggedIn: (LoginOutcome) -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
-    LaunchedEffect(state.loggedIn) {
-        if (state.loggedIn) onLoggedIn()
+    LaunchedEffect(state.outcome) {
+        state.outcome?.let(onLoggedIn)
     }
 
     LoginContent(
@@ -135,7 +135,7 @@ private fun LoginContent(
 
                 state.failure?.let { failure ->
                     StatusBanner(
-                        kind = if (failure == LoginFailure.NOT_AVAILABLE) BannerKind.INFO else BannerKind.ERROR,
+                        kind = BannerKind.ERROR,
                         title = failureText(failure),
                     )
                 }
@@ -193,7 +193,7 @@ private fun passwordErrorText(error: PasswordError): String = stringResource(
 @Composable
 private fun failureText(failure: LoginFailure): String = stringResource(
     when (failure) {
-        LoginFailure.NOT_AVAILABLE -> R.string.login_error_not_available
+        LoginFailure.ACCOUNT_DISABLED -> R.string.login_error_disabled
         LoginFailure.INVALID_CREDENTIALS -> R.string.login_error_invalid_credentials
         LoginFailure.RATE_LIMITED -> R.string.login_error_rate_limited
         LoginFailure.NETWORK -> R.string.login_error_network

@@ -1,10 +1,7 @@
 package app.vaultchat.data
 
-import app.vaultchat.data.auth.NotYetAvailableAuthRepository
 import app.vaultchat.data.network.ApiClient
 import app.vaultchat.data.network.ServerHealth
-import app.vaultchat.domain.auth.LoginFailure
-import app.vaultchat.domain.auth.LoginResult
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -41,11 +38,5 @@ class ApiClientTest {
         val url = System.getenv("VAULTCHAT_TEST_API_URL")
         assumeTrue("VAULTCHAT_TEST_API_URL not set", !url.isNullOrBlank())
         assertEquals(ServerHealth.Reachable, ApiClient(url!!, ApiClient.defaultHttpClient()).checkHealth())
-    }
-
-    @Test
-    fun `phase 1 sign-in never reports success`() = runBlocking {
-        val result = NotYetAvailableAuthRepository().login("alice", "anything")
-        assertEquals(LoginResult.Failure(LoginFailure.NOT_AVAILABLE), result)
     }
 }

@@ -1,26 +1,89 @@
 package app.vaultchat.ui.home
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.vaultchat.R
+import app.vaultchat.ui.components.BannerKind
 import app.vaultchat.ui.components.EmptyState
+import app.vaultchat.ui.components.StatusBanner
 
 /**
- * Home shell. Only reachable after a successful login, which Phase 1 cannot produce.
- * Connection, chat and call entry points arrive in later phases (docs/15-android-ui-ux.md §3.3).
+ * Home. Connection, chat and call entry points arrive in later phases (docs/15-android-ui-ux.md §3.3).
+ * There is deliberately no profile screen.
  */
 @Composable
-fun HomeScreen() {
+fun HomeScreen(
+    viewModel: HomeViewModel,
+    onChangePassword: () -> Unit,
+    onSignedOut: () -> Unit,
+    onPasswordChangeRequired: () -> Unit,
+) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+
+    LaunchedEffect(state.navigation) {
+        when (state.navigation) {
+            HomeNavigation.LOGIN -> onSignedOut()
+            HomeNavigation.CHANGE_PASSWORD -> onPasswordChangeRequired()
+            null -> Unit
+        }
+    }
+
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        EmptyState(
-            title = stringResource(R.string.home_not_connected_title),
-            body = stringResource(R.string.home_not_connected_body),
-            modifier = Modifier.safeDrawingPadding(),
-        )
+        Column(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        stringResource(R.string.app_name),
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.semantics { heading() },
+                    )
+                    state.username?.let {
+                        Text(
+                            stringResource(R.string.home_signed_in_as, it),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                TextButton(onClick = onChangePassword) { Text(stringResource(R.string.home_change_password)) }
+                TextButton(onClick = viewModel::logout) { Text(stringResource(R.string.action_log_out)) }
+            }
+            if (state.offline) {
+                StatusBanner(
+                    kind = BannerKind.WARNING,
+                    title = stringResource(R.string.server_unreachable),
+                    actionLabel = stringResource(R.string.action_retry),
+                    onAction = viewModel::refresh,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
+            EmptyState(
+                title = stringResource(R.string.home_not_connected_title),
+                body = stringResource(R.string.home_not_connected_body),
+            )
+        }
     }
 }

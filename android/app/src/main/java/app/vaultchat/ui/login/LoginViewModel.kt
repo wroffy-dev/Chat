@@ -28,8 +28,11 @@ data class LoginUiState(
     val submitting: Boolean = false,
     val failure: LoginFailure? = null,
     val server: ServerStatus = ServerStatus.CHECKING,
-    val loggedIn: Boolean = false,
+    /** Set once sign-in succeeds; the screen navigates and the ViewModel is discarded. */
+    val outcome: LoginOutcome? = null,
 )
+
+enum class LoginOutcome { HOME, CHANGE_PASSWORD }
 
 class LoginViewModel(
     private val authRepository: AuthRepository,
@@ -79,7 +82,11 @@ class LoginViewModel(
             _state.update {
                 when (result) {
                     // The password is dropped from memory as soon as it is no longer needed.
-                    LoginResult.Success -> it.copy(submitting = false, password = "", loggedIn = true)
+                    is LoginResult.Success -> it.copy(
+                        submitting = false,
+                        password = "",
+                        outcome = if (result.mustChangePassword) LoginOutcome.CHANGE_PASSWORD else LoginOutcome.HOME,
+                    )
                     is LoginResult.Failure -> it.copy(submitting = false, failure = result.reason)
                 }
             }
