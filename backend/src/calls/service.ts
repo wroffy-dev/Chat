@@ -3,6 +3,7 @@ import type { Call, PrismaClient, Prisma } from "../generated/prisma/client.js";
 import { type AppError, appError } from "../errors.js";
 import type { MediaGateway, MediaWebhookEvent } from "./media.js";
 import type { PushService } from "../push/service.js";
+import type { EventPublisher } from "../realtime/events.js";
 
 const SECOND = 1000;
 
@@ -40,7 +41,13 @@ export class CallService {
     private readonly ringTimeoutSeconds: number,
     private readonly now: () => Date = () => new Date(),
     private readonly push: PushService | null = null,
+    private readonly events: EventPublisher | null = null,
   ) {}
+
+  /** Tells both parties' open apps that this call changed; they re-read it over the API. */
+  private changed(call: Pick<Call, "id" | "callerUserId" | "calleeUserId">) {
+    this.events?.publish([call.callerUserId, call.calleeUserId], { type: "call.changed", callId: call.id });
+  }
 
   /** Fire-and-forget push; failures are logged inside PushService and never affect the call. */
   private notify(userId: string, payload: { t: "call" | "call_end"; id: string }) {
@@ -84,6 +91,7 @@ export class CallService {
       throw err;
     }
     this.notify(calleeUserId, { t: "call", id: call.id });
+    this.changed(call);
     return this.joinInfo(call, userId);
   }
 
@@ -106,16 +114,19 @@ export class CallService {
   async accept(userId: string, callId: string): Promise<JoinInfo> {
     this.requireMedia();
     const call = await this.transition(callId, userId, "callee", ["ringing"], { status: "accepted", acceptedAt: this.now() });
+    this.changed(call);
     return this.joinInfo(call, userId);
   }
 
   async decline(userId: string, callId: string): Promise<void> {
     const call = await this.transition(callId, userId, "callee", ["ringing"], { status: "declined", endedAt: this.now() });
+    this.changed(call);
     await this.closeRoom(call);
   }
 
   async cancel(userId: string, callId: string): Promise<void> {
     const call = await this.transition(callId, userId, "caller", ["ringing"], { status: "cancelled", endedAt: this.now() });
+    this.changed(call);
     await this.closeRoom(call);
     this.notify(call.calleeUserId, { t: "call_end", id: call.id });
   }
@@ -130,7 +141,10 @@ export class CallService {
       // Hanging up before the other side answered is a cancel/decline, not a completed call.
       data: { status: call.status === "ringing" ? (call.callerUserId === userId ? "cancelled" : "declined") : "ended", endReason: reason, endedAt: this.now() },
     });
-    if (updated.count === 1) await this.closeRoom(call);
+    if (updated.count === 1) {
+      this.changed(call);
+      await this.closeRoom(call);
+    }
   }
 
   /** Fresh join token for an ongoing call (e.g. after the app process restarted). */
@@ -160,12 +174,14 @@ export class CallService {
     if (!call) return;
     const now = this.now();
     if (e.event === "participant_joined" && call.status === "accepted" && e.participantIdentity === call.calleeUserId) {
-      await this.prisma.call.updateMany({ where: { id: call.id, status: "accepted" }, data: { status: "active", activeAt: now } });
+      const r = await this.prisma.call.updateMany({ where: { id: call.id, status: "accepted" }, data: { status: "active", activeAt: now } });
+      if (r.count === 1) this.changed(call);
     } else if (e.event === "room_finished") {
-      await this.prisma.call.updateMany({
+      const r = await this.prisma.call.updateMany({
         where: { id: call.id, status: { in: [...LIVE] } },
         data: { status: call.status === "ringing" ? "missed" : "ended", endReason: "room_finished", endedAt: now },
       });
+      if (r.count === 1) this.changed(call);
     }
   }
 
@@ -189,6 +205,7 @@ export class CallService {
         data: { status: missed ? "missed" : "failed", endReason: "timeout", endedAt: new Date(now) },
       });
       if (r.count === 1) {
+        this.changed(call);
         await this.closeRoom(call);
         if (missed) this.notify(call.calleeUserId, { t: "call_end", id: call.id });
       }

@@ -7,6 +7,7 @@ import { AuthService } from "./auth/service.js";
 import { ConnectionService } from "./connections/service.js";
 import { CallService } from "./calls/service.js";
 import { ChatService } from "./chat/service.js";
+import { RealtimeHub } from "./realtime/hub.js";
 import { RetentionService } from "./retention/service.js";
 import { LiveKitGateway } from "./calls/media.js";
 import { createFcmTransport, PushService } from "./push/service.js";
@@ -38,9 +39,10 @@ async function main() {
   const transport = config.FCM_CREDENTIALS_FILE ? await createFcmTransport(config.FCM_CREDENTIALS_FILE) : null;
   let logPush: (msg: string, extra?: Record<string, unknown>) => void = () => {};
   const push = new PushService(database.prisma, transport, (msg, extra) => logPush(msg, extra));
-  const calls = new CallService(database.prisma, media, config.CALL_RING_TIMEOUT_SECONDS, undefined, push);
-  const chat = new ChatService(database.prisma, undefined, push);
-  const app = buildApp({ config, database, auth, connections, calls, chat, media, push });
+  const hub = new RealtimeHub();
+  const calls = new CallService(database.prisma, media, config.CALL_RING_TIMEOUT_SECONDS, undefined, push, hub);
+  const chat = new ChatService(database.prisma, undefined, push, hub);
+  const app = buildApp({ config, database, auth, connections, calls, chat, media, push, realtime: { hub } });
   logPush = (msg, extra) => app.log.warn(extra ?? {}, msg);
   // The database is owned (and closed) by the public app; the admin app shares it.
   const adminApp = buildAdminApp({ config, prisma: database.prisma, database, auth, admin });

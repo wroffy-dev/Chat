@@ -3,6 +3,7 @@ import type { PrismaClient, Prisma } from "../generated/prisma/client.js";
 import { UserRateLimiter } from "../connections/service.js";
 import { AppError, appError, DEFAULT_MESSAGES } from "../errors.js";
 import type { PushService } from "../push/service.js";
+import type { EventPublisher } from "../realtime/events.js";
 
 const SECOND = 1000;
 const MINUTE = 60 * SECOND;
@@ -74,47 +75,65 @@ export class ChatService {
     private readonly prisma: PrismaClient,
     private readonly now: () => Date = () => new Date(),
     private readonly push: PushService | null = null,
+    private readonly events: EventPublisher | null = null,
   ) {}
+
+  /** Tells both participants' open apps to re-read the conversation (new message or deletions). */
+  private changed(conversationId: string) {
+    if (!this.events) return;
+    const events = this.events;
+    void this.prisma.conversationParticipant
+      .findMany({ where: { conversationId }, select: { userId: true } })
+      .then((ps) => events.publish(ps.map((p) => p.userId), { type: "chat.changed", conversationId }))
+      .catch(() => undefined);
+  }
 
   /** Opens the chat: starts (or replaces) the caller's presence lease. */
   async enter(userId: string, conversationId: string): Promise<EnterView> {
     const now = this.now();
     const leaseId = randomUUID();
-    const epoch = await this.prisma.$transaction(async (tx) => {
+    const { epoch, deleted } = await this.prisma.$transaction(async (tx) => {
       await this.lockConversation(tx, conversationId);
       const p = await this.participant(tx, conversationId, userId);
       // A lease that lapsed but was not yet swept is an exit that already happened (D-02).
-      if (p.leaseExpiresAt && p.leaseExpiresAt <= now) await this.clearSeen(tx, conversationId, now);
+      const removed = p.leaseExpiresAt && p.leaseExpiresAt <= now ? await this.clearSeen(tx, conversationId, now) : 0;
       await this.setLease(tx, conversationId, userId, leaseId, now);
-      return this.epochOf(tx, conversationId);
+      return { epoch: await this.epochOf(tx, conversationId), deleted: removed };
     });
+    if (deleted > 0) this.changed(conversationId);
     return { leaseId, leaseTtlSeconds: CHAT_POLICY.leaseTtlMs / SECOND, heartbeatSeconds: CHAT_POLICY.heartbeatSeconds, epoch };
   }
 
   /** Renews the lease. A lapsed or replaced lease is refused: the client must enter again. */
   async heartbeat(userId: string, conversationId: string, leaseId: string): Promise<void> {
     const now = this.now();
+    let exited = false;
     const ok = await this.prisma.$transaction(async (tx) => {
       await this.lockConversation(tx, conversationId);
       const p = await this.participant(tx, conversationId, userId);
       if (p.leaseId !== leaseId) return false;
       if (!p.leaseExpiresAt || p.leaseExpiresAt <= now) {
         await this.exit(tx, conversationId, userId, now);
+        exited = true;
         return false;
       }
       await this.setLease(tx, conversationId, userId, leaseId, now);
       return true;
     });
+    // Published only after the commit, so the apps re-read the new state.
+    if (exited) this.changed(conversationId);
     if (!ok) throw appError(409, "LEASE_EXPIRED");
   }
 
   /** Explicit exit (Back, toolbar, logout). Idempotent by `leaveId`. */
   async leave(userId: string, conversationId: string, leaveId: string): Promise<{ epoch: number }> {
     const now = this.now();
+    let exited = false;
     const epoch = await this.prisma.$transaction(async (tx) => {
       await this.lockConversation(tx, conversationId);
       const p = await this.participant(tx, conversationId, userId);
       if (p.lastLeaveId !== leaveId) {
+        exited = true;
         await this.exit(tx, conversationId, userId, now);
         await tx.conversationParticipant.update({
           where: { conversationId_userId: { conversationId, userId } },
@@ -123,6 +142,7 @@ export class ChatService {
       }
       return this.epochOf(tx, conversationId);
     });
+    if (exited) this.changed(conversationId);
     return { epoch };
   }
 
@@ -154,7 +174,10 @@ export class ChatService {
       if (err instanceof AppError) throw err;
       throw new Error(`message send failed (${(err as { code?: string }).code ?? "unknown"})`);
     });
-    if (result.created) void this.notifyPeer(userId, conversationId, now).catch(() => undefined);
+    if (result.created) {
+      this.changed(conversationId);
+      void this.notifyPeer(userId, conversationId, now).catch(() => undefined);
+    }
     return result;
   }
 
@@ -206,7 +229,7 @@ export class ChatService {
     });
     let expiredLeases = 0;
     for (const { conversationId, userId } of lapsed) {
-      expiredLeases += await this.prisma.$transaction(async (tx) => {
+      const n = await this.prisma.$transaction(async (tx) => {
         await this.lockConversation(tx, conversationId);
         const p = await this.participant(tx, conversationId, userId);
         // Renewed or left meanwhile: nothing to do.
@@ -214,6 +237,8 @@ export class ChatService {
         await this.exit(tx, conversationId, userId, now);
         return 1;
       });
+      if (n > 0) this.changed(conversationId);
+      expiredLeases += n;
     }
 
     const cutoff = new Date(now.getTime() - CHAT_POLICY.backstopMs);
@@ -224,12 +249,14 @@ export class ChatService {
     });
     let backstopDeleted = 0;
     for (const { conversationId } of old) {
-      backstopDeleted += await this.prisma.$transaction(async (tx) => {
+      const n = await this.prisma.$transaction(async (tx) => {
         await this.lockConversation(tx, conversationId);
         const r = await tx.message.deleteMany({ where: { conversationId, createdAt: { lt: cutoff } } });
         if (r.count > 0) await this.bumpEpoch(tx, conversationId, now);
         return r.count;
       });
+      if (n > 0) this.changed(conversationId);
+      backstopDeleted += n;
     }
     return { expiredLeases, backstopDeleted };
   }

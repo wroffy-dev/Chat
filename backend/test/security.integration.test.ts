@@ -10,6 +10,7 @@ import { ChatService } from "../src/chat/service.js";
 import { ConnectionService } from "../src/connections/service.js";
 import { PrismaDatabase } from "../src/db/database.js";
 import { PushService, type PushTransport } from "../src/push/service.js";
+import { RealtimeHub } from "../src/realtime/hub.js";
 import { captureLogs, resetDatabase, TEST_DB_URL, testConfig } from "./helpers.js";
 
 /**
@@ -70,6 +71,7 @@ describe.skipIf(!TEST_DB_URL)("security (PostgreSQL)", () => {
       chat: new ChatService(database.prisma, undefined, push),
       media,
       push,
+      realtime: { hub: new RealtimeHub() },
       logger: captured.logger,
     });
     routes = [];
@@ -89,7 +91,7 @@ describe.skipIf(!TEST_DB_URL)("security (PostgreSQL)", () => {
     // Guard against a vacuous pass: the inventory must include every feature area.
     const names = routes.map((r) => `${r.method} ${r.url}`);
     expect(names.length).toBeGreaterThanOrEqual(25);
-    for (const must of ["GET /api/v1/me", "POST /api/v1/connection-qr", "POST /api/v1/calls", "POST /api/v1/conversations/:id/messages", "PUT /api/v1/devices/push-token"]) {
+    for (const must of ["GET /api/v1/me", "POST /api/v1/connection-qr", "POST /api/v1/calls", "POST /api/v1/conversations/:id/messages", "PUT /api/v1/devices/push-token", "GET /api/v1/ws"]) {
       expect(names).toContain(must);
     }
 

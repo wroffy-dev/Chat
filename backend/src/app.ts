@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import rateLimit from "@fastify/rate-limit";
+import websocket from "@fastify/websocket";
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
 import type { AuthService } from "./auth/service.js";
 import type { ConnectionService } from "./connections/service.js";
@@ -16,6 +17,8 @@ import { connectionRoutes } from "./routes/connections.js";
 import { callRoutes, livekitWebhookRoutes } from "./routes/calls.js";
 import { chatRoutes } from "./routes/chat.js";
 import { deviceRoutes } from "./routes/devices.js";
+import { realtimeRoutes } from "./routes/realtime.js";
+import type { RealtimeHub } from "./realtime/hub.js";
 import { healthRoutes } from "./routes/health.js";
 import { AppError } from "./errors.js";
 
@@ -30,11 +33,13 @@ export interface AppDeps {
   /** LiveKit gateway; needed only to verify webhooks. */
   media?: MediaGateway | null;
   push?: PushService;
+  /** Live change signals over GET /api/v1/ws. */
+  realtime?: { hub: RealtimeHub; recheckMs?: number; pingMs?: number };
   /** Overrides the logger (tests pass `false` or a capturing stream). */
   logger?: FastifyServerOptions["logger"];
 }
 
-export function buildApp({ config, database, auth, connections, calls, chat, media, push, logger }: AppDeps): FastifyInstance {
+export function buildApp({ config, database, auth, connections, calls, chat, media, push, realtime, logger }: AppDeps): FastifyInstance {
   const app = Fastify({
     logger: logger ?? buildLoggerOptions(config),
     // Client-supplied request IDs are not trusted; every request gets a fresh one.
@@ -75,6 +80,11 @@ export function buildApp({ config, database, auth, connections, calls, chat, med
       if (calls) await api.register(callRoutes, { auth, calls });
       if (chat) await api.register(chatRoutes, { auth, chat });
       if (push) await api.register(deviceRoutes, { auth, push });
+      if (realtime) {
+        // 16 KB frames at most; the app sends nothing but pongs anyway.
+        await api.register(websocket, { options: { maxPayload: 16_384 } });
+        await api.register(realtimeRoutes, { auth, ...realtime });
+      }
     }, { prefix: "/api/v1" });
   }
 
