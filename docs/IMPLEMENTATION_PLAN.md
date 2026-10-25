@@ -16,7 +16,7 @@ Last updated: 2026-10-25 (UTC), after the chat phase (slice 1).
 | 2 | Authentication and Admin Console | **Done (backend verified; Android verified in CI, not yet on a device)** — see below |
 | 3 | QR connection (moved before calling, Q-1) | **Done (backend verified; Android logic verified on JVM and against the real backend; screens compiled in CI, not yet on a device)** |
 | 4 | Calling | **In progress (slices 1–2 built)** — server + app logic verified; real media and real push untested (no LiveKit server, Firebase project or phones available here). See below |
-| 5 | Text chat | **Slice 1 built** — backend verified; app logic verified on JVM and against the real backend; screen compile pending CI; not yet on a device. See below |
+| 5 | Text chat | **Slice 1 built** — backend verified; app logic verified on JVM and against the real backend; screens compiled in CI; not yet on a device. See below |
 | 6 | Security and reliability | Not started |
 | 7 | Private release | Not started |
 
@@ -235,7 +235,7 @@ Decisions applied: D-01 option D, D-02 (60 s lease renewed every 20 s; 24 h back
 | Message text never in logs (send errors sanitised; `text`/`body` redacted) | Done (verified) | Log-capture test; real-backend run log checked |
 | Content-free `{"t":"msg"}` push to a recipient not in the chat, at most one per minute | Done (verified with a recording transport) | Test; not sent to real FCM |
 | Android `ChatController`: enter, 2 s polling, 20 s heartbeat while the app is in front, idempotent sends with retry, cleared-chat resync, draft restored after a refused send, stored-and-retried exit | Done (verified on JVM) | `ChatControllerTest` (13 tests) + `RealBackendChatTest` (passed against the local backend) |
-| Android chat screen, Home "Open chat", "New message" notification channel, recent-apps thumbnail hidden while chatting (API 33+) | Done (CI compile pending) | Not run on a device |
+| Android chat screen, Home "Open chat", "New message" notification channel, recent-apps thumbnail hidden while chatting (API 33+) | Done (compiles and lints; CI run 40173245132) | Not run on a device |
 | Fix: six string resources had `%1` without a type (would throw at runtime on Home and the pairing screens) | Done | Corrected to `%1$s` / `%1$d` |
 
 Deviations from the original design, recorded in docs/07 and docs/14:
