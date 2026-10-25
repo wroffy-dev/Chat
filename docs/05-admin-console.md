@@ -33,8 +33,10 @@ an IP allow-list — more convenient, larger attack surface.
 | Sessions | Per user: session created, last used, app version, device model (as reported by the app), revoked state | Revoke one session | `admin.session_revoked` |
 | Connection | Whether the two users are connected, and since when; pending request count | None (connections cannot be deleted in v1) | — |
 | Health | Backend version, uptime; DB reachable + migration version; LiveKit reachable (RoomService `ListRooms` call); FCM credential configured (yes/no); disk free; last backup time and result (if reported by backup job) | None | — |
+| | **Implemented:** DB readiness and pending migrations, uptime, memory, LiveKit reachable (`ListRooms`, 2 s timeout), FCM configured, open app connections, last backup (from `BACKUP_STATUS_FILE`; flagged when older than 36 h). Not yet: disk free, backend version | | |
 | Errors | Last 14 days of `error_events`: time, route, error code, count, request ID. No request bodies | Mark as acknowledged | `admin.error_acknowledged` |
-| Calls | Last 30 days: start/end time, duration, end reason, failure code, and per-call quality summary from `call_diagnostics` | None | — |
+| Calls | Last 24 hours (D-12): start time, who called whom, kind, outcome and end reason, connected duration, and each phone's quality summary from `call_diagnostics` | None | — |
+| | **Implemented** (newest 50 calls) | | |
 | Settings | Values from `app_settings` (see §5) | Edit permitted settings | `admin.setting_changed` (old → new value) |
 | Audit log | `audit_events`, newest first, filter by action | None (read-only; no delete) | — |
 | Account | Admin's own password and TOTP | Change password, re-enrol TOTP | `admin.password_changed`, `admin.totp_reset` |

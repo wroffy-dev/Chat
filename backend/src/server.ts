@@ -45,7 +45,7 @@ async function main() {
   const app = buildApp({ config, database, auth, connections, calls, chat, media, push, realtime: { hub } });
   logPush = (msg, extra) => app.log.warn(extra ?? {}, msg);
   // The database is owned (and closed) by the public app; the admin app shares it.
-  const adminApp = buildAdminApp({ config, prisma: database.prisma, database, auth, admin });
+  const adminApp = buildAdminApp({ config, prisma: database.prisma, database, auth, admin, media, pushEnabled: push.enabled, realtime: hub });
 
   const retention = new RetentionService(database.prisma);
   // Hourly housekeeping: spent QR tokens and records past their retention period (D-12).

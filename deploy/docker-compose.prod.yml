@@ -43,6 +43,10 @@ services:
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?}
       # Optional: path of the mounted Firebase service-account file (read-only secret mount).
       FCM_CREDENTIALS_FILE: ${FCM_CREDENTIALS_FILE:-}
+      # The backup job's status file, shown on the Admin Console health page.
+      BACKUP_STATUS_FILE: /backups/last-success
+    volumes:
+      - vaultchat-backups:/backups:ro
     ports:
       - "127.0.0.1:3001:3001"
     logging: *logging

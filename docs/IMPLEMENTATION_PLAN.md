@@ -278,6 +278,14 @@ the deployed system.
 | Chat re-reads at once on a signal; polls 10 s while connected (2 s otherwise); heartbeat time-based. Incoming-call check wakes on `call.changed` (3 s / 15 s polling) | Done (chat verified on JVM; app compiles and lints, CI run 40190854554) | `ChatControllerTest` (signal + fallback test) |
 | The call screen re-reads its call at once on `call.changed` (10 s polling while connected, 2 s otherwise) | Done (verified on JVM) | `CallControllerTest` |
 
+## Admin Console additions
+
+| Item | Status | Evidence |
+|---|---|---|
+| Health page made accurate: LiveKit reachable (`ListRooms`), FCM configured, open app connections, last backup time (flagged after 36 h) | Done (verified) | `test/admin.integration.test.ts` |
+| Calls page: last 24 h, outcome, connected time, each phone's quality summary (escaped) — for reading the call test results | Done (verified) | Same file |
+| Still not built from docs/05: Sessions page (per-session revoke), Errors page (`error_events` table does not exist), Settings (`app_settings`), admin Account page (password/TOTP change — use `cli admin:reset` meanwhile) | Not started | |
+
 ## Next task
 
 1. **Owner actions to test for real:** create a Firebase project (android/README.md "Push notifications"),

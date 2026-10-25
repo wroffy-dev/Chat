@@ -1,4 +1,7 @@
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import type { MediaGateway } from "../calls/media.js";
+import type { RealtimeHub } from "../realtime/hub.js";
 import cookie from "@fastify/cookie";
 import formbody from "@fastify/formbody";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest, type FastifyServerOptions } from "fastify";
@@ -21,6 +24,10 @@ export interface AdminAppDeps {
   database: Database;
   auth: AuthService;
   admin: AdminService;
+  /** For the health page; all optional. */
+  media?: MediaGateway | null;
+  pushEnabled?: boolean;
+  realtime?: RealtimeHub;
   logger?: FastifyServerOptions["logger"];
 }
 
@@ -284,8 +291,10 @@ export function buildAdminApp(deps: AdminAppDeps): FastifyInstance {
       ["Process uptime", `${Math.floor(process.uptime() / 60)} min`],
       ["Memory (RSS)", `${Math.round(mem.rss / 1_048_576)} MB`],
       ["Node.js", process.version],
-      ["LiveKit", "not configured yet (calling phase)"],
-      ["Push notifications", "not configured yet"],
+      ["LiveKit", await livekitStatus(deps.media)],
+      ["Push notifications (FCM)", deps.pushEnabled ? "configured" : "not configured: calls ring only while the app is open"],
+      ["Open app connections (live signals)", deps.realtime ? String(deps.realtime.total()) : "not enabled"],
+      ["Last backup", await backupStatus(config.BACKUP_STATUS_FILE)],
     ];
     return html(reply, page("Health", `<h1>Health</h1><table><tbody>${rows
       .map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join("")}</tbody></table>`, nav(request)));
@@ -316,5 +325,62 @@ export function buildAdminApp(deps: AdminAppDeps): FastifyInstance {
     },
   );
 
+  // ------------------------------------------------------------------ calls (D-12: kept 24 h)
+
+  app.get("/admin/calls", { preHandler: requireAdmin }, async (request, reply) => {
+    const calls = await prisma.call.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      include: { caller: true, callee: true, diagnostics: { include: { user: true } } },
+    });
+    const quality = (summary: unknown) => {
+      const s = (summary ?? {}) as Record<string, unknown>;
+      const pick = ["rttMsAvg", "jitterMsMax", "lossPct", "recvKbpsAvg", "recvResMax", "recvFpsAvg", "qualityLimitation", "videoFreezes", "path", "reconnects"];
+      const shown = pick.filter((k) => s[k] !== undefined && s[k] !== null).map((k) => `${esc(k)}=${esc(String(s[k]))}`).join(" · ");
+      return `${shown || "—"}<details><summary class="muted">all values</summary><code>${esc(JSON.stringify(s))}</code></details>`;
+    };
+    const rows = calls.map((c) => {
+      const duration = c.activeAt && c.endedAt ? `${Math.round((c.endedAt.getTime() - c.activeAt.getTime()) / 1000)} s` : "—";
+      const diag = c.diagnostics.map((d) => `<strong>${esc(d.user.username)}</strong>: ${quality(d.summary)}`).join("<br>") || `<span class="muted">none reported</span>`;
+      return `<tr><td>${fmt(c.createdAt)}</td><td>${esc(c.caller.username)} → ${esc(c.callee.username)}</td><td>${esc(c.kind)}</td>
+        <td>${esc(c.status)}${c.endReason ? `<br><span class=muted>${esc(c.endReason)}</span>` : ""}</td><td>${duration}</td><td>${diag}</td></tr>`;
+    });
+    return html(reply, page("Calls", `<h1>Calls</h1>
+      <p class="muted">Call records and quality summaries are deleted 24 hours after the call (D-12). Numbers only: no media, no IP addresses.</p>
+      <table><thead><tr><th>Started</th><th>Who</th><th>Kind</th><th>Outcome</th><th>Connected for</th><th>Quality (per phone)</th></tr></thead>
+      <tbody>${rows.join("") || `<tr><td colspan="6" class="muted">No calls in the last 24 hours.</td></tr>`}</tbody></table>`, nav(request)));
+  });
+
   return app;
+}
+
+async function livekitStatus(media: MediaGateway | null | undefined): Promise<string> {
+  if (!media) return "not configured: calling returns MEDIA_UNAVAILABLE";
+  if (!media.ping) return "configured";
+  try {
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error("timeout")), 2_000);
+    });
+    try {
+      await Promise.race([media.ping(), timeout]);
+    } finally {
+      clearTimeout(timer);
+    }
+    return "reachable";
+  } catch {
+    return "configured but NOT reachable";
+  }
+}
+
+async function backupStatus(file: string | undefined): Promise<string> {
+  if (!file) return "not reported (BACKUP_STATUS_FILE not set)";
+  try {
+    const at = new Date((await readFile(file, "utf8")).trim());
+    if (Number.isNaN(at.getTime())) return "status file unreadable";
+    const hours = (Date.now() - at.getTime()) / 3_600_000;
+    return `${at.toISOString().slice(0, 16).replace("T", " ")} UTC (${hours.toFixed(1)} h ago)${hours > 36 ? " — OLDER THAN 36 HOURS" : ""}`;
+  } catch {
+    return "no successful backup reported yet";
+  }
 }

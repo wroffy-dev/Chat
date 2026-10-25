@@ -48,6 +48,9 @@ const envSchema = z.object({
   // Firebase Cloud Messaging service-account JSON (mounted file, never committed). Optional:
   // without it no pushes are sent and calls ring only while the app is open.
   FCM_CREDENTIALS_FILE: z.string().min(1).optional(),
+  // Status file written by deploy/backup/backup.sh after each successful backup (read-only mount);
+  // shown on the Admin Console health page.
+  BACKUP_STATUS_FILE: z.string().min(1).optional(),
 }).superRefine((env, ctx) => {
   const livekit = [env.LIVEKIT_PUBLIC_URL, env.LIVEKIT_API_URL, env.LIVEKIT_API_KEY, env.LIVEKIT_API_SECRET];
   if (livekit.some(Boolean) && !livekit.every(Boolean)) {

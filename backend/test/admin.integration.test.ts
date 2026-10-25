@@ -6,12 +6,17 @@ import { PasswordHasher } from "../src/auth/passwords.js";
 import { AuthService } from "../src/auth/service.js";
 import { generateTotpSecret, totpCode, totpStep } from "../src/auth/totp.js";
 import { PrismaDatabase } from "../src/db/database.js";
+import { RealtimeHub } from "../src/realtime/hub.js";
 import { resetDatabase, TEST_DB_URL, testConfig } from "./helpers.js";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const ADMIN_PASSWORD = "a long admin passphrase 2026";
 
 describe.skipIf(!TEST_DB_URL)("Admin Console (PostgreSQL)", () => {
-  const config = testConfig({ DATABASE_URL: TEST_DB_URL ?? "postgresql://unused/x" });
+  const backupStatusFile = join(mkdtempSync(join(tmpdir(), "vc-admin-")), "last-success");
+  const config = testConfig({ DATABASE_URL: TEST_DB_URL ?? "postgresql://unused/x", BACKUP_STATUS_FILE: backupStatusFile });
   let database: PrismaDatabase;
   let adminService: AdminService;
   let auth: AuthService;
@@ -26,7 +31,15 @@ describe.skipIf(!TEST_DB_URL)("Admin Console (PostgreSQL)", () => {
     const clock = () => new Date(nowMs);
     auth = new AuthService(database.prisma, hasher, clock);
     adminService = new AdminService(database.prisma, hasher, config.ADMIN_TOTP_ENC_KEY, clock);
-    app = buildAdminApp({ config, prisma: database.prisma, database, auth, admin: adminService, logger: false });
+    const media = {
+      publicUrl: "wss://rtc.example.test",
+      createRoom: async () => {},
+      deleteRoom: async () => {},
+      joinToken: async () => "jwt",
+      verifyWebhook: async () => ({ event: "none" }),
+      ping: async () => {},
+    };
+    app = buildAdminApp({ config, prisma: database.prisma, database, auth, admin: adminService, media, pushEnabled: true, realtime: new RealtimeHub(), logger: false });
     await app.ready();
   });
 
@@ -189,5 +202,42 @@ describe.skipIf(!TEST_DB_URL)("Admin Console (PostgreSQL)", () => {
     expect(out.statusCode).toBe(303);
     const after = await app.inject({ method: "GET", url: "/admin/users", headers: { cookie } });
     expect(after.headers.location).toBe("/admin/login");
+  });
+
+  it("health shows LiveKit, push, live connections and the last backup", async () => {
+    await createAdmin();
+    const { cookie } = await loginCookie();
+    let page = (await app.inject({ method: "GET", url: "/admin/health", headers: { cookie } })).body;
+    expect(page).toContain("reachable");
+    expect(page).toContain("configured");
+    expect(page).toContain("no successful backup reported yet");
+    writeFileSync(backupStatusFile, new Date(Date.now() - 2 * 3_600_000).toISOString());
+    page = (await app.inject({ method: "GET", url: "/admin/health", headers: { cookie } })).body;
+    expect(page).toMatch(/\(2\.0 h ago\)/);
+    writeFileSync(backupStatusFile, new Date(Date.now() - 40 * 3_600_000).toISOString());
+    page = (await app.inject({ method: "GET", url: "/admin/health", headers: { cookie } })).body;
+    expect(page).toContain("OLDER THAN 36 HOURS");
+  });
+
+  it("lists recent calls with each phone's quality summary, escaped", async () => {
+    await createAdmin();
+    const db = database.prisma;
+    const a = await db.user.create({ data: { slot: 1, username: "alice", passwordHash: "x", passwordChangedAt: new Date() } });
+    const b = await db.user.create({ data: { slot: 2, username: "bob", passwordHash: "x", passwordChangedAt: new Date() } });
+    const [ua, ub] = [a.id, b.id].sort();
+    const conn = await db.connection.create({ data: { userAId: ua!, userBId: ub! } });
+    const call = await db.call.create({
+      data: { connectionId: conn.id, callerUserId: a.id, calleeUserId: b.id, kind: "video", livekitRoom: "r1", status: "ended",
+        activeAt: new Date(Date.now() - 65_000), endedAt: new Date() },
+    });
+    await db.callDiagnostic.create({ data: { callId: call.id, userId: a.id, summary: { rttMsAvg: 84, lossPct: 0.4, path: "<script>x</script>" } } });
+    const { cookie } = await loginCookie();
+    const page = (await app.inject({ method: "GET", url: "/admin/calls", headers: { cookie } })).body;
+    expect(page).toContain("alice → bob");
+    expect(page).toContain("65 s");
+    expect(page).toContain("rttMsAvg=84");
+    expect(page).toContain("lossPct=0.4");
+    expect(page).not.toContain("<script>x");
+    expect(page).toContain("&lt;script&gt;");
   });
 });

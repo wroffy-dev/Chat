@@ -22,6 +22,13 @@ export class RealtimeHub implements EventPublisher {
     return this.byUser.get(userId)?.size ?? 0;
   }
 
+  /** Open sockets across all users (Admin Console health). */
+  total(): number {
+    let n = 0;
+    for (const set of this.byUser.values()) n += set.size;
+    return n;
+  }
+
   publish(userIds: readonly string[], event: RealtimeEvent) {
     const { type, ...data } = event;
     const frame = JSON.stringify({ type, data });

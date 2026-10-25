@@ -10,6 +10,8 @@ export interface MediaGateway {
   joinToken(identity: string, displayName: string, room: string): Promise<string>;
   /** Verifies a webhook's signature and returns the event, or throws. */
   verifyWebhook(body: string, authHeader: string | undefined): Promise<MediaWebhookEvent>;
+  /** Throws if the media server's API cannot be reached (Admin Console health). */
+  ping?(): Promise<void>;
 }
 
 export interface MediaWebhookEvent {
@@ -42,6 +44,10 @@ export class LiveKitGateway implements MediaGateway {
 
   async deleteRoom(name: string): Promise<void> {
     await this.rooms.deleteRoom(name);
+  }
+
+  async ping(): Promise<void> {
+    await this.rooms.listRooms();
   }
 
   async joinToken(identity: string, displayName: string, room: string): Promise<string> {
