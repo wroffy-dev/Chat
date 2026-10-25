@@ -242,8 +242,8 @@ Deviations from the original design, recorded in docs/07 and docs/14:
 - **Polling instead of WebSocket** for now: the app polls every 2 s while the chat is open, and renews
   the lease with `POST /heartbeat`. Same server rules; a WebSocket can replace polling later.
 - `clearedThroughSeq` was dropped: under option D a clear no longer removes everything below a sequence.
-- The keyboard's "no personalised learning" flag is **not set**: Compose 1.7 text fields expose no API
-  for it. A platform `EditText` would be needed.
+- The keyboard's "no personalised learning" flag is set through a platform `EditText` input (Compose 1.7
+  has no API for it); added after slice 1, compile pending CI. Not checked with real keyboards.
 - "In chat" presence is not shown to the other user (D-11 is still open).
 
 ## Phase 6 — Security and reliability, slice 1
@@ -275,6 +275,6 @@ the deployed system.
    then run PostgreSQL + LiveKit locally (`deploy/docker-compose.dev.yml`) and make a call between two
    phones; record results against docs/09 (T-SETUP-1/2, T-CLEAN, T-BG-VOICE/VIDEO).
 2. Chat on two phones: open, send both ways, Back on one phone, background for over a minute; record
-   results. Then chat slice 2 if wanted: WebSocket instead of polling, keyboard learning flag.
+   results. Then chat slice 2 if wanted: WebSocket instead of polling.
 3. Phase 7 (private release) — needs the VPS and your go-ahead for any deployment.
 4. Calling later: core-telecom (S-2), WebRTC stats in diagnostics, quality benchmarks (D-13).

@@ -122,9 +122,9 @@ on screen; this is what decides which messages an exit deletes.
 5. The chat activity calls `setRecentsScreenshotEnabled(false)` (API 33+) so the recent-apps thumbnail
    does not show messages. This does **not** block screenshots, which remain allowed.
 6. The text field should request no personalised learning from the keyboard
-   (`EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING`) — the keyboard may ignore this hint. **Not
-   implemented in slice 1:** Compose 1.7 text fields have no API for it; a platform `EditText` would be
-   needed. The draft is held in memory only (not in saved instance state).
+   (`EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING`) — the keyboard may ignore this hint. Implemented
+   with a platform `EditText` (Compose 1.7 text fields have no API for it). The draft is held in memory
+   only; the field never writes its text to saved instance state.
 
 ### 4.1 Supported exit actions
 

@@ -4,9 +4,15 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.os.Build
+import android.text.Editable
+import android.text.InputType
+import android.text.TextWatcher
+import android.view.inputmethod.EditorInfo
+import android.widget.EditText
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,10 +28,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -35,15 +39,17 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -159,25 +165,25 @@ fun ChatScreen(
             }
 
             val tooLong = ChatText.tooLong(draft.trim())
+            if (tooLong) {
+                Text(
+                    stringResource(R.string.chat_too_long, ChatText.MAX_CODE_POINTS),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
             Row(
                 modifier = Modifier.fillMaxWidth().padding(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                OutlinedTextField(
+                PrivateTextInput(
                     value = draft,
                     onValueChange = { draft = it },
-                    modifier = Modifier.weight(1f),
-                    placeholder = { Text(stringResource(R.string.chat_input_hint)) },
-                    isError = tooLong,
-                    supportingText = if (tooLong) {
-                        { Text(stringResource(R.string.chat_too_long, ChatText.MAX_CODE_POINTS)) }
-                    } else {
-                        null
-                    },
-                    maxLines = 5,
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                    hint = stringResource(R.string.chat_input_hint),
                     enabled = state.phase == ChatPhase.OPEN,
+                    modifier = Modifier.weight(1f),
                 )
                 Button(
                     onClick = { if (controller.send(draft)) draft = "" },
@@ -186,6 +192,56 @@ fun ChatScreen(
             }
         }
     }
+}
+
+/**
+ * Message input as a platform EditText, because Compose text fields cannot ask the keyboard not to
+ * learn from what is typed (docs/07 §4 rule 6). The keyboard may still ignore the request. The text
+ * is never put in saved instance state.
+ */
+@Composable
+private fun PrivateTextInput(
+    value: String,
+    onValueChange: (String) -> Unit,
+    hint: String,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val colors = MaterialTheme.colorScheme
+    val textColor = colors.onSurface.toArgb()
+    val hintColor = colors.onSurfaceVariant.toArgb()
+    val onChange by rememberUpdatedState(onValueChange)
+    AndroidView(
+        modifier = modifier
+            .border(1.dp, colors.outline, RoundedCornerShape(12.dp))
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        factory = { context ->
+            EditText(context).apply {
+                imeOptions = EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
+                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+                maxLines = 5
+                isSaveEnabled = false
+                background = null
+                addTextChangedListener(
+                    object : TextWatcher {
+                        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+                        override fun afterTextChanged(s: Editable?) = onChange(s?.toString().orEmpty())
+                    },
+                )
+            }
+        },
+        update = { field ->
+            if (field.text.toString() != value) {
+                field.setText(value)
+                field.setSelection(value.length)
+            }
+            field.isEnabled = enabled
+            field.hint = hint
+            field.setTextColor(textColor)
+            field.setHintTextColor(hintColor)
+        },
+    )
 }
 
 @Composable
