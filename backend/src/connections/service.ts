@@ -31,11 +31,12 @@ export interface RequestView {
 export interface ConnectionView {
   id: string;
   peer: { id: string; username: string };
+  conversationId: string;
   createdAt: Date;
 }
 
 /** Fixed-window per-user counter, in memory (single backend instance, docs/02 ADR-07). */
-class UserRateLimiter {
+export class UserRateLimiter {
   private readonly windows = new Map<string, { start: number; count: number }>();
   constructor(private readonly limit: number, private readonly windowMs: number) {}
 
@@ -70,11 +71,11 @@ export class ConnectionService {
   async connectionFor(userId: string): Promise<ConnectionView | null> {
     const c = await this.prisma.connection.findFirst({
       where: { OR: [{ userAId: userId }, { userBId: userId }] },
-      include: { userA: true, userB: true },
+      include: { userA: true, userB: true, conversation: { select: { id: true } } },
     });
-    if (!c) return null;
+    if (!c?.conversation) return null;
     const peer = c.userAId === userId ? c.userB : c.userA;
-    return { id: c.id, peer: { id: peer.id, username: peer.username }, createdAt: c.createdAt };
+    return { id: c.id, peer: { id: peer.id, username: peer.username }, conversationId: c.conversation.id, createdAt: c.createdAt };
   }
 
   /** Issues a fresh single-use QR token and invalidates the owner's previous unused one. */
@@ -196,7 +197,14 @@ export class ConnectionService {
 
       const [a, b] = [req.requester_user_id, req.owner_user_id].sort();
       // skipDuplicates = ON CONFLICT DO NOTHING: simultaneous accepts in both directions keep one row.
-      await tx.connection.createMany({ data: [{ userAId: a!, userBId: b!, createdFromRequestId: req.id, createdAt: now }], skipDuplicates: true });
+      const created = await tx.connection.createMany({ data: [{ userAId: a!, userBId: b!, createdFromRequestId: req.id, createdAt: now }], skipDuplicates: true });
+      if (created.count === 1) {
+        // The connection's conversation and both participants come into existence with it.
+        const connection = await tx.connection.findUniqueOrThrow({ where: { userAId_userBId: { userAId: a!, userBId: b! } } });
+        await tx.conversation.create({
+          data: { connectionId: connection.id, participants: { create: [{ userId: a! }, { userId: b! }] } },
+        });
+      }
       await tx.connectionRequest.update({ where: { id: req.id }, data: { status: "accepted", decidedAt: now } });
       await tx.connectionRequest.updateMany({
         where: {

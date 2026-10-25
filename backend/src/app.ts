@@ -4,6 +4,7 @@ import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastif
 import type { AuthService } from "./auth/service.js";
 import type { ConnectionService } from "./connections/service.js";
 import type { CallService } from "./calls/service.js";
+import type { ChatService } from "./chat/service.js";
 import type { MediaGateway } from "./calls/media.js";
 import type { PushService } from "./push/service.js";
 import type { Config } from "./config/env.js";
@@ -13,6 +14,7 @@ import { registerErrorHandling } from "./plugins/error-handler.js";
 import { authRoutes } from "./routes/auth.js";
 import { connectionRoutes } from "./routes/connections.js";
 import { callRoutes, livekitWebhookRoutes } from "./routes/calls.js";
+import { chatRoutes } from "./routes/chat.js";
 import { deviceRoutes } from "./routes/devices.js";
 import { healthRoutes } from "./routes/health.js";
 import { AppError } from "./errors.js";
@@ -24,6 +26,7 @@ export interface AppDeps {
   auth?: AuthService;
   connections?: ConnectionService;
   calls?: CallService;
+  chat?: ChatService;
   /** LiveKit gateway; needed only to verify webhooks. */
   media?: MediaGateway | null;
   push?: PushService;
@@ -31,7 +34,7 @@ export interface AppDeps {
   logger?: FastifyServerOptions["logger"];
 }
 
-export function buildApp({ config, database, auth, connections, calls, media, push, logger }: AppDeps): FastifyInstance {
+export function buildApp({ config, database, auth, connections, calls, chat, media, push, logger }: AppDeps): FastifyInstance {
   const app = Fastify({
     logger: logger ?? buildLoggerOptions(config),
     // Client-supplied request IDs are not trusted; every request gets a fresh one.
@@ -70,6 +73,7 @@ export function buildApp({ config, database, auth, connections, calls, media, pu
       await api.register(authRoutes, connections ? { auth, connections } : { auth });
       if (connections) await api.register(connectionRoutes, { auth, connections });
       if (calls) await api.register(callRoutes, { auth, calls });
+      if (chat) await api.register(chatRoutes, { auth, chat });
       if (push) await api.register(deviceRoutes, { auth, push });
     }, { prefix: "/api/v1" });
   }

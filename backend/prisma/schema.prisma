@@ -38,15 +38,17 @@ model User {
 
   sessions Session[]
 
-  ownedQrTokens              QrToken[]           @relation("QrOwner")
-  consumedQrTokens           QrToken[]           @relation("QrConsumer")
-  sentConnectionRequests     ConnectionRequest[] @relation("RequestRequester")
-  receivedConnectionRequests ConnectionRequest[] @relation("RequestOwner")
-  connectionsAsA             Connection[]        @relation("ConnectionA")
-  connectionsAsB             Connection[]        @relation("ConnectionB")
-  callsMade                  Call[]              @relation("CallCaller")
-  callsReceived              Call[]              @relation("CallCallee")
+  ownedQrTokens              QrToken[]                 @relation("QrOwner")
+  consumedQrTokens           QrToken[]                 @relation("QrConsumer")
+  sentConnectionRequests     ConnectionRequest[]       @relation("RequestRequester")
+  receivedConnectionRequests ConnectionRequest[]       @relation("RequestOwner")
+  connectionsAsA             Connection[]              @relation("ConnectionA")
+  connectionsAsB             Connection[]              @relation("ConnectionB")
+  callsMade                  Call[]                    @relation("CallCaller")
+  callsReceived              Call[]                    @relation("CallCallee")
   callDiagnostics            CallDiagnostic[]
+  conversationParticipants   ConversationParticipant[]
+  sentMessages               Message[]
 
   @@map("users")
 }
@@ -129,7 +131,6 @@ model AuditEvent {
 
 // ---------------------------------------------------------------------------------------------
 // QR connection phase (docs/06-qr-connection.md, docs/13-database-design.md §3.5–3.7).
-// The chat `conversations` table is added with the chat phase.
 // ---------------------------------------------------------------------------------------------
 
 model QrToken {
@@ -175,10 +176,11 @@ model Connection {
   createdFromRequestId String?  @unique @map("created_from_request_id") @db.Uuid
   createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  userA       User               @relation("ConnectionA", fields: [userAId], references: [id], onDelete: Restrict)
-  userB       User               @relation("ConnectionB", fields: [userBId], references: [id], onDelete: Restrict)
-  fromRequest ConnectionRequest? @relation(fields: [createdFromRequestId], references: [id], onDelete: SetNull)
-  calls       Call[]
+  userA        User               @relation("ConnectionA", fields: [userAId], references: [id], onDelete: Restrict)
+  userB        User               @relation("ConnectionB", fields: [userBId], references: [id], onDelete: Restrict)
+  fromRequest  ConnectionRequest? @relation(fields: [createdFromRequestId], references: [id], onDelete: SetNull)
+  calls        Call[]
+  conversation Conversation?
 
   @@unique([userAId, userBId])
   @@map("connections")
@@ -226,4 +228,61 @@ model CallDiagnostic {
 
   @@unique([callId, userId])
   @@map("call_diagnostics")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Chat phase (docs/07-chat-and-disappearing-messages.md, docs/13-database-design.md §3.8–3.10).
+// Messages are hard-deleted; nothing here is soft-deleted.
+// ---------------------------------------------------------------------------------------------
+
+model Conversation {
+  id           String    @id @default(uuid()) @db.Uuid
+  connectionId String    @unique @map("connection_id") @db.Uuid
+  /// Last allocated message sequence number.
+  lastSeq      BigInt    @default(0) @map("last_seq")
+  /// Incremented whenever messages are deleted (exit or backstop); sends from an older epoch are refused.
+  clearEpoch   BigInt    @default(0) @map("clear_epoch")
+  clearedAt    DateTime? @map("cleared_at") @db.Timestamptz(3)
+
+  connection   Connection                @relation(fields: [connectionId], references: [id], onDelete: Restrict)
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@map("conversations")
+}
+
+model ConversationParticipant {
+  conversationId String    @map("conversation_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  /// Highest sequence number this user has displayed (monotonic).
+  lastReadSeq    BigInt    @default(0) @map("last_read_seq")
+  leaseId        String?   @map("lease_id") @db.Uuid
+  leaseExpiresAt DateTime? @map("lease_expires_at") @db.Timestamptz(3)
+  lastLeaveId    String?   @map("last_leave_id") @db.Uuid
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([conversationId, userId])
+  @@map("conversation_participants")
+}
+
+model Message {
+  id              String   @id @default(uuid()) @db.Uuid
+  conversationId  String   @map("conversation_id") @db.Uuid
+  seq             BigInt
+  epoch           BigInt
+  senderUserId    String   @map("sender_user_id") @db.Uuid
+  clientMessageId String   @map("client_message_id") @db.Uuid
+  /// Sensitive: never logged, excluded from backups.
+  body            String
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderUserId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, seq])
+  @@unique([conversationId, senderUserId, clientMessageId])
+  @@index([createdAt])
+  @@map("messages")
 }

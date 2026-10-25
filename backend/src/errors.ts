@@ -22,6 +22,9 @@ export type ErrorCode =
   | "CALL_IN_PROGRESS"
   | "CALL_NOT_ACTIVE"
   | "MEDIA_UNAVAILABLE"
+  | "CONVERSATION_CLEARED"
+  | "LEASE_EXPIRED"
+  | "MESSAGE_TOO_LONG"
   | "PAYLOAD_TOO_LARGE"
   | "UNSUPPORTED_MEDIA_TYPE"
   | "RATE_LIMITED"
@@ -82,6 +85,9 @@ export const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   CALL_IN_PROGRESS: "A call is already in progress.",
   CALL_NOT_ACTIVE: "This call is no longer ringing or active.",
   MEDIA_UNAVAILABLE: "Calling is temporarily unavailable.",
+  CONVERSATION_CLEARED: "The chat was cleared. Your message was not sent.",
+  LEASE_EXPIRED: "You left the chat. Open it again to continue.",
+  MESSAGE_TOO_LONG: "The message is too long.",
   PAYLOAD_TOO_LARGE: "The request is too large.",
   UNSUPPORTED_MEDIA_TYPE: "Unsupported content type.",
   RATE_LIMITED: "Too many requests. Try again later.",

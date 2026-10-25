@@ -5,7 +5,7 @@ import type { PrismaClient } from "../generated/prisma/client.js";
  * Wake-up pushes (docs/10-notifications.md). Payloads are opaque data messages: a type and an id,
  * never usernames, message text, tokens or secrets.
  */
-export type PushPayload = { t: "call"; id: string } | { t: "call_end"; id: string };
+export type PushPayload = { t: "call"; id: string } | { t: "call_end"; id: string } | { t: "msg" };
 
 /** Delivers one payload to one FCM token. Throws `UnregisteredTokenError` for dead tokens. */
 export interface PushTransport {

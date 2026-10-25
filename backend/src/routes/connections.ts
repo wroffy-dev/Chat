@@ -24,9 +24,10 @@ const requestSchema = {
 export const connectionSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["id", "peer", "createdAt"],
+  required: ["id", "peer", "conversationId", "createdAt"],
   properties: {
     id: { type: "string" },
+    conversationId: { type: "string" },
     peer: {
       type: "object",
       additionalProperties: false,

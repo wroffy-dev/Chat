@@ -6,6 +6,7 @@ import { PasswordHasher } from "./auth/passwords.js";
 import { AuthService } from "./auth/service.js";
 import { ConnectionService } from "./connections/service.js";
 import { CallService } from "./calls/service.js";
+import { ChatService } from "./chat/service.js";
 import { LiveKitGateway } from "./calls/media.js";
 import { createFcmTransport, PushService } from "./push/service.js";
 import { ConfigError, loadConfig } from "./config/env.js";
@@ -37,7 +38,8 @@ async function main() {
   let logPush: (msg: string, extra?: Record<string, unknown>) => void = () => {};
   const push = new PushService(database.prisma, transport, (msg, extra) => logPush(msg, extra));
   const calls = new CallService(database.prisma, media, config.CALL_RING_TIMEOUT_SECONDS, undefined, push);
-  const app = buildApp({ config, database, auth, connections, calls, media, push });
+  const chat = new ChatService(database.prisma, undefined, push);
+  const app = buildApp({ config, database, auth, connections, calls, chat, media, push });
   logPush = (msg, extra) => app.log.warn(extra ?? {}, msg);
   // The database is owned (and closed) by the public app; the admin app shares it.
   const adminApp = buildAdminApp({ config, prisma: database.prisma, database, auth, admin });
@@ -52,6 +54,11 @@ async function main() {
     calls.sweep().catch((err: unknown) => app.log.warn({ err }, "call sweep failed"));
   }, 5_000);
   callSweep.unref();
+  // Chat exits by lapsed presence lease and the 24 h backstop (D-02): checked every 15 seconds.
+  const chatSweep = setInterval(() => {
+    chat.sweep().catch((err: unknown) => app.log.warn({ err }, "chat sweep failed"));
+  }, 15_000);
+  chatSweep.unref();
 
   let shuttingDown = false;
   const shutdown = (signal: string) => {
@@ -59,6 +66,7 @@ async function main() {
     shuttingDown = true;
     clearInterval(housekeeping);
     clearInterval(callSweep);
+    clearInterval(chatSweep);
     app.log.info({ signal }, "shutting down");
     const force = setTimeout(() => {
       app.log.error("shutdown timed out, forcing exit");
