@@ -12,6 +12,13 @@ import io.livekit.android.room.track.LocalVideoTrackOptions
 import io.livekit.android.room.track.VideoPreset169
 import app.vaultchat.domain.call.MediaEvent
 import app.vaultchat.domain.call.MediaSession
+import app.vaultchat.domain.call.RawStat
+import app.vaultchat.domain.call.StatsSample
+import app.vaultchat.domain.call.WebRtcStats
+import io.livekit.android.webrtc.RTCStatsGetter
+import io.livekit.android.webrtc.getStats
+import kotlinx.coroutines.withTimeoutOrNull
+import livekit.org.webrtc.RTCStatsReport
 import com.twilio.audioswitch.AudioDevice
 import io.livekit.android.LiveKit
 import io.livekit.android.RoomOptions
@@ -131,6 +138,22 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
         room.release()
         scope.cancel()
     }
+
+    /** Both peer connections' WebRTC stats, reduced to plain values (docs/08 §11). Null on any failure. */
+    override suspend fun stats(): StatsSample? {
+        if (released) return null
+        return try {
+            withTimeoutOrNull(1_500) {
+                val publisher: RTCStatsGetter = room::getPublisherRTCStats
+                val subscriber: RTCStatsGetter = room::getSubscriberRTCStats
+                WebRtcStats.sample(publisher.getStats().toRaw(), subscriber.getStats().toRaw())
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun RTCStatsReport.toRaw(): List<RawStat> = statsMap.values.map { RawStat(it.id, it.type, it.members) }
 }
 
 /** Device capability check for 1080p capture (docs/08-calling.md §8). */

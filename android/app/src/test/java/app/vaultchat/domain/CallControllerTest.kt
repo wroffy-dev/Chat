@@ -12,7 +12,11 @@ import app.vaultchat.domain.call.CallStatus
 import app.vaultchat.domain.call.JoinInfo
 import app.vaultchat.domain.call.MediaEvent
 import app.vaultchat.domain.call.MediaSession
+import app.vaultchat.domain.call.StatsSample
+import app.vaultchat.domain.realtime.RealtimeSignal
+import app.vaultchat.domain.realtime.RealtimeSignals
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -60,6 +64,8 @@ class FakeMedia : MediaSession {
         connected = false
         disconnects++
     }
+    var nextStats: StatsSample? = null
+    override suspend fun stats() = nextStats
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -67,7 +73,7 @@ class CallControllerTest {
     private val repo = FakeCallRepo()
     private val media = FakeMedia()
 
-    private fun TestScope.controller() = CallController(repo, media, backgroundScope) { testScheduler.currentTime }
+    private fun TestScope.controller() = CallController(repo, media, backgroundScope, nowMs = { testScheduler.currentTime })
 
     @Test
     fun `outgoing video call rings, is answered and becomes active when the peer's media arrives`() = runTest {
@@ -235,5 +241,48 @@ class CallControllerTest {
         val d = repo.diagnostics.single()
         assertEquals(setOf("kind", "endReason", "durationSec", "reconnects"), d.keys)
         assertEquals(65L, d["durationSec"])
+    }
+
+    @Test
+    fun `call statistics are sampled while connected and summarised at the end`() = runTest {
+        val c = controller()
+        c.startOutgoing("conn", CallKind.VIDEO, "bob")
+        runCurrent()
+        var sent = 0L
+        media.nextStats = StatsSample(rttMs = 80.0, bytesSent = 0, sendWidth = 1280, sendHeight = 720, candidateType = "srflx", protocol = "udp")
+        media.events.emit(MediaEvent.RemoteJoined)
+        runCurrent()
+        repeat(5) {
+            sent += 250_000 // 1 Mbps over 2 s
+            media.nextStats = media.nextStats!!.copy(bytesSent = sent, rttMs = 80.0 + it * 10)
+            advanceTimeBy(CallController.STATS_INTERVAL_MS)
+        }
+        c.hangup()
+        runCurrent()
+        val d = repo.diagnostics.single()
+        assertEquals(6, d["statsSamples"])
+        assertEquals(80, d["rttMsMin"])
+        assertEquals(120, d["rttMsMax"])
+        assertEquals(1000, d["sendKbpsAvg"])
+        assertEquals("1280x720", d["sendResMax"])
+        assertEquals("srflx/udp", d["path"])
+        assertTrue("within the server's 40-key limit", d.size <= 40)
+    }
+
+    @Test
+    fun `a live call signal ends the ringing at once instead of at the next poll`() = runTest {
+        val live = object : RealtimeSignals {
+            override val signals = MutableSharedFlow<RealtimeSignal>(extraBufferCapacity = 8)
+            override val connected = MutableStateFlow(true)
+        }
+        val c = CallController(repo, media, backgroundScope, { testScheduler.currentTime }, live)
+        c.startOutgoing("conn", CallKind.VIDEO, "bob")
+        runCurrent()
+        repo.status = CallStatus.DECLINED
+        advanceTimeBy(5_000)
+        assertEquals("no 2 s polling while connected", CallPhase.RINGING_OUT, c.state.value.phase)
+        live.signals.emit(RealtimeSignal.CallChanged("c1"))
+        runCurrent()
+        assertEquals(CallEndReason.DECLINED, c.state.value.endReason)
     }
 }

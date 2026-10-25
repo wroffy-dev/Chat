@@ -54,4 +54,7 @@ interface MediaSession {
     fun setSpeakerphone(enabled: Boolean)
     /** Releases camera, microphone and the connection. Safe to call more than once. */
     fun disconnect()
+
+    /** Current WebRTC statistics, or null when unavailable (not connected, or the SDK failed). */
+    suspend fun stats(): StatsSample? = null
 }

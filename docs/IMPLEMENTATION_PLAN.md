@@ -218,7 +218,7 @@ user. Server logs scanned afterwards: no passwords or tokens present.
 | Android: `CallForegroundService` (microphone/camera types) during connected calls | Done (compiles; CI run 40137301179) | Not run on a device |
 | 1080p capture only on capable, cool phones without power saving (`VideoQualityPolicy` + Camera2 capability check) | Policy verified on JVM; capability check compiles (CI run 40137301179) | `VideoQualityPolicyTest` |
 | core-telecom integration (system call UI, Bluetooth/car controls) | **Not started** — spike S-2 | |
-| WebRTC stats (RTT, jitter, loss, resolution) in diagnostics | **Not started** | |
+| WebRTC stats in diagnostics: RTT, jitter, loss, send/receive bitrate, resolution, fps, quality-limitation reason, freezes, audio concealment, path (candidate type/protocol — no addresses); sampled every 2 s, summarised (min/avg/max, totals) into the end-of-call diagnostics | Done (logic verified on JVM; SDK reading compile pending CI) | `CallStatsTest`, `CallControllerTest`; SDK API names checked in livekit-android 2.29.1 sources. Not yet seen on a real call |
 
 ## Phase 5 — Text chat, slice 1
 
@@ -276,7 +276,7 @@ the deployed system.
 | Signals `chat.changed {conversationId}` and `call.changed {callId}` — IDs only, after commit — from sends, exits, lease expiry, backstop and every call transition | Done (verified) | Same tests (no message text in frames) |
 | Android `RealtimeClient` (OkHttp, data layer): reconnect with backoff, token refresh on 4401, stops on 4403; runs while signed in and in front | Done (verified against the real backend) | `RealBackendChatTest` with live signals on both sides |
 | Chat re-reads at once on a signal; polls 10 s while connected (2 s otherwise); heartbeat time-based. Incoming-call check wakes on `call.changed` (3 s / 15 s polling) | Done (chat verified on JVM; app compiles and lints, CI run 40190854554) | `ChatControllerTest` (signal + fallback test) |
-| The call screen still polls its own call every 2 s | Not changed | Could use `call.changed` later |
+| The call screen re-reads its call at once on `call.changed` (10 s polling while connected, 2 s otherwise) | Done (verified on JVM) | `CallControllerTest` |
 
 ## Next task
 

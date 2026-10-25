@@ -1,7 +1,12 @@
 package app.vaultchat.domain.call
 
+import app.vaultchat.domain.realtime.RealtimeSignal
+import app.vaultchat.domain.realtime.RealtimeSignals
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -48,13 +53,18 @@ class CallController(
     private val media: MediaSession,
     private val scope: CoroutineScope,
     private val nowMs: () -> Long = System::currentTimeMillis,
+    /** Live "call changed" signals: the status is re-read at once and polled slowly while connected. */
+    private val signals: RealtimeSignals? = null,
 ) {
     companion object {
         const val STATUS_POLL_MS = 2_000L
+        const val SIGNALLED_STATUS_POLL_MS = 10_000L
         /** Give up if media cannot reconnect within this time (docs/08 §9). */
         const val RECONNECT_GIVE_UP_MS = 30_000L
         /** After accepting, how long to wait for the other side's media before failing. */
         const val JOIN_GIVE_UP_MS = 30_000L
+        /** How often call statistics are sampled while media flows (docs/08 §11). */
+        const val STATS_INTERVAL_MS = 2_000L
     }
 
     private val _state = MutableStateFlow(CallState())
@@ -63,6 +73,8 @@ class CallController(
     private var poller: Job? = null
     private var mediaEvents: Job? = null
     private var watchdog: Job? = null
+    private var statsJob: Job? = null
+    private val stats = CallStatsAggregator()
     private var startedAtMs: Long? = null
 
     /** Caller side: create the call, join the room while it rings. */
@@ -191,6 +203,7 @@ class CallController(
                         watchdog?.cancel()
                         if (startedAtMs == null) startedAtMs = nowMs()
                         _state.update { it.copy(remotePresent = true, phase = CallPhase.ACTIVE) }
+                        collectStats()
                     }
                     MediaEvent.RemoteLeft -> {
                         if (_state.value.phase == CallPhase.ACTIVE) finish(CallEndReason.REMOTE_HANGUP, notifyServer = true)
@@ -215,8 +228,13 @@ class CallController(
     private fun pollStatus() {
         poller?.cancel()
         poller = scope.launch {
+            val wake = Channel<Unit>(Channel.CONFLATED)
+            signals?.let { live ->
+                launch { live.signals.collect { if (it is RealtimeSignal.CallChanged && it.callId == _state.value.callId) wake.trySend(Unit) } }
+            }
             while (isActive) {
-                delay(STATUS_POLL_MS)
+                val waitMs = if (signals?.connected?.value == true) SIGNALLED_STATUS_POLL_MS else STATUS_POLL_MS
+                withTimeoutOrNull(waitMs) { wake.receive() }
                 val id = _state.value.callId ?: continue
                 val r = repo.get(id)
                 if (r is CallResult.Failure && r.reason == CallFailure.SESSION_ENDED) {
@@ -240,7 +258,19 @@ class CallController(
                     CallStatus.ENDED -> finish(if (phase == CallPhase.RINGING_IN) CallEndReason.CANCELLED else CallEndReason.REMOTE_HANGUP, notifyServer = false)
                     CallStatus.FAILED -> finish(CallEndReason.FAILED, notifyServer = false)
                 }
-                if (_state.value.phase == CallPhase.ENDED) return@launch
+                if (_state.value.phase == CallPhase.ENDED) break
+            }
+            coroutineContext.cancelChildren()
+        }
+    }
+
+    /** Samples statistics while the call is up; the summary goes out with the diagnostics at the end. */
+    private fun collectStats() {
+        if (statsJob != null) return
+        statsJob = scope.launch {
+            while (isActive) {
+                media.stats()?.let { stats.add(it.copy(atMs = nowMs())) }
+                delay(STATS_INTERVAL_MS)
             }
         }
     }
@@ -266,6 +296,8 @@ class CallController(
         val durationSec = startedAtMs?.let { (nowMs() - it) / 1000 }
         _state.update { it.copy(phase = CallPhase.ENDED, endReason = reason) }
         val ended = _state.value
+        statsJob?.cancel()
+        val quality = stats.summary()
         media.disconnect()
         if (id != null) {
             scope.launch {
@@ -278,7 +310,7 @@ class CallController(
                         "endReason" to reason.name.lowercase(),
                         "durationSec" to durationSec,
                         "reconnects" to ended.reconnects,
-                    ),
+                    ) + quality,
                 )
             }
         }

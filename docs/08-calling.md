@@ -270,7 +270,13 @@ Collected in memory during the call (every 2 s from WebRTC stats via the SDK) an
 
 At call end the app posts a summary (min/avg/max, not raw time series) to `POST /calls/{id}/diagnostics`.
 No media, no IP addresses, no location. A hidden "debug overlay" shows live values during testing.
-Exact stats API names in the Android SDK must be checked against the pinned SDK version.
+
+**Implemented** (except the debug overlay, connection-quality events and device/battery fields):
+`WebRtcStats` + `CallStatsAggregator` (plain Kotlin, JVM-tested) and `LiveKitMediaSession.stats()`, which
+reads `Room.getPublisherRTCStats` / `getSubscriberRTCStats` (API names checked in the livekit-android
+2.29.1 sources). Summary keys: `rttMsMin/Avg/Max`, `jitterMsAvg/Max`, `lossPct`, `sendKbpsAvg`,
+`recvKbpsAvg`, `sendResMax`, `recvResMax`, `sendFpsAvg`, `recvFpsAvg`, `qualityLimitedPct`,
+`qualityLimitation`, `videoFreezes`, `audioConcealmentEvents`, `path`, `statsSamples`.
 
 ## 12. Battery and thermal
 
