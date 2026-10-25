@@ -256,9 +256,9 @@ Deviations from the original design, recorded in docs/07 and docs/14:
 | Startup catch-up: lapsed chat leases, 24 h backstop and stale calls handled at boot, not 5–15 s later | Done (verified) | Manual run: a lease expired during downtime was cleared 3 s after restart |
 | `deploy/backup/backup.sh`: `pg_dump` without `messages` rows, streamed into `age` (no plaintext on disk), status file | Done (verified locally) | A sentinel message in the live DB was absent from the decrypted dump |
 | `deploy/backup/restore-test.sh`: restore into a new scratch DB, check migrations and that `messages` is empty, drop it | Done (verified locally) | Passed; wrong key fails and leaves no scratch DB |
-| `backend/Dockerfile` (non-root runtime, pruned, health check; `migrate` target), backup image, `deploy/docker-compose.prod.yml` template (no secrets; admin port on the VPS loopback only) | Done (CI pending) | CI `images` job: build, non-root and content checks, starts without DB (`/healthz` 200, `/readyz` 503), compose validation |
+| `backend/Dockerfile` (non-root runtime, pruned, health check; `migrate` target), backup image, `deploy/docker-compose.prod.yml` template (no secrets; admin port on the VPS loopback only) | Done (verified in CI, run 40176585222) | CI `images` job: build, non-root and content checks, starts without DB (`/healthz` 200, `/readyz` 503), compose validation. Not yet run on the VPS |
 | `scripts/check-secrets.sh` in CI | Done (verified) | Passes on the repo; caught a planted key and connection string |
-| Unsigned release APK built in CI (R8 shrinking) | CI pending | |
+| Unsigned release APK built in CI (R8 shrinking) | Done (verified in CI, run 40176585222) | Builds; not yet run on a device |
 | Android: backups/device transfer exclude all app data; only the launcher activity is exported; release is HTTPS-only with system CAs | Done (reviewed) | Manifest and XML rules; `adb backup` check needs a device |
 
 Not done in this slice: backup pruning and data-retention jobs (retention periods are open decision
