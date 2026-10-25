@@ -14,7 +14,6 @@ recommendation is given, it is labelled as such and still needs sign-off.
 | D-09 | Minimum Android version and target devices | e.g. Android 10 (API 29) floor | Set from the two users' actual phones | Android project setup |
 | D-10 | Staging environment | None · same VPS, backend-only staging · full staging incl. LiveKit | Backend-only staging on the same VPS | Deployment |
 | D-11 | Show "last seen" / online presence to the other user? | Show both · in-chat only · nothing | Show "in chat" only (privacy-minimal) | UI |
-| D-12 | Retention periods | Calls/diagnostics 30 d; audit 365 d; errors 14 d; backups 7 daily + 4 weekly (proposed) | As proposed | DB jobs |
 | D-13 | Video codec and degradation preference for MVP | VP8 · H.264 · VP9 SVC; MAINTAIN_FRAMERATE · BALANCED | Decide from T-Q-CODEC / T-Q-DEGRADE results | Calling |
 | D-14 | App name, package name (`applicationId`) and deep-link scheme | "Vault Chat" / `vaultchat://` are working names | — | Android project setup, QR payload |
 | D-15 | TURN/TLS on port 443 | Not in MVP · add if a real network fails | Add only if T-NET-ONLY-443 matters for the users' networks | Deployment |
@@ -29,6 +28,7 @@ recommendation is given, it is labelled as such and still needs sign-off.
 |---|---|---|---|
 | Q-1 | Build QR connection before calling | 2026-10-24 | Owner ("Go" to the recommendation) |
 | D-01 | **Option D.** On any exit, delete messages the recipient has already seen. Unseen messages wait for the recipient, and are deleted on the next exit after they are seen. | 2026-10-24 | Owner |
+| D-12 | **Retention.** Call records and call diagnostics: 24 h. Audit log: 365 days. Backups: only the last 24 h are kept. (Error records: no table exists yet.) | 2026-10-25 | Owner ("Just 24", then chose the scope) |
 | D-02 | **Exit after about a minute.** The chat holds a 60 s presence lease renewed every 20 s; when it lapses (background, crash, power or network loss) the server applies the exit rule. **Backstop: every message is deleted at most 24 h after it was sent**, seen or not. | 2026-10-24 | Owner |
 
 ## How to record a decision

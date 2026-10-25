@@ -200,7 +200,7 @@ Use the config in [08 §13](08-calling.md#13-livekit-server-configuration-propos
 | When | Daily at a quiet hour (UTC time chosen per users' time zone), plus automatically before each migration |
 | Encryption | Pipe through `age` (or `gpg`) with a **public** key; the private key is stored offline only |
 | Where | Offsite S3-compatible bucket, private, with credentials that can write but not list/delete if the provider supports it; plus the latest copy on the VPS |
-| Retention | 7 daily + 4 weekly (proposed) |
+| Retention | Only the last 24 hours (D-12, 2026-10-25): `backup.sh` deletes older files after each successful backup. Apply the same rule to the offsite bucket (lifecycle rule) |
 | Monitoring | Backup job writes a status file read by the backend; Admin Console Health shows last success time; alert if older than 36 h |
 | Restore test | Monthly: download latest, decrypt, `pg_restore` into a scratch database, run `prisma migrate status` and a row-count sanity check; record result |
 | Not backed up | Message text and location (by design); LiveKit (stateless); Redis (none) |
@@ -208,8 +208,9 @@ Use the config in [08 §13](08-calling.md#13-livekit-server-configuration-propos
 
 Implemented as scripts (not yet run on the VPS): `deploy/backup/backup.sh` (dump without message rows,
 streamed into `age`) and `deploy/backup/restore-test.sh` (the monthly drill: restore into a new scratch
-database, check, drop), packaged as the `backup` service in `deploy/docker-compose.prod.yml`. Pruning to
-7 daily + 4 weekly waits for D-12.
+database, check, drop), packaged as the `backup` service in `deploy/docker-compose.prod.yml`. The
+backup directory keeps only the last 24 hours (D-12). Consequence: a problem noticed more than a day
+later cannot be restored from backup.
 
 Restore procedure (summary): stop backend → create empty DB → `pg_restore` → run `prisma migrate deploy` →
 start backend → verify `/readyz` and admin login. Restored sessions remain valid; revoke all sessions

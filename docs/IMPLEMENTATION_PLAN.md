@@ -261,8 +261,10 @@ Deviations from the original design, recorded in docs/07 and docs/14:
 | Unsigned release APK built in CI (R8 shrinking) | Done (verified in CI, run 40176585222) | Builds; not yet run on a device |
 | Android: backups/device transfer exclude all app data; only the launcher activity is exported; release is HTTPS-only with system CAs | Done (reviewed) | Manifest and XML rules; `adb backup` check needs a device |
 
-Not done in this slice: backup pruning and data-retention jobs (retention periods are open decision
-D-12); separate database roles (`vc_migrate`/`vc_app`/`vc_maint`, docs/13 §1) — to be set up with the
+| Retention (D-12, decided 2026-10-25): calls + diagnostics 24 h, audit 365 days; plus docs/13 periods for sessions (30 d), admin sessions (7 d), finished connection requests (30 d, never the one behind the connection). Startup and hourly | Done (verified) | `test/retention.integration.test.ts` |
+| Backups keep only the last 24 hours (D-12): pruned after each successful backup | Done (verified locally) | 30 h-old file pruned; 2 h-old and new kept; unrelated files untouched |
+
+Not done in this slice: separate database roles (`vc_migrate`/`vc_app`/`vc_maint`, docs/13 §1) — to be set up with the
 database on the VPS; external port scan, uptime/disk/bandwidth alerts, ASVS/MASVS self-review — need
 the deployed system.
 
@@ -273,6 +275,5 @@ the deployed system.
    phones; record results against docs/09 (T-SETUP-1/2, T-CLEAN, T-BG-VOICE/VIDEO).
 2. Chat on two phones: open, send both ways, Back on one phone, background for over a minute; record
    results. Then chat slice 2 if wanted: WebSocket instead of polling, keyboard learning flag.
-3. **Owner decision D-12** (retention periods) unblocks backup pruning and retention jobs. Then Phase 7
-   (private release) — needs the VPS and your go-ahead for any deployment.
+3. Phase 7 (private release) — needs the VPS and your go-ahead for any deployment.
 4. Calling later: core-telecom (S-2), WebRTC stats in diagnostics, quality benchmarks (D-13).

@@ -7,6 +7,7 @@ import { AuthService } from "./auth/service.js";
 import { ConnectionService } from "./connections/service.js";
 import { CallService } from "./calls/service.js";
 import { ChatService } from "./chat/service.js";
+import { RetentionService } from "./retention/service.js";
 import { LiveKitGateway } from "./calls/media.js";
 import { createFcmTransport, PushService } from "./push/service.js";
 import { ConfigError, loadConfig } from "./config/env.js";
@@ -44,9 +45,12 @@ async function main() {
   // The database is owned (and closed) by the public app; the admin app shares it.
   const adminApp = buildAdminApp({ config, prisma: database.prisma, database, auth, admin });
 
-  // Hourly housekeeping of spent QR tokens; failures are logged and retried next hour.
+  const retention = new RetentionService(database.prisma);
+  // Hourly housekeeping: spent QR tokens and records past their retention period (D-12).
+  // Failures are logged and retried next hour.
   const housekeeping = setInterval(() => {
     connections.cleanup().catch((err: unknown) => app.log.warn({ err }, "qr token cleanup failed"));
+    retention.purge().catch((err: unknown) => app.log.warn({ err }, "retention purge failed"));
   }, 60 * 60 * 1000);
   housekeeping.unref();
   // Ring timeouts and stuck calls: checked every 5 seconds.
@@ -102,6 +106,7 @@ async function main() {
   if (readiness.ready) {
     await chat.sweep().catch((err: unknown) => app.log.warn({ err }, "startup chat sweep failed"));
     await calls.sweep().catch((err: unknown) => app.log.warn({ err }, "startup call sweep failed"));
+    await retention.purge().catch((err: unknown) => app.log.warn({ err }, "startup retention purge failed"));
   }
   if (!media) app.log.warn("LiveKit not configured: calling returns 503 MEDIA_UNAVAILABLE");
   if (!push.enabled) app.log.warn("FCM not configured: incoming calls ring only while the app is open");

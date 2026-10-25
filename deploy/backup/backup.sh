@@ -8,8 +8,9 @@
 # Optional:  BACKUP_STATUS_FILE  written with the UTC time of the last success (default $BACKUP_DIR/last-success)
 #
 # Message data is never written: the `messages` table keeps its structure but no rows. The dump is
-# streamed straight into age, so no unencrypted copy touches the disk. Old files are not pruned here:
-# retention is open decision D-12.
+# streamed straight into age, so no unencrypted copy touches the disk.
+# Retention (decision D-12, 2026-10-25): only the last 24 hours of backups are kept. Older files in
+# BACKUP_DIR are deleted after a successful backup, so the newest backup always survives.
 set -euo pipefail
 umask 077
 
@@ -30,3 +31,7 @@ pg_dump --format=custom --no-owner --no-privileges \
 mv "$partial" "$out"
 date -u +%Y-%m-%dT%H:%M:%SZ > "$STATUS_FILE"
 echo "backup written: $out ($(wc -c < "$out") bytes)"
+
+# D-12: keep 24 hours of backups. Runs only after the new file exists.
+find "$BACKUP_DIR" -maxdepth 1 -type f \( -name 'vaultchat-*.dump.age' -o -name 'vaultchat-*.dump.age.partial' \) \
+  -mmin +1440 ! -path "$out" -print -delete | sed 's/^/pruned: /'

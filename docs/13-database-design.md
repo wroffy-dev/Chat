@@ -219,7 +219,7 @@ Backups: data excluded. Never logged.
 | `created_at`, `accepted_at`, `active_at`, `ended_at` | timestamptz | | |
 
 Partial unique index: `(connection_id) WHERE status IN ('ringing','accepted','active')` — one live call at a time.
-Retention: 30 days (proposed), then deleted (cascades to diagnostics).
+Retention (D-12): 24 hours, then deleted (cascades to diagnostics); live calls are never deleted.
 
 ### 3.12 call_diagnostics
 
@@ -241,7 +241,7 @@ No IP addresses, no location. Retention: same as `calls`.
 | `ip_truncated` | inet | yes | /24 (IPv4) or /48 (IPv6) |
 | `metadata` | jsonb | yes | Never secrets, message text, coordinates |
 
-Index `(occurred_at DESC)`, `(action, occurred_at DESC)`. Append-only for `vc_app`. Retention: 365 days (proposed).
+Index `(occurred_at DESC)`, `(action, occurred_at DESC)`. Append-only for `vc_app`. Retention (D-12): 365 days.
 
 ### 3.14 location_shares (proposed — only if D-06 approved)
 
@@ -295,8 +295,10 @@ Default isolation READ COMMITTED is sufficient with the explicit row locks above
   rolling back the schema.
 - Raw SQL migrations for things Prisma does not model: partial unique indexes, `CHECK` constraints, role grants.
 
+Retention is enforced by `RetentionService` (backend), run at startup and hourly.
+
 ## 7. Backup and restore
 
 Details in [16 §11](16-deployment-and-operations.md#11-backups-and-restore). Summary:
 daily `pg_dump` (custom format) with `--exclude-table-data=messages --exclude-table-data=location_shares`,
-encrypted, uploaded offsite; 7 daily + 4 weekly kept; monthly restore test into a scratch database.
+encrypted, uploaded offsite; only the last 24 hours of backups kept (D-12); monthly restore test into a scratch database.
