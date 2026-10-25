@@ -7,6 +7,9 @@ const DAY = 24 * HOUR;
  * Retention periods. Decision D-12 (2026-10-25): call records and call diagnostics 24 h; audit
  * events 365 days. The rest follow docs/13-database-design.md §3. Messages have their own 24 h
  * backstop (D-02, ChatService); spent QR tokens are cleaned by ConnectionService.
+ *
+ * The audit log is append-only for the app's database role, so its clean-up is a separate job run
+ * with the maintenance role (`cli maint:purge-audit`, docs/13 §1).
  */
 export const RETENTION = {
   callsMs: 24 * HOUR,
@@ -21,7 +24,6 @@ export const RETENTION = {
 
 export interface PurgeCounts {
   calls: number;
-  auditEvents: number;
   sessions: number;
   adminSessions: number;
   connectionRequests: number;
@@ -33,7 +35,13 @@ export class RetentionService {
     private readonly now: () => Date = () => new Date(),
   ) {}
 
-  /** Hard-deletes records past their retention period. Idempotent; safe to run at any time. */
+  /** Audit events older than 365 days. Needs the maintenance role (DELETE on audit_events). */
+  async purgeAudit(): Promise<number> {
+    const r = await this.prisma.auditEvent.deleteMany({ where: { occurredAt: { lt: new Date(this.now().getTime() - RETENTION.auditMs) } } });
+    return r.count;
+  }
+
+  /** Hard-deletes app records past their retention period. Idempotent; runs with the app role. */
   async purge(): Promise<PurgeCounts> {
     const now = this.now().getTime();
     const before = (ms: number) => new Date(now - ms);
@@ -42,7 +50,6 @@ export class RetentionService {
     const calls = await this.prisma.call.deleteMany({
       where: { createdAt: { lt: before(RETENTION.callsMs) }, status: { notIn: ["ringing", "accepted", "active"] } },
     });
-    const auditEvents = await this.prisma.auditEvent.deleteMany({ where: { occurredAt: { lt: before(RETENTION.auditMs) } } });
 
     const s = before(RETENTION.sessionsMs);
     const sessions = await this.prisma.session.deleteMany({
@@ -65,7 +72,6 @@ export class RetentionService {
 
     return {
       calls: calls.count,
-      auditEvents: auditEvents.count,
       sessions: sessions.count,
       adminSessions: adminSessions.count,
       connectionRequests: connectionRequests.count,

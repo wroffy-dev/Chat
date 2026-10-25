@@ -88,7 +88,8 @@ skip staging LiveKit and test calls against production LiveKit with staging back
 ## 5. Backend deployment
 
 1. Coolify builds the image from the Git commit.
-2. Pre-deployment step: `prisma migrate deploy` with `MIGRATE_DATABASE_URL` (after the automatic pre-migration backup, §11).
+2. Pre-deployment step: `prisma migrate deploy` with `MIGRATE_DATABASE_URL` (after the automatic pre-migration backup, §11),
+   then `psql -f deploy/postgres/grants.sql` as the database owner (new tables get the right privileges).
 3. Container starts as non-root; `/readyz` must pass before Traefik routes traffic.
 4. Traefik routes `api.<domain>` → `backend:3000`, with `/internal/*` **not** routed (path rule excludes it).
 5. Admin listener: compose `ports: ["127.0.0.1:3001:3001"]` — reachable only from the VPS itself (SSH tunnel).
@@ -98,7 +99,10 @@ skip staging LiveKit and test calls against production LiveKit with staging back
 ## 6. PostgreSQL
 
 - Coolify database resource with a persistent volume; **no public port mapping**.
-- Create roles `vc_migrate`, `vc_app`, `vc_maint` with the grants in [13 §1](13-database-design.md#1-conventions).
+- Create roles `vc_migrate`, `vc_app`, `vc_maint` with the grants in [13 §1](13-database-design.md#1-conventions):
+  the one-time commands are at the top of `deploy/postgres/grants.sql`; passwords are set with `\password`,
+  never written to a file.
+- Scheduled jobs with `vc_maint`: daily backup (§11) and `maint:purge-audit` (D-12: audit events older than 365 days).
 - `max_connections` modest (e.g. 50); backend pool ~10.
 - **Coolify's built-in scheduled backup is not used for this database**, because it would include message
   data (ADR-05). Use the custom backup job (§11). If Coolify gains per-table exclusion, reconsider.

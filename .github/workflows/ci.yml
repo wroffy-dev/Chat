@@ -108,3 +108,32 @@ jobs:
           BACKUP_PGPASSWORD: placeholder
           AGE_RECIPIENT: placeholder
         run: docker compose -f deploy/docker-compose.prod.yml --profile migrate --profile backup config -q
+
+  database-roles:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          # Throwaway CI superuser; not a real credential.
+          POSTGRES_PASSWORD: ci-only-password
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: ci-only-password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends age postgresql-client
+      - run: npm ci && npm run build
+        working-directory: backend
+      - run: deploy/postgres/verify-roles.sh

@@ -43,15 +43,18 @@ describe.skipIf(!TEST_DB_URL)("retention, D-12 (PostgreSQL)", () => {
       ],
     });
 
-    const purged = await new RetentionService(db, () => NOW).purge();
-    expect(purged).toMatchObject({ calls: 2, auditEvents: 1 });
+    const retention = new RetentionService(db, () => NOW);
+    expect(await retention.purge()).toMatchObject({ calls: 2 });
+    expect((await db.auditEvent.count())).toBe(2); // the app job never touches the audit log
+    expect(await retention.purgeAudit()).toBe(1);
     expect((await db.call.findMany({ orderBy: { livekitRoom: "asc" } })).map((c) => c.id)).toEqual([recent.id, live.id]);
     expect(await db.callDiagnostic.count()).toBe(0);
     expect((await db.auditEvent.findMany()).map((e) => e.action)).toEqual(["recent"]);
     // Nothing else is touched.
     expect(await db.user.count()).toBe(2);
     expect(await db.connection.count()).toBe(1);
-    expect(await new RetentionService(db, () => NOW).purge()).toMatchObject({ calls: 0, auditEvents: 0 });
+    expect(await retention.purge()).toMatchObject({ calls: 0 });
+    expect(await retention.purgeAudit()).toBe(0);
   });
 
   it("deletes old sessions, admin sessions and finished requests, never the request behind a connection", async () => {

@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { AdminService, AdminSetupError } from "./admin/service.js";
 import { PasswordHasher } from "./auth/passwords.js";
 import { AuthService } from "./auth/service.js";
+import { RetentionService } from "./retention/service.js";
 import { generateTotpSecret, otpauthUri, base32Encode, verifyTotp } from "./auth/totp.js";
 import { ConfigError, loadConfig } from "./config/env.js";
 import { PrismaDatabase } from "./db/database.js";
@@ -157,8 +158,14 @@ async function main() {
         for (const u of users) out(`${u.slot}  ${u.username}  ${u.status}${u.mustChangePassword ? "  (must change password)" : ""}`);
         break;
       }
+      case "maint:purge-audit": {
+        // Run with the maintenance role's DATABASE_URL (the app role cannot delete audit events).
+        const removed = await new RetentionService(database.prisma).purgeAudit();
+        out(`Removed ${removed} audit event(s) older than 365 days.`);
+        break;
+      }
       default:
-        out("Commands: admin:create | admin:reset | user:create | user:reset-password (all need --username <name>) | user:list");
+        out("Commands: admin:create | admin:reset | user:create | user:reset-password (all need --username <name>) | user:list | maint:purge-audit");
         process.exitCode = 1;
     }
   } catch (err) {

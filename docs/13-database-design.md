@@ -16,7 +16,12 @@ column names used in the other docs.
   - `vc_app` — used by the running backend: `SELECT/INSERT/UPDATE/DELETE` as needed, **no DDL**,
     **no DELETE on `connections` and `audit_events`**.
   - Retention clean-up of `audit_events` runs in a scheduled job as `vc_maint` (DELETE on `audit_events`
-    only, by age).
+    only, by age): `node dist/cli.js maint:purge-audit` with the `vc_maint` connection string.
+  - `vc_maint` also runs backups, so it can SELECT every table (`pg_dump` must lock `messages` even
+    though it skips its rows).
+  - **Implemented** as `deploy/postgres/grants.sql` (idempotent, re-run after every migration) and
+    checked by `deploy/postgres/verify-roles.sh` in CI: each refused action must fail with
+    "permission denied", and the backend's real flows run as `vc_app`.
 
 ## 2. Entity overview and justification
 
