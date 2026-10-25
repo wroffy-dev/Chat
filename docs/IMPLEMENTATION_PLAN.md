@@ -239,8 +239,7 @@ Decisions applied: D-01 option D, D-02 (60 s lease renewed every 20 s; 24 h back
 | Fix: six string resources had `%1` without a type (would throw at runtime on Home and the pairing screens) | Done | Corrected to `%1$s` / `%1$d` |
 
 Deviations from the original design, recorded in docs/07 and docs/14:
-- **Polling instead of WebSocket** for now: the app polls every 2 s while the chat is open, and renews
-  the lease with `POST /heartbeat`. Same server rules; a WebSocket can replace polling later.
+- Slice 1 polled every 2 s; live signals were added afterwards (see "Realtime signals" below).
 - `clearedThroughSeq` was dropped: under option D a clear no longer removes everything below a sequence.
 - The keyboard's "no personalised learning" flag is set through a platform `EditText` input (Compose 1.7
   has no API for it); added after slice 1, compiles (CI run 40182356147). Not checked with real keyboards.
@@ -269,12 +268,22 @@ Deviations from the original design, recorded in docs/07 and docs/14:
 Not done in this slice: external port scan, uptime/disk/bandwidth alerts, ASVS/MASVS self-review — need
 the deployed system.
 
+## Realtime signals (WebSocket)
+
+| Item | Status | Evidence |
+|---|---|---|
+| `GET /api/v1/ws` (`@fastify/websocket` 11.3.4): Bearer auth on the upgrade (no URL tokens; restricted sessions refused), ping 25 s, 16 KB frames, flood close, close at token expiry (4401) and after logout/revocation (4403) | Done (verified) | `test/realtime.integration.test.ts` (5 tests, real `ws` client); `/ws` in the security route inventory |
+| Signals `chat.changed {conversationId}` and `call.changed {callId}` — IDs only, after commit — from sends, exits, lease expiry, backstop and every call transition | Done (verified) | Same tests (no message text in frames) |
+| Android `RealtimeClient` (OkHttp, data layer): reconnect with backoff, token refresh on 4401, stops on 4403; runs while signed in and in front | Done (verified against the real backend) | `RealBackendChatTest` with live signals on both sides |
+| Chat re-reads at once on a signal; polls 10 s while connected (2 s otherwise); heartbeat time-based. Incoming-call check wakes on `call.changed` (3 s / 15 s polling) | Done (chat verified on JVM; watcher compile pending CI) | `ChatControllerTest` (signal + fallback test) |
+| The call screen still polls its own call every 2 s | Not changed | Could use `call.changed` later |
+
 ## Next task
 
 1. **Owner actions to test for real:** create a Firebase project (android/README.md "Push notifications"),
    then run PostgreSQL + LiveKit locally (`deploy/docker-compose.dev.yml`) and make a call between two
    phones; record results against docs/09 (T-SETUP-1/2, T-CLEAN, T-BG-VOICE/VIDEO).
 2. Chat on two phones: open, send both ways, Back on one phone, background for over a minute; record
-   results. Then chat slice 2 if wanted: WebSocket instead of polling.
+   results.
 3. Phase 7 (private release) — needs the VPS and your go-ahead for any deployment.
 4. Calling later: core-telecom (S-2), WebRTC stats in diagnostics, quality benchmarks (D-13).

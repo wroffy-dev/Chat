@@ -2,9 +2,10 @@
 
 Status: **Implemented (slice 1)** — see docs/IMPLEMENTATION_PLAN.md, Phase 5. Not yet tried on phones. Decisions D-01 (option D) and D-02 were made on 2026-10-24 — see §6 and §7.
 
-> **Transport in slice 1:** the app **polls** `GET /messages` every 2 s while the chat is open and renews
-> its lease with `POST /conversations/{id}/heartbeat`, instead of the WebSocket described in
-> [14 §10](14-api-contracts.md). The server rules below are the same either way.
+> **Transport:** the app reads messages with `GET /messages` and renews its lease with
+> `POST /conversations/{id}/heartbeat`. A live `chat.changed` signal over the WebSocket
+> ([14 §10](14-api-contracts.md)) makes it re-read at once; without one it polls every 2 s (every 10 s
+> while the socket is connected). The server rules below are the same either way.
 
 ## 1. Scope
 

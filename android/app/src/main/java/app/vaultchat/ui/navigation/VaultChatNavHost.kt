@@ -13,6 +13,8 @@ import androidx.navigation.toRoute
 import app.vaultchat.AppContainer
 import android.app.Application
 import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.compose.LifecycleStartEffect
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.vaultchat.domain.call.CallResult
@@ -99,7 +101,12 @@ fun VaultChatNavHost(container: AppContainer) {
     val onCallScreen = backStack?.destination?.route?.contains("CallRoute") == true
     val signedIn = backStack?.destination?.route?.let { r -> listOf("HomeRoute", "InboxRoute", "ShowQrRoute", "ScanQrRoute", "ChatRoute").any { r.contains(it) } } == true
     // Rings only while the app is open (no push notifications yet).
-    IncomingCallWatcher(container.callRepository, enabled = signedIn && !onCallScreen) { call ->
+    // Live change signals while signed in and the app is in front (calls arrive by push otherwise).
+    LifecycleStartEffect(signedIn) {
+        val job = if (signedIn) container.applicationScope.launch { container.realtime.run() } else null
+        onStopOrDispose { job?.cancel() }
+    }
+    IncomingCallWatcher(container.callRepository, container.realtime, enabled = signedIn && !onCallScreen) { call ->
         navController.navigate(CallRoute(video = call.kind == CallKind.VIDEO, peerUsername = call.peerUsername, callId = call.id))
     }
 
@@ -178,7 +185,7 @@ fun VaultChatNavHost(container: AppContainer) {
             val viewModel: ChatViewModel = viewModel(
                 factory = viewModelFactory {
                     initializer {
-                        ChatViewModel(container.chatRepository, container.pendingLeaves, route.conversationId, me.id, container.applicationScope)
+                        ChatViewModel(container.chatRepository, container.pendingLeaves, route.conversationId, me.id, container.applicationScope, container.realtime)
                     }
                 },
             )

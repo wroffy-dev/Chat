@@ -236,29 +236,29 @@ Server-rendered pages; POST forms with CSRF token; session cookie. All require a
 
 ## 10. WebSocket contract — `GET /api/v1/ws`
 
+**Implemented** as a **change-signal** channel (simpler than the earlier full-event design, and it carries
+no message text): the server says *what* changed, by ID, and the app re-reads it over REST. Every rule —
+authorization, epochs, deletion — therefore lives only in the REST handlers.
+
 - Upgrade request carries `Authorization: Bearer <access token>` (OkHttp supports headers on the
-  handshake). Tokens are **not** put in the URL (URLs end up in logs).
-- On access-token expiry the server sends `{"type":"auth.expiring"}` 60 s before; the client refreshes and
-  sends `{"type":"auth.renew","accessToken":"…"}`. If not renewed, the server closes with code `4401`.
-- Revoked session → close `4403`. Server ping every 25 s; client reconnects with backoff (1, 2, 4 … max 30 s).
-- Max frame 16 KB; max 20 client messages/second.
+  handshake). Tokens are **not** accepted in the URL (URLs end up in logs). No token → `401`;
+  must-change-password session → `403`.
+- The socket lives at most until the access token expires: the server closes with `4401`; the app
+  refreshes the token and reconnects (no in-band renewal). Logout, revocation, password reset or a
+  disabled account close it with `4403` within a minute (periodic session re-check).
+- Server ping every 25 s; a missed pong drops the socket. The app reconnects with backoff (1, 2, 4 … max
+  30 s). Max frame 16 KB. The app sends nothing; more than 20 frames/second closes the socket (`1008`).
+- The app keeps the socket open only while it is signed in and in front; in the background, calls arrive
+  by FCM (docs/10).
 
-Envelope: `{ "type": string, "id": uuid, "ts": iso8601, "data": object }`
+Envelope: `{ "type": string, "data": object }`
 
-| Direction | Type | Data |
-|---|---|---|
-| S→C | `connection_request.created` | `{ requestId }` |
-| S→C | `connection_request.updated` | `{ requestId, status }` |
-| S→C | `connection.created` | `{ connectionId, conversationId }` |
-| S→C | `message.created` | `{ conversationId, id, seq, epoch, senderId, text, createdAt }` |
-| S→C | `message.read` | `{ conversationId, seq }` |
-| S→C | `conversation.cleared` | `{ conversationId, epoch }` |
-| S→C | `chat.presence` | `{ conversationId, userId, inChat }` |
-| S→C | `call.incoming` | `{ callId, kind, callerId }` |
-| S→C | `call.accepted` / `call.declined` / `call.cancelled` / `call.missed` / `call.active` / `call.ended` | `{ callId, reason? }` |
-| S→C | `session.revoked` | `{}` then close `4403` |
-| C→S | `chat.heartbeat` | `{ conversationId, leaseId }` |
-| C→S | `auth.renew` | `{ accessToken }` |
+| Direction | Type | Data | App reaction |
+|---|---|---|---|
+| S→C | `ready` | `{}` | — |
+| S→C | `chat.changed` | `{ conversationId }` | New message or deletions: `GET /conversations/{id}/messages` now |
+| S→C | `call.changed` | `{ callId }` | Incoming call or status change: `GET /calls/current` now |
 
-The socket never accepts state-changing commands other than heartbeats and auth renewal; all actions go
-through REST, so validation, rate limiting and audit live in one place.
+Signals are best effort. Polling stays as the fallback: the chat polls every 2 s without a socket and
+every 10 s with one; the incoming-call check every 3 s / 15 s. The chat heartbeat stays on REST
+(`POST /conversations/{id}/heartbeat`).

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import app.vaultchat.domain.chat.ChatController
 import app.vaultchat.domain.chat.ChatRepository
 import app.vaultchat.domain.chat.PendingLeaveStore
+import app.vaultchat.domain.realtime.RealtimeSignals
 import kotlinx.coroutines.CoroutineScope
 
 /**
@@ -17,8 +18,9 @@ class ChatViewModel(
     conversationId: String,
     myUserId: String,
     applicationScope: CoroutineScope,
+    signals: RealtimeSignals,
 ) : ViewModel() {
-    val controller = ChatController(repo, pendingLeaves, conversationId, myUserId, viewModelScope, applicationScope)
+    val controller = ChatController(repo, pendingLeaves, conversationId, myUserId, viewModelScope, applicationScope, signals = signals)
 
     init {
         controller.start()

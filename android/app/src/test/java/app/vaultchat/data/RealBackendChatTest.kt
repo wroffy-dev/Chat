@@ -7,6 +7,7 @@ import app.vaultchat.data.auth.RemoteAuthRepository
 import app.vaultchat.data.chat.RemoteChatRepository
 import app.vaultchat.data.network.ApiClient
 import app.vaultchat.data.network.HttpJson
+import app.vaultchat.data.realtime.RealtimeClient
 import app.vaultchat.domain.auth.LoginResult
 import app.vaultchat.domain.auth.MeResult
 import app.vaultchat.domain.chat.ChatController
@@ -15,11 +16,13 @@ import app.vaultchat.domain.chat.ChatPhase
 import app.vaultchat.domain.chat.ChatResult
 import app.vaultchat.domain.chat.PendingLeave
 import app.vaultchat.domain.chat.PendingLeaveStore
+import app.vaultchat.domain.realtime.RealtimeSignal
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -44,12 +47,15 @@ class RealBackendChatTest {
         }
     }
 
-    private class Client(url: String) {
+    private class Client(val url: String) {
         val store = InMemoryTokenStore()
         private val http = HttpJson(url, ApiClient.defaultHttpClient())
+        private val okHttp = ApiClient.defaultHttpClient()
         private val caller = AuthorizedCaller(AuthApi(http), store)
         val auth = RemoteAuthRepository(AuthApi(http), store, DeviceDto("JVM test", 1), caller)
         val chat = RemoteChatRepository(http, caller)
+        val realtime = RealtimeClient(url, okHttp, caller)
+        val received = java.util.Collections.synchronizedList(mutableListOf<RealtimeSignal>())
         val pending = Store()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     }
@@ -78,14 +84,21 @@ class RealBackendChatTest {
             val conversation = meA.connection!!.conversationId
             assertEquals(conversation, meB.connection!!.conversationId)
 
-            val chatA = ChatController(a.chat, a.pending, conversation, meA.user.id, a.scope, a.scope)
-            val chatB = ChatController(b.chat, b.pending, conversation, meB.user.id, b.scope, b.scope)
+            // Live signals on both sides: the chat re-reads at once instead of waiting for a poll.
+            for (c in listOf(a, b)) {
+                c.scope.launch { c.realtime.run() }
+                c.scope.launch { c.realtime.signals.collect { c.received += it } }
+            }
+            waitFor("both sockets connected") { a.realtime.connected.value && b.realtime.connected.value }
+            val chatA = ChatController(a.chat, a.pending, conversation, meA.user.id, a.scope, a.scope, signals = a.realtime)
+            val chatB = ChatController(b.chat, b.pending, conversation, meB.user.id, b.scope, b.scope, signals = b.realtime)
             chatA.start()
             chatB.start()
             waitFor("both open") { chatA.state.value.phase == ChatPhase.OPEN && chatB.state.value.phase == ChatPhase.OPEN }
 
             assertTrue(chatA.send("hello from A"))
             waitFor("B receives") { chatB.state.value.messages.any { it.text == "hello from A" } }
+            waitFor("B got a live signal") { b.received.contains(RealtimeSignal.ChatChanged(conversation)) }
             assertEquals(meA.user.id, chatB.state.value.messages.single().senderId)
 
             // A message B has not displayed yet: B looks away (a call on top) before it arrives.

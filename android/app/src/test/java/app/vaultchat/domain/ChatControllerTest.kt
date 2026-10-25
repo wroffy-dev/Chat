@@ -15,7 +15,11 @@ import app.vaultchat.domain.chat.PendingLeave
 import app.vaultchat.domain.chat.PendingLeaveStore
 import app.vaultchat.domain.chat.SentMessage
 import app.vaultchat.domain.chat.flushPendingLeave
+import app.vaultchat.domain.realtime.RealtimeSignal
+import app.vaultchat.domain.realtime.RealtimeSignals
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
@@ -105,8 +109,8 @@ class ChatControllerTest {
     private val pending = MemoryPendingLeaves()
     private var ids = 0
 
-    private fun TestScope.controller() =
-        ChatController(repo, pending, "conv", "me", backgroundScope, backgroundScope, newId = { "id${++ids}" })
+    private fun TestScope.controller(signals: RealtimeSignals? = null) =
+        ChatController(repo, pending, "conv", "me", backgroundScope, backgroundScope, newId = { "id${++ids}" }, signals = signals, nowMs = { testScheduler.currentTime })
 
     private fun ChatController.texts() = state.value.messages.map { it.text }
 
@@ -302,6 +306,39 @@ class ChatControllerTest {
         val polls = repo.log.size
         advanceTimeBy(60_000)
         assertEquals("nothing runs after leaving", polls, repo.log.size)
+    }
+
+    @Test
+    fun `with live signals connected, a signal re-reads at once and polling slows down`() = runTest {
+        val live = object : RealtimeSignals {
+            override val signals = MutableSharedFlow<RealtimeSignal>(extraBufferCapacity = 8)
+            override val connected = MutableStateFlow(true)
+        }
+        val c = controller(live)
+        c.start()
+        runCurrent()
+        val polls = { repo.log.count { it.startsWith("history") } }
+        val afterOpen = polls()
+        advanceTimeBy(9_000)
+        assertEquals("no 2 s polling while connected", afterOpen, polls())
+
+        repo.peerSays("instant")
+        live.signals.emit(RealtimeSignal.ChatChanged("other-conversation"))
+        runCurrent()
+        assertTrue("signals for other chats are ignored", c.texts().isEmpty())
+        live.signals.emit(RealtimeSignal.ChatChanged("conv"))
+        runCurrent()
+        assertEquals(listOf("instant"), c.texts())
+
+        // Heartbeats still keep the lease (60 s) alive at the 20 s rhythm.
+        advanceTimeBy(41_000)
+        assertEquals(2, repo.log.count { it.startsWith("beat") })
+
+        live.connected.value = false
+        advanceTimeBy(10_001) // the current slow wait ends, then 2 s polling resumes
+        val slow = polls()
+        advanceTimeBy(4_001)
+        assertTrue("falls back to 2 s polling", polls() >= slow + 2)
     }
 
     @Test

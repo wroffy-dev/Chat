@@ -6,6 +6,7 @@ import app.vaultchat.data.auth.AuthApi
 import app.vaultchat.data.auth.AuthorizedCaller
 import app.vaultchat.data.call.RemoteCallRepository
 import app.vaultchat.data.chat.RemoteChatRepository
+import app.vaultchat.data.realtime.RealtimeClient
 import app.vaultchat.domain.chat.ChatRepository
 import app.vaultchat.domain.chat.PendingLeaveStore
 import app.vaultchat.platform.chat.PrefsPendingLeaveStore
@@ -54,6 +55,9 @@ class AppContainer(context: Context) {
     val pushTokenApi = PushTokenApi(httpJson, caller)
 
     val chatRepository: ChatRepository = RemoteChatRepository(httpJson, caller)
+
+    /** Live change signals; run by the navigation host while signed in and in front. */
+    val realtime = RealtimeClient(BuildConfig.API_BASE_URL, http, caller)
 
     val pendingLeaves: PendingLeaveStore = PrefsPendingLeaveStore(appContext)
 

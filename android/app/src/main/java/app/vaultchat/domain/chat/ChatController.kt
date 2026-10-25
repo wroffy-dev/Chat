@@ -1,7 +1,10 @@
 package app.vaultchat.domain.chat
 
+import app.vaultchat.domain.realtime.RealtimeSignal
+import app.vaultchat.domain.realtime.RealtimeSignals
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -12,6 +15,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 
 enum class ChatPhase { ENTERING, OPEN, LEFT, SESSION_ENDED, UNAVAILABLE }
@@ -65,9 +69,14 @@ class ChatController(
     /** Outlives the screen, so the exit request is still sent after Back closes it. */
     private val outliveScope: CoroutineScope,
     private val newId: () -> String = { UUID.randomUUID().toString() },
+    /** Live "chat changed" signals; with them connected the list is re-read at once and polled slowly. */
+    private val signals: RealtimeSignals? = null,
+    private val nowMs: () -> Long = System::currentTimeMillis,
 ) {
     companion object {
         const val POLL_MS = 2_000L
+        /** Fallback polling while live signals are connected. */
+        const val SIGNALLED_POLL_MS = 10_000L
     }
 
     private val _state = MutableStateFlow(ChatState())
@@ -77,34 +86,49 @@ class ChatController(
     @Volatile private var onScreen = true
     private val syncLock = Mutex()
     private var loop: Job? = null
+    private var signalJob: Job? = null
+    private val wake = Channel<Unit>(Channel.CONFLATED)
 
     // Owned by the loop and by sync() under syncLock.
     private var leaseId: String? = null
-    private var ticksPerBeat = 10
-    private var ticksSinceBeat = 0
+    private var heartbeatMs = 20_000L
+    private var lastBeatMs = 0L
+    private var beatNow = false
     private var epoch = 0L
     private var syncedSeq = 0L
     private var readSeq = 0L
 
     fun start() {
         if (loop != null) return
+        signalJob = signals?.let { live ->
+            scope.launch {
+                live.signals.collect { if (it is RealtimeSignal.ChatChanged && it.conversationId == conversationId) wake.trySend(Unit) }
+            }
+        }
         loop = scope.launch {
-            // An earlier exit that never reached the server must land before this entry.
-            flushPendingLeave(repo, pendingLeaves)
-            while (isActive) {
-                if (!foreground.value) {
-                    foreground.first { it }
-                    ticksSinceBeat = ticksPerBeat // renew (or learn we left) straight away
-                }
-                if (leaseId == null && !enter()) {
+            try {
+                // An earlier exit that never reached the server must land before this entry.
+                flushPendingLeave(repo, pendingLeaves)
+                while (isActive) {
+                    if (!foreground.value) {
+                        foreground.first { it }
+                        beatNow = true // renew (or learn we left) straight away
+                    }
+                    if (leaseId == null && !enter()) {
+                        if (_state.value.phase.isFinal()) return@launch
+                        delay(POLL_MS)
+                        continue
+                    }
+                    if ((beatNow || nowMs() - lastBeatMs >= heartbeatMs) && !heartbeat()) continue
+                    sync()
                     if (_state.value.phase.isFinal()) return@launch
-                    delay(POLL_MS)
-                    continue
+                    // Sleep until the next poll or heartbeat is due, or a signal says something changed.
+                    val pollMs = if (signals?.connected?.value == true) SIGNALLED_POLL_MS else POLL_MS
+                    val untilBeat = lastBeatMs + heartbeatMs - nowMs()
+                    withTimeoutOrNull(minOf(pollMs, untilBeat).coerceAtLeast(1)) { wake.receive() }
                 }
-                if (++ticksSinceBeat >= ticksPerBeat && !heartbeat()) continue
-                sync()
-                if (_state.value.phase.isFinal()) return@launch
-                delay(POLL_MS)
+            } finally {
+                signalJob?.cancel()
             }
         }
     }
@@ -170,8 +194,8 @@ class ChatController(
     private suspend fun enter(): Boolean = when (val r = repo.enter(conversationId)) {
         is ChatResult.Ok -> {
             leaseId = r.value.leaseId
-            ticksPerBeat = maxOf(1, (r.value.heartbeatSeconds * 1000L / POLL_MS).toInt())
-            ticksSinceBeat = 0
+            heartbeatMs = r.value.heartbeatSeconds * 1000L
+            lastBeatMs = nowMs()
             syncLock.withLock {
                 epoch = r.value.epoch
                 syncedSeq = 0
@@ -190,7 +214,8 @@ class ChatController(
     /** False when the lease is gone: the server has already applied the exit, so start over. */
     private suspend fun heartbeat(): Boolean {
         val id = leaseId ?: return false
-        ticksSinceBeat = 0
+        beatNow = false
+        lastBeatMs = nowMs()
         return when (val r = repo.heartbeat(conversationId, id)) {
             is ChatResult.Ok -> true
             is ChatResult.Failure -> when (r.reason) {
