@@ -218,7 +218,7 @@ user. Server logs scanned afterwards: no passwords or tokens present.
 | Android: `CallForegroundService` (microphone/camera types) during connected calls | Done (compiles; CI run 40137301179) | Not run on a device |
 | 1080p capture only on capable, cool phones without power saving (`VideoQualityPolicy` + Camera2 capability check) | Policy verified on JVM; capability check compiles (CI run 40137301179) | `VideoQualityPolicyTest` |
 | core-telecom integration (system call UI, Bluetooth/car controls) | **Not started** — spike S-2 | |
-| WebRTC stats in diagnostics: RTT, jitter, loss, send/receive bitrate, resolution, fps, quality-limitation reason, freezes, audio concealment, path (candidate type/protocol — no addresses); sampled every 2 s, summarised (min/avg/max, totals) into the end-of-call diagnostics | Done (logic verified on JVM; SDK reading compile pending CI) | `CallStatsTest`, `CallControllerTest`; SDK API names checked in livekit-android 2.29.1 sources. Not yet seen on a real call |
+| WebRTC stats in diagnostics: RTT, jitter, loss, send/receive bitrate, resolution, fps, quality-limitation reason, freezes, audio concealment, path (candidate type/protocol — no addresses); sampled every 2 s, summarised (min/avg/max, totals) into the end-of-call diagnostics | Done (logic verified on JVM; SDK reading compiles, CI run 40205109174) | `CallStatsTest`, `CallControllerTest`; SDK API names checked in livekit-android 2.29.1 sources. Not yet seen on a real call |
 
 ## Phase 5 — Text chat, slice 1
 
