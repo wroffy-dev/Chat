@@ -1,6 +1,6 @@
 package app.vaultchat.domain.connection
 
-data class Connection(val id: String, val peerId: String, val peerUsername: String, val sinceEpochMs: Long)
+data class Connection(val id: String, val peerId: String, val peerUsername: String, val conversationId: String, val sinceEpochMs: Long)
 
 enum class RequestDirection { INCOMING, OUTGOING }
 

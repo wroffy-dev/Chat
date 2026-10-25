@@ -33,8 +33,10 @@ import kotlin.coroutines.resume
 object Push {
     const val CHANNEL_CALLS = "calls"
     const val CHANNEL_ONGOING = "ongoing_call"
+    const val CHANNEL_MESSAGES = "messages"
     const val EXTRA_INCOMING_CALL_ID = "app.vaultchat.INCOMING_CALL_ID"
     private const val INCOMING_NOTIFICATION_ID = 1001
+    private const val MESSAGE_NOTIFICATION_ID = 1002
 
     /** True when the build carries Firebase identifiers (docs/10-notifications.md). */
     val configured: Boolean
@@ -83,6 +85,34 @@ object Push {
         manager.createNotificationChannel(
             NotificationChannel(CHANNEL_ONGOING, context.getString(R.string.channel_ongoing_call), NotificationManager.IMPORTANCE_LOW),
         )
+        manager.createNotificationChannel(
+            NotificationChannel(CHANNEL_MESSAGES, context.getString(R.string.channel_messages), NotificationManager.IMPORTANCE_DEFAULT),
+        )
+    }
+
+    /** "New message" only: no sender, no text, no preview (docs/07 §4, docs/10 §2). */
+    fun showNewMessage(context: Context) {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        val open = Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        val openPending = PendingIntent.getActivity(context, MESSAGE_NOTIFICATION_ID, open, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle(context.getString(R.string.app_name))
+            .setContentText(context.getString(R.string.chat_new_message))
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setAutoCancel(true)
+            .setContentIntent(openPending)
+            .build()
+        NotificationManagerCompat.from(context).notify(MESSAGE_NOTIFICATION_ID, notification)
+    }
+
+    fun cancelMessageNotification(context: Context) {
+        NotificationManagerCompat.from(context).cancel(MESSAGE_NOTIFICATION_ID)
     }
 
     /**
@@ -125,15 +155,16 @@ object Push {
     }
 }
 
-/** Receives FCM data messages: {t: "call" | "call_end", id}. */
+/** Receives FCM data messages: {t: "call" | "call_end", id} and {t: "msg"}. */
 class VaultChatMessagingService : FirebaseMessagingService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onMessageReceived(message: RemoteMessage) {
-        val id = message.data["id"] ?: return
+        val id = message.data["id"]
         when (message.data["t"]) {
-            "call" -> Push.showIncomingCall(applicationContext, id)
+            "call" -> if (id != null) Push.showIncomingCall(applicationContext, id)
             "call_end" -> Push.cancelIncomingCall(applicationContext)
+            "msg" -> Push.showNewMessage(applicationContext)
         }
     }
 

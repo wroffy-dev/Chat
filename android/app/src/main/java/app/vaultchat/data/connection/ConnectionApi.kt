@@ -15,7 +15,7 @@ import java.time.Instant
 data class PeerDto(val id: String, val username: String)
 
 @Serializable
-data class ConnectionDto(val id: String, val peer: PeerDto, val createdAt: String)
+data class ConnectionDto(val id: String, val peer: PeerDto, val conversationId: String, val createdAt: String)
 
 @Serializable
 data class RequestPeerDto(val username: String)
@@ -42,7 +42,7 @@ data class QrDto(val token: String, val qrPayload: String, val expiresAt: String
 @Serializable
 data class RedeemBody(val token: String)
 
-fun ConnectionDto.toDomain() = Connection(id, peer.id, peer.username, Instant.parse(createdAt).toEpochMilli())
+fun ConnectionDto.toDomain() = Connection(id, peer.id, peer.username, conversationId, Instant.parse(createdAt).toEpochMilli())
 
 fun RequestDto.toDomain() = ConnectionRequest(
     id = id,

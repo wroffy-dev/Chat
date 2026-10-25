@@ -37,7 +37,7 @@ import app.vaultchat.ui.components.EmptyState
 import app.vaultchat.ui.components.StatusBanner
 
 /**
- * Home. Connection, chat and call entry points arrive in later phases (docs/15-android-ui-ux.md §3.3).
+ * Home: connection, chat and call entry points (docs/15-android-ui-ux.md §3.3).
  * There is deliberately no profile screen.
  */
 @Composable
@@ -48,6 +48,7 @@ fun HomeScreen(
     onPasswordChangeRequired: () -> Unit,
     onOpenInbox: () -> Unit,
     onCall: (connectionId: String, peerUsername: String, video: Boolean) -> Unit,
+    onChat: (conversationId: String, peerUsername: String) -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -122,17 +123,20 @@ fun HomeScreen(
                     title = stringResource(R.string.home_connected_title, connection.peerUsername),
                     body = stringResource(R.string.home_connected_body),
                     action = {
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            PrimaryButton(
-                                stringResource(R.string.home_video_call),
-                                { onCall(connection.id, connection.peerUsername, true) },
-                                modifier = Modifier.weight(1f),
-                            )
-                            PrimaryButton(
-                                stringResource(R.string.home_voice_call),
-                                { onCall(connection.id, connection.peerUsername, false) },
-                                modifier = Modifier.weight(1f),
-                            )
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            PrimaryButton(stringResource(R.string.home_open_chat), { onChat(connection.conversationId, connection.peerUsername) })
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                PrimaryButton(
+                                    stringResource(R.string.home_video_call),
+                                    { onCall(connection.id, connection.peerUsername, true) },
+                                    modifier = Modifier.weight(1f),
+                                )
+                                PrimaryButton(
+                                    stringResource(R.string.home_voice_call),
+                                    { onCall(connection.id, connection.peerUsername, false) },
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
                         }
                     },
                 )

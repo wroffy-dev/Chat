@@ -5,6 +5,13 @@ import android.os.Build
 import app.vaultchat.data.auth.AuthApi
 import app.vaultchat.data.auth.AuthorizedCaller
 import app.vaultchat.data.call.RemoteCallRepository
+import app.vaultchat.data.chat.RemoteChatRepository
+import app.vaultchat.domain.chat.ChatRepository
+import app.vaultchat.domain.chat.PendingLeaveStore
+import app.vaultchat.platform.chat.PrefsPendingLeaveStore
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import app.vaultchat.data.push.PushTokenApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import app.vaultchat.data.connection.ConnectionApi
@@ -45,6 +52,13 @@ class AppContainer(context: Context) {
     val callRepository: CallRepository = RemoteCallRepository(httpJson, caller)
 
     val pushTokenApi = PushTokenApi(httpJson, caller)
+
+    val chatRepository: ChatRepository = RemoteChatRepository(httpJson, caller)
+
+    val pendingLeaves: PendingLeaveStore = PrefsPendingLeaveStore(appContext)
+
+    /** For work that must finish after a screen closes (e.g. the chat exit request). */
+    val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /** Set when the user taps an incoming-call notification; the navigation host consumes it. */
     val pendingIncomingCallId = MutableStateFlow<String?>(null)

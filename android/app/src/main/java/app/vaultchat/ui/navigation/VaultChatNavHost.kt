@@ -22,7 +22,10 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import app.vaultchat.domain.call.CallInfo
 import app.vaultchat.domain.call.CallKind
 import app.vaultchat.domain.call.CallStatus
+import app.vaultchat.domain.chat.flushPendingLeave
 import app.vaultchat.ui.call.CallScreen
+import app.vaultchat.ui.chat.ChatScreen
+import app.vaultchat.ui.chat.ChatViewModel
 import app.vaultchat.ui.call.CallViewModel
 import app.vaultchat.ui.call.IncomingCallWatcher
 import app.vaultchat.ui.connect.InboxScreen
@@ -58,6 +61,9 @@ data object ShowQrRoute
 @Serializable
 data object ScanQrRoute
 
+@Serializable
+data class ChatRoute(val conversationId: String, val peerUsername: String)
+
 /** Outgoing: [connectionId] set, [callId] null. Incoming: [callId] set. */
 @Serializable
 data class CallRoute(
@@ -91,15 +97,19 @@ fun VaultChatNavHost(container: AppContainer) {
     val context = LocalContext.current
     val backStack by navController.currentBackStackEntryAsState()
     val onCallScreen = backStack?.destination?.route?.contains("CallRoute") == true
-    val signedIn = backStack?.destination?.route?.let { r -> listOf("HomeRoute", "InboxRoute", "ShowQrRoute", "ScanQrRoute").any { r.contains(it) } } == true
+    val signedIn = backStack?.destination?.route?.let { r -> listOf("HomeRoute", "InboxRoute", "ShowQrRoute", "ScanQrRoute", "ChatRoute").any { r.contains(it) } } == true
     // Rings only while the app is open (no push notifications yet).
     IncomingCallWatcher(container.callRepository, enabled = signedIn && !onCallScreen) { call ->
         navController.navigate(CallRoute(video = call.kind == CallKind.VIDEO, peerUsername = call.peerUsername, callId = call.id))
     }
 
-    // Register this device for call wake-ups once signed in (no-op when FCM is not configured).
+    // Register this device for call wake-ups once signed in (no-op when FCM is not configured), and
+    // send a chat exit that a crash or lost network kept from reaching the server.
     LaunchedEffect(signedIn) {
-        if (signedIn) Push.registerAfterLogin(container.pushTokenApi)
+        if (signedIn) {
+            flushPendingLeave(container.chatRepository, container.pendingLeaves)
+            Push.registerAfterLogin(container.pushTokenApi)
+        }
     }
 
     // A tapped incoming-call notification: open the call screen if the call is still ringing.
@@ -155,6 +165,29 @@ fun VaultChatNavHost(container: AppContainer) {
                 onCall = { connectionId, peer, video ->
                     navController.navigate(CallRoute(video = video, peerUsername = peer, connectionId = connectionId))
                 },
+                onChat = { conversationId, peer -> navController.navigate(ChatRoute(conversationId, peer)) },
+            )
+        }
+        composable<ChatRoute> { entry ->
+            val route = entry.toRoute<ChatRoute>()
+            val me = container.authRepository.currentUser()
+            if (me == null) {
+                LaunchedEffect(Unit) { navController.replaceAll(LoginRoute) }
+                return@composable
+            }
+            val viewModel: ChatViewModel = viewModel(
+                factory = viewModelFactory {
+                    initializer {
+                        ChatViewModel(container.chatRepository, container.pendingLeaves, route.conversationId, me.id, container.applicationScope)
+                    }
+                },
+            )
+            ChatScreen(
+                viewModel = viewModel,
+                myUserId = me.id,
+                peerUsername = route.peerUsername,
+                onBack = { navController.popBackStack() },
+                onSessionEnded = { navController.replaceAll(LoginRoute) },
             )
         }
         composable<CallRoute> { entry ->
