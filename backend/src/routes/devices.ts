@@ -10,7 +10,7 @@ export async function deviceRoutes(app: FastifyInstance, opts: { auth: AuthServi
   app.put<{ Body: { fcmToken: string } }>(
     "/devices/push-token",
     {
-      preHandler: user,
+      onRequest: user,
       config: { rateLimit: { max: 10, timeWindow: 60_000 } },
       schema: {
         body: {
@@ -27,7 +27,7 @@ export async function deviceRoutes(app: FastifyInstance, opts: { auth: AuthServi
     },
   );
 
-  app.delete("/devices/push-token", { preHandler: user }, async (request, reply) => {
+  app.delete("/devices/push-token", { onRequest: user }, async (request, reply) => {
     await opts.push.clearToken(authOf(request).session.id);
     return reply.status(204).send();
   });

@@ -42,7 +42,7 @@ export async function chatRoutes(app: FastifyInstance, opts: { auth: AuthService
   app.post<{ Params: { id: string } }>(
     "/conversations/:id/enter",
     {
-      preHandler: user,
+      onRequest: user,
       config: { rateLimit: { max: 30, timeWindow: MINUTE } },
       schema: {
         params: idParams,
@@ -63,7 +63,7 @@ export async function chatRoutes(app: FastifyInstance, opts: { auth: AuthService
   app.post<{ Params: { id: string }; Body: { leaseId: string } }>(
     "/conversations/:id/heartbeat",
     {
-      preHandler: user,
+      onRequest: user,
       config: { rateLimit: { max: 20, timeWindow: MINUTE } },
       schema: {
         params: idParams,
@@ -79,7 +79,7 @@ export async function chatRoutes(app: FastifyInstance, opts: { auth: AuthService
   app.post<{ Params: { id: string }; Body: { leaveId: string } }>(
     "/conversations/:id/leave",
     {
-      preHandler: user,
+      onRequest: user,
       config: { rateLimit: { max: 30, timeWindow: MINUTE } },
       schema: {
         params: idParams,
@@ -93,7 +93,7 @@ export async function chatRoutes(app: FastifyInstance, opts: { auth: AuthService
   app.get<{ Params: { id: string }; Querystring: { afterSeq?: number; epoch?: number; limit?: number } }>(
     "/conversations/:id/messages",
     {
-      preHandler: user,
+      onRequest: user,
       config: { rateLimit: { max: 120, timeWindow: MINUTE } },
       schema: {
         params: idParams,
@@ -126,7 +126,7 @@ export async function chatRoutes(app: FastifyInstance, opts: { auth: AuthService
   app.post<{ Params: { id: string }; Body: { clientMessageId: string; epoch: number; text: string } }>(
     "/conversations/:id/messages",
     {
-      preHandler: user,
+      onRequest: user,
       bodyLimit: 16_384,
       config: { rateLimit: { max: 60, timeWindow: MINUTE } },
       schema: {
@@ -149,7 +149,7 @@ export async function chatRoutes(app: FastifyInstance, opts: { auth: AuthService
   app.post<{ Params: { id: string }; Body: { seq: number } }>(
     "/conversations/:id/read",
     {
-      preHandler: user,
+      onRequest: user,
       config: { rateLimit: { max: 120, timeWindow: MINUTE } },
       schema: { params: idParams, body: { type: "object", additionalProperties: false, required: ["seq"], properties: { seq: SEQ } } },
     },

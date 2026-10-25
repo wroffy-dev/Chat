@@ -21,8 +21,9 @@ export function requestMeta(request: FastifyRequest): RequestMeta {
 }
 
 /**
- * preHandler factory. The authenticated user always comes from the session, never from the
- * request body or path (docs/04-accounts-and-authentication.md §9).
+ * onRequest hook factory: runs before the body is parsed or validated, so unauthenticated requests
+ * are refused without their input being processed. The authenticated user always comes from the
+ * session, never from the request body or path (docs/04-accounts-and-authentication.md §9).
  */
 export function requireUser(auth: AuthService, opts: { allowRestricted?: boolean } = {}) {
   return async (request: FastifyRequest, _reply: FastifyReply) => {

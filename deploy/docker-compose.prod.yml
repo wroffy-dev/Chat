@@ -1,0 +1,95 @@
+# Production service layout (docs/16-deployment-and-operations.md §2, §5–§8, §11). TEMPLATE:
+# not deployed by this repository. Coolify (or `docker compose`) supplies every secret through
+# the environment; nothing secret is in this file. Traefik routing (api.<domain> → backend:3000,
+# rtc.<domain> → livekit:7880, /internal/* not routed) is configured in Coolify.
+#
+#   docker compose -f deploy/docker-compose.prod.yml --profile migrate run --rm migrate   # before each deploy
+#   docker compose -f deploy/docker-compose.prod.yml up -d
+#
+# PostgreSQL is a Coolify database resource on the same Docker network, never published.
+
+name: vaultchat
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "5" }
+
+x-hardening: &hardening
+  read_only: true
+  tmpfs: ["/tmp"]
+  cap_drop: ["ALL"]
+  security_opt: ["no-new-privileges:true"]
+
+services:
+  backend:
+    build: { context: ../backend, target: runtime }
+    image: vaultchat-backend
+    restart: unless-stopped
+    <<: *hardening
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "3000"
+      # Inside the container the admin listener must bind all interfaces; the port mapping below
+      # publishes it on the VPS loopback only (reach it through an SSH tunnel, D-05).
+      ADMIN_HOST: 0.0.0.0
+      ADMIN_PORT: "3001"
+      TRUST_PROXY: ${TRUST_PROXY:?Traefik network CIDR}
+      DATABASE_URL: ${DATABASE_URL:?app role connection string}
+      ADMIN_TOTP_ENC_KEY: ${ADMIN_TOTP_ENC_KEY:?32 random bytes, base64}
+      LIVEKIT_PUBLIC_URL: ${LIVEKIT_PUBLIC_URL:?wss://rtc.<domain>}
+      LIVEKIT_API_URL: http://livekit:7880
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:?}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?}
+      # Optional: path of the mounted Firebase service-account file (read-only secret mount).
+      FCM_CREDENTIALS_FILE: ${FCM_CREDENTIALS_FILE:-}
+    ports:
+      - "127.0.0.1:3001:3001"
+    logging: *logging
+
+  migrate:
+    profiles: ["migrate"]
+    build: { context: ../backend, target: migrate }
+    image: vaultchat-migrate
+    <<: *hardening
+    environment:
+      # Schema-owning role (docs/13 §1); never the app role.
+      MIGRATE_DATABASE_URL: ${MIGRATE_DATABASE_URL:?migration role connection string}
+    logging: *logging
+
+  livekit:
+    image: livekit/livekit-server:v1.13.7   # pinned; read release notes before changing
+    restart: unless-stopped
+    <<: *hardening
+    command: ["--config", "/etc/livekit.yaml"]
+    environment:
+      LIVEKIT_KEYS: ${LIVEKIT_KEYS:?format is key colon space secret}
+    volumes:
+      # Copy of livekit/livekit.yaml.example with real values (git-ignored as livekit.yaml).
+      - ./livekit/livekit.yaml:/etc/livekit.yaml:ro
+    ports:
+      - "7881:7881/tcp"   # ICE over TCP
+      - "7882:7882/udp"   # media (UDP mux)
+      - "3478:3478/udp"   # embedded TURN/UDP (only if enabled, docs/16 §8.3)
+    logging: *logging
+
+  backup:
+    # Run by a scheduled task (e.g. Coolify): `docker compose ... run --rm backup`.
+    profiles: ["backup"]
+    build: { context: ./backup }
+    image: vaultchat-backup
+    <<: *hardening
+    environment:
+      PGHOST: ${BACKUP_PGHOST:?}
+      PGPORT: ${BACKUP_PGPORT:-5432}
+      PGDATABASE: ${BACKUP_PGDATABASE:?}
+      PGUSER: ${BACKUP_PGUSER:?read-only maintenance role}
+      PGPASSWORD: ${BACKUP_PGPASSWORD:?}
+      AGE_RECIPIENT: ${AGE_RECIPIENT:?age public key; private key kept offline}
+      BACKUP_DIR: /backups
+    volumes:
+      - vaultchat-backups:/backups
+    logging: *logging
+
+volumes:
+  vaultchat-backups:

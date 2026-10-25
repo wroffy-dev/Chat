@@ -87,7 +87,7 @@ export async function authRoutes(app: FastifyInstance, opts: { auth: AuthService
   app.post(
     "/auth/logout",
     {
-      preHandler: requireUser(auth, { allowRestricted: true }),
+      onRequest: requireUser(auth, { allowRestricted: true }),
       schema: { body: { type: "object", additionalProperties: false, properties: {} } },
     },
     async (request, reply) => {
@@ -99,7 +99,7 @@ export async function authRoutes(app: FastifyInstance, opts: { auth: AuthService
   app.post<{ Body: { currentPassword: string; newPassword: string } }>(
     "/auth/change-password",
     {
-      preHandler: requireUser(auth, { allowRestricted: true }),
+      onRequest: requireUser(auth, { allowRestricted: true }),
       config: { rateLimit: { max: 5, timeWindow: 15 * MINUTE } },
       schema: {
         body: {
@@ -123,7 +123,7 @@ export async function authRoutes(app: FastifyInstance, opts: { auth: AuthService
   app.get(
     "/me",
     {
-      preHandler: requireUser(auth),
+      onRequest: requireUser(auth),
       schema: {
         response: {
           200: {

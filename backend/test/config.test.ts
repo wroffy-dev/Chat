@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ConfigError, loadConfig } from "../src/config/env.js";
 
 const base = {
-  DATABASE_URL: "postgresql://u:p@localhost:5432/db",
+  DATABASE_URL: "postgresql://u:test-only@localhost:5432/db",
   ADMIN_TOTP_ENC_KEY: Buffer.alloc(32).toString("base64"),
 };
 

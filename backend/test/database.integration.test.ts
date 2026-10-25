@@ -59,7 +59,7 @@ describe("PrismaDatabase with an unreachable server", () => {
   it("reports database_unreachable within the timeout", async () => {
     // Port 1 on localhost: connection refused immediately, no external network involved.
     const db = new PrismaDatabase(
-      { DATABASE_URL: "postgresql://u:p@127.0.0.1:1/none", DATABASE_POOL_MAX: 1 },
+      { DATABASE_URL: "postgresql://u:test-only@127.0.0.1:1/none", DATABASE_POOL_MAX: 1 },
       "does-not-exist",
     );
     const started = Date.now();

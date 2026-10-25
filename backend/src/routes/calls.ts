@@ -78,7 +78,7 @@ export async function callRoutes(app: FastifyInstance, opts: { auth: AuthService
   app.post<{ Body: { connectionId: string; kind: "video" | "voice" } }>(
     "/calls",
     {
-      preHandler: user,
+      onRequest: user,
       config: { rateLimit: { max: 10, timeWindow: MINUTE } },
       schema: {
         body: {
@@ -95,7 +95,7 @@ export async function callRoutes(app: FastifyInstance, opts: { auth: AuthService
 
   app.get(
     "/calls/current",
-    { preHandler: user, schema: { response: { 200: { type: "object", additionalProperties: false, required: ["call"], properties: { call: { anyOf: [{ type: "null" }, callSchema] } } } } } },
+    { onRequest: user, schema: { response: { 200: { type: "object", additionalProperties: false, required: ["call"], properties: { call: { anyOf: [{ type: "null" }, callSchema] } } } } } },
     async (request) => {
       const c = await calls.current(authOf(request).user.id);
       return { call: c ? viewJson(c) : null };
@@ -104,14 +104,14 @@ export async function callRoutes(app: FastifyInstance, opts: { auth: AuthService
 
   app.get<{ Params: { id: string } }>(
     "/calls/:id",
-    { preHandler: user, schema: { params: idParams, response: { 200: callSchema } } },
+    { onRequest: user, schema: { params: idParams, response: { 200: callSchema } } },
     async (request) => viewJson(await calls.get(authOf(request).user.id, request.params.id)),
   );
 
   const joinRoute = (path: string, fn: (userId: string, id: string) => Promise<JoinInfo>) =>
     app.post<{ Params: { id: string } }>(
       path,
-      { preHandler: user, config: { rateLimit: { max: 20, timeWindow: MINUTE } }, schema: { params: idParams, body: emptyBody, response: { 200: joinSchema } } },
+      { onRequest: user, config: { rateLimit: { max: 20, timeWindow: MINUTE } }, schema: { params: idParams, body: emptyBody, response: { 200: joinSchema } } },
       async (request) => fn(authOf(request).user.id, request.params.id),
     );
   joinRoute("/calls/:id/accept", (u, id) => calls.accept(u, id));
@@ -120,7 +120,7 @@ export async function callRoutes(app: FastifyInstance, opts: { auth: AuthService
   for (const action of ["decline", "cancel"] as const) {
     app.post<{ Params: { id: string } }>(
       `/calls/:id/${action}`,
-      { preHandler: user, schema: { params: idParams, body: emptyBody } },
+      { onRequest: user, schema: { params: idParams, body: emptyBody } },
       async (request, reply) => {
         const { id } = authOf(request).user;
         if (action === "decline") await calls.decline(id, request.params.id);
@@ -133,7 +133,7 @@ export async function callRoutes(app: FastifyInstance, opts: { auth: AuthService
   app.post<{ Params: { id: string }; Body: { reason: "hangup" | "network_lost" | "error" } }>(
     "/calls/:id/end",
     {
-      preHandler: user,
+      onRequest: user,
       schema: {
         params: idParams,
         body: { type: "object", additionalProperties: false, required: ["reason"], properties: { reason: { type: "string", enum: ["hangup", "network_lost", "error"] } } },
@@ -147,7 +147,7 @@ export async function callRoutes(app: FastifyInstance, opts: { auth: AuthService
 
   app.post<{ Params: { id: string }; Body: { summary: Record<string, number | boolean | string | null> } }>(
     "/calls/:id/diagnostics",
-    { preHandler: user, config: { rateLimit: { max: 10, timeWindow: MINUTE } }, schema: { params: idParams, body: diagnosticsBody } },
+    { onRequest: user, config: { rateLimit: { max: 10, timeWindow: MINUTE } }, schema: { params: idParams, body: diagnosticsBody } },
     async (request, reply) => {
       await calls.saveDiagnostics(authOf(request).user.id, request.params.id, request.body.summary);
       return reply.status(204).send();

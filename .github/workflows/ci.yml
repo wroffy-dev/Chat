@@ -56,3 +56,52 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       # GitHub-hosted Ubuntu runners include the Android SDK (ANDROID_HOME is preset).
       - run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
+
+  repo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/check-secrets.sh
+
+  images:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build backend runtime, migrate and backup images
+        run: |
+          docker build --target runtime -t vaultchat-backend backend
+          docker build --target migrate -t vaultchat-migrate backend
+          docker build -t vaultchat-backup deploy/backup
+      - name: Runtime image runs as non-root and carries no tests or env files
+        run: |
+          test "$(docker run --rm --entrypoint id vaultchat-backend -u)" != 0
+          docker run --rm --entrypoint sh vaultchat-backend -c 'test ! -e /app/test && test ! -e /app/.env && test ! -e /app/src'
+          docker run --rm --entrypoint sh vaultchat-backup -c 'age --version && pg_dump --version && test "$(id -u)" != 0'
+      - name: Runtime image starts without a database (liveness up, readiness down)
+        run: |
+          docker run -d --name backend -p 127.0.0.1:3000:3000 \
+            -e NODE_ENV=production \
+            -e DATABASE_URL=postgresql://ci:ci-only-password@127.0.0.1:1/none \
+            -e ADMIN_TOTP_ENC_KEY="$(openssl rand -base64 32)" \
+            vaultchat-backend
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:3000/healthz && break; sleep 1; done
+          curl -fsS http://127.0.0.1:3000/healthz
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/readyz)" = 503
+          docker logs backend 2>&1 | tail -20
+          docker rm -f backend
+      - name: Production compose template is valid
+        env:
+          TRUST_PROXY: 10.0.0.0/8
+          DATABASE_URL: postgresql://app:ci-only-password@db:5432/vc
+          MIGRATE_DATABASE_URL: postgresql://migrate:ci-only-password@db:5432/vc
+          ADMIN_TOTP_ENC_KEY: placeholder
+          LIVEKIT_PUBLIC_URL: wss://rtc.example.test
+          LIVEKIT_API_KEY: placeholder
+          LIVEKIT_API_SECRET: placeholder
+          LIVEKIT_KEYS: "placeholder: placeholder"
+          BACKUP_PGHOST: db
+          BACKUP_PGDATABASE: vc
+          BACKUP_PGUSER: maint
+          BACKUP_PGPASSWORD: placeholder
+          AGE_RECIPIENT: placeholder
+        run: docker compose -f deploy/docker-compose.prod.yml --profile migrate --profile backup config -q

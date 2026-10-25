@@ -97,6 +97,12 @@ async function main() {
 
   // Start even if the database is down, so liveness works and /readyz reports the problem.
   const readiness = await database.checkReadiness(config.READINESS_DB_TIMEOUT_MS);
+  // Catch up at once on what happened while the server was down (docs/16 §5): chat leases that
+  // lapsed are exits, messages past 24 h go, and calls left ringing or unjoined are closed.
+  if (readiness.ready) {
+    await chat.sweep().catch((err: unknown) => app.log.warn({ err }, "startup chat sweep failed"));
+    await calls.sweep().catch((err: unknown) => app.log.warn({ err }, "startup call sweep failed"));
+  }
   if (!media) app.log.warn("LiveKit not configured: calling returns 503 MEDIA_UNAVAILABLE");
   if (!push.enabled) app.log.warn("FCM not configured: incoming calls ring only while the app is open");
   if (readiness.ready) app.log.info("database ready");

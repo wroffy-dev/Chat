@@ -48,7 +48,7 @@ export async function connectionRoutes(app: FastifyInstance, opts: { auth: AuthS
   app.post(
     "/connection-qr",
     {
-      preHandler: user,
+      onRequest: user,
       schema: {
         body: emptyBody,
         response: {
@@ -70,7 +70,7 @@ export async function connectionRoutes(app: FastifyInstance, opts: { auth: AuthS
   app.post<{ Body: { token: string } }>(
     "/connection-requests",
     {
-      preHandler: user,
+      onRequest: user,
       schema: {
         body: {
           type: "object",
@@ -90,7 +90,7 @@ export async function connectionRoutes(app: FastifyInstance, opts: { auth: AuthS
   app.get<{ Querystring: { direction?: "incoming" | "outgoing"; status?: "pending" | "accepted" | "rejected" | "cancelled" | "expired" } }>(
     "/connection-requests",
     {
-      preHandler: user,
+      onRequest: user,
       schema: {
         querystring: {
           type: "object",
@@ -111,7 +111,7 @@ export async function connectionRoutes(app: FastifyInstance, opts: { auth: AuthS
 
   app.post<{ Params: { id: string } }>(
     "/connection-requests/:id/accept",
-    { preHandler: user, schema: { params: idParams, body: emptyBody, response: { 200: connectionSchema } } },
+    { onRequest: user, schema: { params: idParams, body: emptyBody, response: { 200: connectionSchema } } },
     async (request) => {
       const c = await connections.accept(authOf(request).user.id, request.params.id, requestMeta(request).ip);
       return { ...c, createdAt: c.createdAt.toISOString() };
@@ -121,7 +121,7 @@ export async function connectionRoutes(app: FastifyInstance, opts: { auth: AuthS
   for (const action of ["reject", "cancel"] as const) {
     app.post<{ Params: { id: string } }>(
       `/connection-requests/:id/${action}`,
-      { preHandler: user, schema: { params: idParams, body: emptyBody } },
+      { onRequest: user, schema: { params: idParams, body: emptyBody } },
       async (request, reply) => {
         const { id } = authOf(request).user;
         if (action === "reject") await connections.reject(id, request.params.id, requestMeta(request).ip);
@@ -134,7 +134,7 @@ export async function connectionRoutes(app: FastifyInstance, opts: { auth: AuthS
   app.get(
     "/connections",
     {
-      preHandler: user,
+      onRequest: user,
       schema: { response: { 200: { type: "object", additionalProperties: false, required: ["items"], properties: { items: { type: "array", items: connectionSchema } } } } },
     },
     async (request) => {
