@@ -17,7 +17,7 @@ Last updated: 2026-10-25 (UTC), after the chat phase (slice 1).
 | 3 | QR connection (moved before calling, Q-1) | **Done (backend verified; Android logic verified on JVM and against the real backend; screens compiled in CI, not yet on a device)** |
 | 4 | Calling | **In progress (slices 1–2 built)** — server + app logic verified; real media and real push untested (no LiveKit server, Firebase project or phones available here). See below |
 | 5 | Text chat | **Slice 1 built** — backend verified; app logic verified on JVM and against the real backend; screens compiled in CI; not yet on a device. See below |
-| 6 | Security and reliability | Not started |
+| 6 | Security and reliability | **Slice 1 built** — see below; deployment-side items wait for the VPS |
 | 7 | Private release | Not started |
 
 ### Q-1 (decided 2026-10-24): QR connection before calling
@@ -246,6 +246,26 @@ Deviations from the original design, recorded in docs/07 and docs/14:
   for it. A platform `EditText` would be needed.
 - "In chat" presence is not shown to the other user (D-11 is still open).
 
+## Phase 6 — Security and reliability, slice 1
+
+| Item | Status | Evidence |
+|---|---|---|
+| Authentication runs before body parsing and validation (`onRequest`), so anonymous input is never processed | Done (verified) | Full backend suite |
+| Route inventory test: every `/api/v1` route except login/refresh refuses anonymous, invalid and non-Bearer credentials; a must-change-password session can use only logout, change-password and push-token | Done (verified) | `test/security.integration.test.ts`; failed as expected with a planted unauthenticated route |
+| Log scan (docs/12 §4): a full run of login, refresh, pairing, push token, call and chat leaves no password, token, QR code, FCM token, LiveKit token or message text in the logs | Done (verified) | Same file; failed as expected with a planted log line |
+| Startup catch-up: lapsed chat leases, 24 h backstop and stale calls handled at boot, not 5–15 s later | Done (verified) | Manual run: a lease expired during downtime was cleared 3 s after restart |
+| `deploy/backup/backup.sh`: `pg_dump` without `messages` rows, streamed into `age` (no plaintext on disk), status file | Done (verified locally) | A sentinel message in the live DB was absent from the decrypted dump |
+| `deploy/backup/restore-test.sh`: restore into a new scratch DB, check migrations and that `messages` is empty, drop it | Done (verified locally) | Passed; wrong key fails and leaves no scratch DB |
+| `backend/Dockerfile` (non-root runtime, pruned, health check; `migrate` target), backup image, `deploy/docker-compose.prod.yml` template (no secrets; admin port on the VPS loopback only) | Done (CI pending) | CI `images` job: build, non-root and content checks, starts without DB (`/healthz` 200, `/readyz` 503), compose validation |
+| `scripts/check-secrets.sh` in CI | Done (verified) | Passes on the repo; caught a planted key and connection string |
+| Unsigned release APK built in CI (R8 shrinking) | CI pending | |
+| Android: backups/device transfer exclude all app data; only the launcher activity is exported; release is HTTPS-only with system CAs | Done (reviewed) | Manifest and XML rules; `adb backup` check needs a device |
+
+Not done in this slice: backup pruning and data-retention jobs (retention periods are open decision
+D-12); separate database roles (`vc_migrate`/`vc_app`/`vc_maint`, docs/13 §1) — to be set up with the
+database on the VPS; external port scan, uptime/disk/bandwidth alerts, ASVS/MASVS self-review — need
+the deployed system.
+
 ## Next task
 
 1. **Owner actions to test for real:** create a Firebase project (android/README.md "Push notifications"),
@@ -253,5 +273,6 @@ Deviations from the original design, recorded in docs/07 and docs/14:
    phones; record results against docs/09 (T-SETUP-1/2, T-CLEAN, T-BG-VOICE/VIDEO).
 2. Chat on two phones: open, send both ways, Back on one phone, background for over a minute; record
    results. Then chat slice 2 if wanted: WebSocket instead of polling, keyboard learning flag.
-3. Phase 6 (security and reliability) is the next build phase.
+3. **Owner decision D-12** (retention periods) unblocks backup pruning and retention jobs. Then Phase 7
+   (private release) — needs the VPS and your go-ahead for any deployment.
 4. Calling later: core-telecom (S-2), WebRTC stats in diagnostics, quality benchmarks (D-13).

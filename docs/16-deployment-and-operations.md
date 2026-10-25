@@ -206,6 +206,11 @@ Use the config in [08 §13](08-calling.md#13-livekit-server-configuration-propos
 | Not backed up | Message text and location (by design); LiveKit (stateless); Redis (none) |
 | Also keep | Coolify configuration export and a copy of this repo's `deploy/` files (no secrets) |
 
+Implemented as scripts (not yet run on the VPS): `deploy/backup/backup.sh` (dump without message rows,
+streamed into `age`) and `deploy/backup/restore-test.sh` (the monthly drill: restore into a new scratch
+database, check, drop), packaged as the `backup` service in `deploy/docker-compose.prod.yml`. Pruning to
+7 daily + 4 weekly waits for D-12.
+
 Restore procedure (summary): stop backend → create empty DB → `pg_restore` → run `prisma migrate deploy` →
 start backend → verify `/readyz` and admin login. Restored sessions remain valid; revoke all sessions
 from the Admin Console if the incident involved credential exposure.
