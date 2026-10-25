@@ -56,6 +56,9 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       # GitHub-hosted Ubuntu runners include the Android SDK (ANDROID_HOME is preset).
       - run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
+      # Unsigned release build with a placeholder URL: checks that R8 shrinking works with the
+      # libraries in use. No signing material exists in CI.
+      - run: ./gradlew --no-daemon :app:assembleRelease -Pvaultchat.apiBaseUrl.release=https://api.example.invalid/
 
   repo:
     runs-on: ubuntu-latest
