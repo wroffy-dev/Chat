@@ -6,7 +6,7 @@ This file tracks what has **actually** been built and verified. Design lives in 
 Status words: **Done (verified)** = built and checked by the tests/commands listed; **Done (unverified)** =
 written but not compiled or run; **Not started**; **Blocked**.
 
-Last updated: 2026-10-24 (UTC), after the QR-connection phase.
+Last updated: 2026-10-25 (UTC), after the chat phase (slice 1).
 
 ## Phase order
 
@@ -16,7 +16,7 @@ Last updated: 2026-10-24 (UTC), after the QR-connection phase.
 | 2 | Authentication and Admin Console | **Done (backend verified; Android verified in CI, not yet on a device)** — see below |
 | 3 | QR connection (moved before calling, Q-1) | **Done (backend verified; Android logic verified on JVM and against the real backend; screens compiled in CI, not yet on a device)** |
 | 4 | Calling | **In progress (slices 1–2 built)** — server + app logic verified; real media and real push untested (no LiveKit server, Firebase project or phones available here). See below |
-| 5 | Text chat | Not started — D-01/D-02 decided 2026-10-24, no longer blocked |
+| 5 | Text chat | **Slice 1 built** — backend verified; app logic verified on JVM and against the real backend; screen compile pending CI; not yet on a device. See below |
 | 6 | Security and reliability | Not started |
 | 7 | Private release | Not started |
 
@@ -220,10 +220,38 @@ user. Server logs scanned afterwards: no passwords or tokens present.
 | core-telecom integration (system call UI, Bluetooth/car controls) | **Not started** — spike S-2 | |
 | WebRTC stats (RTT, jitter, loss, resolution) in diagnostics | **Not started** | |
 
+## Phase 5 — Text chat, slice 1
+
+Decisions applied: D-01 option D, D-02 (60 s lease renewed every 20 s; 24 h backstop).
+
+| Item | Status | Evidence |
+|---|---|---|
+| Migration `chat`: `conversations`, `conversation_participants`, `messages` (CHECKs: 1–4,000 characters, lease columns set together; active-lease index). Existing connections get a conversation; accepting a request now creates it | Done (verified) | Applied locally (dev DB: 1 connection → 1 conversation, 2 participants); integration tests |
+| `POST /conversations/{id}/enter`, `/heartbeat`, `/leave`, `/messages`, `/read`; `GET /conversations/{id}/messages` (docs/14 §5) | Done (verified) | `test/chat.integration.test.ts` (14 tests) |
+| Exit rule (D-01 option D): an exit deletes every message its recipient has displayed, in both directions; unseen messages stay | Done (verified) | Tests, and end to end through the app's chat logic against the real backend (`RealBackendChatTest`) |
+| Epoch rule: sends composed before a clear are refused (`409 CONVERSATION_CLEARED`); a retry of a message that still exists returns it; the epoch moves only when rows are deleted | Done (verified) | Tests |
+| Presence lease (D-02): lapsed leases are exits — swept every 15 s, and on heartbeat/enter; backstop deletes messages older than 24 h, seen or not | Done (verified) | Tests with a controlled clock |
+| Limits: text trimmed, 1–4,000 code points, NUL refused; 30 sends/min per user; 16 KB body; 200 per history page | Done (verified) | Tests |
+| Message text never in logs (send errors sanitised; `text`/`body` redacted) | Done (verified) | Log-capture test; real-backend run log checked |
+| Content-free `{"t":"msg"}` push to a recipient not in the chat, at most one per minute | Done (verified with a recording transport) | Test; not sent to real FCM |
+| Android `ChatController`: enter, 2 s polling, 20 s heartbeat while the app is in front, idempotent sends with retry, cleared-chat resync, draft restored after a refused send, stored-and-retried exit | Done (verified on JVM) | `ChatControllerTest` (13 tests) + `RealBackendChatTest` (passed against the local backend) |
+| Android chat screen, Home "Open chat", "New message" notification channel, recent-apps thumbnail hidden while chatting (API 33+) | Done (CI compile pending) | Not run on a device |
+| Fix: six string resources had `%1` without a type (would throw at runtime on Home and the pairing screens) | Done | Corrected to `%1$s` / `%1$d` |
+
+Deviations from the original design, recorded in docs/07 and docs/14:
+- **Polling instead of WebSocket** for now: the app polls every 2 s while the chat is open, and renews
+  the lease with `POST /heartbeat`. Same server rules; a WebSocket can replace polling later.
+- `clearedThroughSeq` was dropped: under option D a clear no longer removes everything below a sequence.
+- The keyboard's "no personalised learning" flag is **not set**: Compose 1.7 text fields expose no API
+  for it. A platform `EditText` would be needed.
+- "In chat" presence is not shown to the other user (D-11 is still open).
+
 ## Next task
 
 1. **Owner actions to test for real:** create a Firebase project (android/README.md "Push notifications"),
    then run PostgreSQL + LiveKit locally (`deploy/docker-compose.dev.yml`) and make a call between two
    phones; record results against docs/09 (T-SETUP-1/2, T-CLEAN, T-BG-VOICE/VIDEO).
-2. Chat phase (D-01 option D, D-02 60 s lease / 24 h backstop) — next build phase.
-3. Calling later: core-telecom (S-2), WebRTC stats in diagnostics, quality benchmarks (D-13).
+2. Chat on two phones: open, send both ways, Back on one phone, background for over a minute; record
+   results. Then chat slice 2 if wanted: WebSocket instead of polling, keyboard learning flag.
+3. Phase 6 (security and reliability) is the next build phase.
+4. Calling later: core-telecom (S-2), WebRTC stats in diagnostics, quality benchmarks (D-13).

@@ -31,7 +31,7 @@ No stack traces, SQL errors or internal names are ever returned.
 | 403 | `FORBIDDEN`, `ACCOUNT_DISABLED`, `PASSWORD_CHANGE_REQUIRED`, `UPGRADE_REQUIRED` |
 | 404 | `NOT_FOUND` (also used when the resource exists but the caller is not a member) |
 | 405 | `METHOD_NOT_ALLOWED` |
-| 409 | `CONFLICT` (generic), `ALREADY_CONNECTED`, `REQUEST_ALREADY_PENDING`, `REQUEST_NOT_PENDING`, `CONVERSATION_CLEARED`, `CALL_IN_PROGRESS`, `CALL_NOT_ACTIVE`, `SHARING_DISABLED`, `PEER_NOT_IN_CHAT` (only if D-01 = option C) |
+| 409 | `CONFLICT` (generic), `ALREADY_CONNECTED`, `REQUEST_ALREADY_PENDING`, `REQUEST_NOT_PENDING`, `CONVERSATION_CLEARED`, `LEASE_EXPIRED`, `CALL_IN_PROGRESS`, `CALL_NOT_ACTIVE`, `SHARING_DISABLED`, `PEER_NOT_IN_CHAT` (only if D-01 = option C) |
 | 410 | `QR_INVALID_OR_EXPIRED` |
 | 413 | `PAYLOAD_TOO_LARGE` |
 | 415 | `UNSUPPORTED_MEDIA_TYPE` (request body is not JSON) |
@@ -119,30 +119,43 @@ Common to every authenticated route: `401` if token missing/expired/revoked; `40
 
 ## 5. Chat
 
-All routes require the caller to be a participant of `{id}` (else `404`).
+**Implemented (slice 1).** All routes require the caller to be a participant of `{id}` (else `404`).
+Request bodies of these routes are never logged. In slice 1 the app polls instead of using the WebSocket
+(§10): `GET /messages` every 2 s and `POST /heartbeat` every 20 s while the chat is open.
 
 ### POST /conversations/{id}/enter
-- **Request:** `{}`. **Response 200:** `{ "leaseId", "leaseTtlSeconds": 60, "heartbeatSeconds": 20, "epoch", "peerInChat": bool }`
-- **Side effects:** sets presence lease; notifies peer `chat.presence`.
+- **Request:** `{}`. **Response 200:** `{ "leaseId", "leaseTtlSeconds": 60, "heartbeatSeconds": 20, "epoch" }`
+- **Side effects:** starts (or replaces) the caller's presence lease. A lease that had lapsed but was not
+  yet swept is applied as an exit first. Peer presence is not returned (D-11 open).
+
+### POST /conversations/{id}/heartbeat
+- **Request:** `{ "leaseId": uuid }`. **Response:** `204`, lease extended by 60 s.
+- **Errors:** `409 LEASE_EXPIRED` — the lease lapsed (the exit is applied now if the sweep had not yet)
+  or was replaced. The client must enter again.
 
 ### POST /conversations/{id}/leave
-- **Request:** `{ "leaseId": uuid|null, "leaveId": uuid }`. **Response 200:** `{ "epoch", "clearedThroughSeq" }`.
-- **Side effects:** the clear transaction ([07 §3.2](07-chat-and-disappearing-messages.md#32-leaving-the-chat-the-clear--post-apiv1conversationsidleave)); WS `conversation.cleared` to both. Idempotent by `leaveId`.
-- **Audit:** none per clear (would leak chat-activity timing); a daily count is kept in memory metrics only.
+- **Request:** `{ "leaveId": uuid }`. **Response 200:** `{ "epoch" }`.
+- **Side effects:** the clear transaction ([07 §3.2](07-chat-and-disappearing-messages.md#32-leaving-the-chat-the-clear--post-apiv1conversationsidleave)) and ends the caller's lease. Idempotent by `leaveId`.
+- **Audit:** none per clear (would leak chat-activity timing).
 
 ### GET /conversations/{id}/messages?afterSeq={n}&epoch={e}&limit={1..200}
-- **Response 200:** `{ "epoch", "clearedThroughSeq", "cleared": bool, "items": [ { "id", "seq", "senderId", "text", "createdAt" } ], "hasMore": bool }`
-- `cleared: true` means the client's `epoch` is stale and it must discard local state.
+- **Response 200:** `{ "epoch", "cleared": bool, "items": [ { "id", "seq", "senderId", "text", "createdAt" } ], "hasMore": bool }`
+- `cleared: true` means the client's `epoch` is stale: `afterSeq` is ignored, items start from the
+  beginning, and the client must replace its state with them.
 
 ### POST /conversations/{id}/messages
 - **Rate limit:** 30/min per user. **Body limit:** 16 KB.
-- **Request:** `{ "clientMessageId": uuid, "epoch": int, "text": string(1..4000 code points, trimmed) }`
-- **Response 201:** `{ "id", "seq", "epoch", "createdAt" }` (200 with the same body on idempotent retry).
-- **Errors:** `409 CONVERSATION_CLEARED` (body includes current `epoch`), `422 MESSAGE_TOO_LONG`, `409 PEER_NOT_IN_CHAT` (only if D-01 = C).
-- **Side effects:** WS `message.created` to both; FCM `msg` to recipient if no socket (subject to D-01).
+- **Request:** `{ "clientMessageId": uuid, "epoch": int, "text": string(1..4000 code points after trimming; no NUL) }`
+- **Response 201:** `{ "id", "seq", "epoch", "createdAt" }` (200 with the same body when that
+  `clientMessageId` already exists — idempotent retry).
+- **Errors:** `409 CONVERSATION_CLEARED` (stale epoch; read `GET /messages` for the current one),
+  `422 MESSAGE_TOO_LONG`, `400 VALIDATION_FAILED` (empty after trimming, or NUL).
+- **Side effects:** FCM `{"t":"msg"}` (normal priority, no content) to the recipient if they hold no
+  active lease, at most one per minute.
 
 ### POST /conversations/{id}/read
-- **Request:** `{ "seq": int }` (monotonic; lower values ignored). **Response:** `204`. WS `message.read` to peer.
+- **Request:** `{ "seq": int }` — the highest sequence displayed. Monotonic (lower values ignored) and
+  capped at the last allocated sequence. **Response:** `204`.
 
 ## 6. Calls
 
@@ -239,7 +252,7 @@ Envelope: `{ "type": string, "id": uuid, "ts": iso8601, "data": object }`
 | S→C | `connection.created` | `{ connectionId, conversationId }` |
 | S→C | `message.created` | `{ conversationId, id, seq, epoch, senderId, text, createdAt }` |
 | S→C | `message.read` | `{ conversationId, seq }` |
-| S→C | `conversation.cleared` | `{ conversationId, epoch, clearedThroughSeq }` |
+| S→C | `conversation.cleared` | `{ conversationId, epoch }` |
 | S→C | `chat.presence` | `{ conversationId, userId, inChat }` |
 | S→C | `call.incoming` | `{ callId, kind, callerId }` |
 | S→C | `call.accepted` / `call.declined` / `call.cancelled` / `call.missed` / `call.active` / `call.ended` | `{ callId, reason? }` |

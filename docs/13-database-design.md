@@ -1,6 +1,6 @@
 # 13 — Database Design (PostgreSQL + Prisma)
 
-Status: **Partly implemented.** §3.1–3.4 and §3.13 exist as migration `phase2_accounts_sessions_audit`; §3.5–3.7 as `qr_connection` (permanence enforced by a trigger rather than role grants, because a separate app role is not set up yet). The other tables are still proposed. This document is the source of truth for table and
+Status: **Partly implemented.** §3.1–3.4 and §3.13 exist as migration `phase2_accounts_sessions_audit`; §3.5–3.7 as `qr_connection` (permanence enforced by a trigger rather than role grants, because a separate app role is not set up yet). §3.8–3.10 exist as migration `chat`; §3.11–3.12 as `calls`. The other tables are still proposed. This document is the source of truth for table and
 column names used in the other docs.
 
 ## 1. Conventions
@@ -172,8 +172,7 @@ UNIQUE `(user_a_id, user_b_id)`. Immutable: `vc_app` has no UPDATE or DELETE pri
 | `id` | uuid PK | no | |
 | `connection_id` | uuid FK → connections.id | no | UNIQUE (one conversation per connection) |
 | `last_seq` | bigint | no | default 0; last allocated message sequence |
-| `clear_epoch` | bigint | no | default 0; +1 per clear |
-| `cleared_through_seq` | bigint | no | default 0 |
+| `clear_epoch` | bigint | no | default 0; +1 whenever messages are deleted (exit or backstop) |
 | `cleared_at` | timestamptz | yes | |
 
 Row is locked `FOR UPDATE` by every send and clear ([07 §3](07-chat-and-disappearing-messages.md#3-server-side-model)).
@@ -203,7 +202,7 @@ Row is locked `FOR UPDATE` by every send and clear ([07 §3](07-chat-and-disappe
 | `created_at` | timestamptz | no | |
 
 UNIQUE `(conversation_id, seq)`; UNIQUE `(conversation_id, sender_user_id, client_message_id)`.
-Deletion: **hard DELETE** by the clear transaction; backstop job by `created_at` if D-01/D-02 sets one.
+Deletion: **hard DELETE** by the clear transaction (D-01 option D: rows whose recipient's `last_read_seq >= seq`); backstop job deletes rows with `created_at` older than 24 h (D-02).
 Backups: data excluded. Never logged.
 
 ### 3.11 calls

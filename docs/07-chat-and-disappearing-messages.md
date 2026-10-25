@@ -1,6 +1,10 @@
 # 07 — Text Chat and Disappearing Messages
 
-Status: **Designed, not implemented.** Decisions D-01 and D-02 were made on 2026-10-24 — see §6 and §7.
+Status: **Implemented (slice 1)** — see docs/IMPLEMENTATION_PLAN.md, Phase 5. Not yet tried on phones. Decisions D-01 (option D) and D-02 were made on 2026-10-24 — see §6 and §7.
+
+> **Transport in slice 1:** the app **polls** `GET /messages` every 2 s while the chat is open and renews
+> its lease with `POST /conversations/{id}/heartbeat`, instead of the WebSocket described in
+> [14 §10](14-api-contracts.md). The server rules below are the same either way.
 
 ## 1. Scope
 
@@ -22,7 +26,7 @@ not depend on the other device being online, and deleted messages can never be r
 Tables (full definitions in [13](13-database-design.md)):
 
 - `conversations` — one per connection. `last_seq` (last message sequence number allocated),
-  `clear_epoch` (incremented on every clear), `cleared_through_seq`, `cleared_at`.
+  `clear_epoch` (incremented whenever messages are deleted), `cleared_at`.
 - `conversation_participants` — per user: `last_read_seq`, chat presence lease (`lease_id`,
   `lease_expires_at`), `last_leave_id`.
 - `messages` — `seq` (per-conversation, strictly increasing), `epoch`, `sender_user_id`,
@@ -38,10 +42,10 @@ last synced), and `text`.
 BEGIN
   conv = SELECT … FROM conversations WHERE id = :id FOR UPDATE      -- serialises with clears
   require :me is a participant                                      -- else 404
-  if :epoch <> conv.clear_epoch → ROLLBACK; 409 CONVERSATION_CLEARED (returns current epoch)
   existing = SELECT … FROM messages WHERE conversation_id = :id
                AND sender_user_id = :me AND client_message_id = :cmid
-  if existing → COMMIT; return existing                             -- idempotent retry
+  if existing → COMMIT; return existing                             -- idempotent retry (still exists)
+  if :epoch <> conv.clear_epoch → ROLLBACK; 409 CONVERSATION_CLEARED
   seq = conv.last_seq + 1
   INSERT messages (conversation_id, seq, epoch = conv.clear_epoch, sender_user_id = :me,
                    client_message_id = :cmid, body = :text)
@@ -52,12 +56,14 @@ publish message.created {conversationId, seq, epoch, …} to both users' sockets
 
 **Why the epoch check:** if a message was committed but the response was lost, and the chat was cleared
 before the retry, a naive retry would re-insert it — the message would "come back". The epoch check
-rejects any send composed before a clear. The app then shows: "The chat was cleared. Your message was
+rejects any send composed before a clear. A retry of a message that **still exists** (under option D, an
+unseen message survives a clear) returns it instead, so it is neither refused nor duplicated. The client
+learns the current epoch from `GET /messages`. The app then shows: "The chat was cleared. Your message was
 not sent." and puts the text back in the input box so the user can decide to resend it.
 
 ### 3.2 Leaving the chat (the clear) — `POST /api/v1/conversations/{id}/leave`
 
-Request carries `leaveId` (UUID per exit action, for idempotent retries).
+Request carries `leaveId` (UUID per exit action, for idempotent retries). Response: `{ "epoch" }`.
 
 ```
 BEGIN
@@ -65,24 +71,32 @@ BEGIN
   require :me is a participant
   if conversation_participants(:me).last_leave_id = :leaveId → COMMIT; return 200 (already done)
   DELETE FROM messages WHERE conversation_id = :id AND <clear scope>        -- see D-01
-  UPDATE conversations SET clear_epoch = clear_epoch + 1,
-                           cleared_through_seq = last_seq, cleared_at = now()
+  if any rows were deleted:
+    UPDATE conversations SET clear_epoch = clear_epoch + 1, cleared_at = now()
   UPDATE conversation_participants SET lease_id = NULL, lease_expires_at = NULL,
                                        last_leave_id = :leaveId
      WHERE conversation_id = :id AND user_id = :me
 COMMIT
-publish conversation.cleared {conversationId, epoch, clearedThroughSeq} to both users' sockets
+(clients see the new epoch on their next `GET /messages`)
 ```
 
-`<clear scope>` is `TRUE` (every message) under the "strict" interpretation. It changes only if the
-owner picks a different option for D-01 (§6). The transaction shape stays the same.
+`<clear scope>` under D-01 option D (implemented): every message whose **recipient** has displayed it —
+`seq <= last_read_seq` of the participant who is not the sender. Both directions are covered by one
+statement. The epoch moves only when something was deleted, so an exit with nothing to delete does not
+refuse the other person's next message. The backstop job (§5) uses the same lock and also moves the epoch.
 
 ### 3.3 Reading history — `GET /api/v1/conversations/{id}/messages?afterSeq=&epoch=`
 
-Returns the current `epoch`, `clearedThroughSeq`, and the messages that still exist with `seq > afterSeq`.
-Deleted rows no longer exist, so they **cannot** be returned. If the client's `epoch` is older than the
-server's, the response says `cleared: true` and the client must drop everything it holds before
-displaying the returned messages.
+Returns the current `epoch` and the messages that still exist with `seq > afterSeq`, read in one
+snapshot. Deleted rows no longer exist, so they **cannot** be returned. If the client's `epoch` is older
+than the server's, the response says `cleared: true`, `afterSeq` is ignored and the items start from the
+beginning: the client replaces everything it holds with them.
+
+### 3.5 Seen — `POST /api/v1/conversations/{id}/read`
+
+`{ "seq" }`: the highest sequence number this user has **displayed**. Monotonic and capped at the last
+allocated sequence, so it never covers a message sent later. The app reports it only while the chat is
+on screen; this is what decides which messages an exit deletes.
 
 ### 3.4 Race conditions
 
@@ -107,8 +121,10 @@ displaying the returned messages.
 4. Notifications for new messages say only "New message" — no sender text, no preview (see [10](10-notifications.md)).
 5. The chat activity calls `setRecentsScreenshotEnabled(false)` (API 33+) so the recent-apps thumbnail
    does not show messages. This does **not** block screenshots, which remain allowed.
-6. The text field requests no personalised learning from the keyboard
-   (`EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING`) — the keyboard may ignore this hint.
+6. The text field should request no personalised learning from the keyboard
+   (`EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING`) — the keyboard may ignore this hint. **Not
+   implemented in slice 1:** Compose 1.7 text fields have no API for it; a platform `EditText` would be
+   needed. The draft is held in memory only (not in saved instance state).
 
 ### 4.1 Supported exit actions
 
@@ -117,7 +133,7 @@ displaying the returned messages.
 | System Back button / back gesture from the chat screen | Yes → `leave` sent immediately |
 | Toolbar back arrow | Yes |
 | Logout while in chat | Yes (leave sent before logout) |
-| Starting a call from the chat screen | **No** — the chat stays open beneath the call screen (proposed) |
+| A call screen shown over the chat (incoming call) | **No** — the chat stays open beneath it and the lease is renewed while the app is in front, but nothing new counts as seen until the chat is on screen again. The chat screen has no call buttons in slice 1 |
 | App sent to background (Home, app switcher, screen off) | Yes, once the 60 s presence lease lapses (D-02) |
 | App killed, crash, phone loses power or network | Handled by the presence lease (§5) |
 
@@ -130,8 +146,8 @@ Crashes, power loss, the OS killing the app, or losing network mean the `leave` 
 
 | Mechanism | How it works |
 |---|---|
-| **Presence lease** | `POST /conversations/{id}/enter` returns a `leaseId` with a TTL (proposed 60 s). While the chat screen is visible, the app sends `chat.heartbeat` over the WebSocket every 20 s. A server job runs every 15 s. Any lease whose `lease_expires_at` has passed is treated as an exit and runs the same clear transaction (audit/system actor `system:lease_expired`). Leases are stored in PostgreSQL, so a backend restart does not lose them — on startup the job processes leases that expired during downtime |
-| **Pending-leave flag** | When the user exits, the app writes a small "leave pending" record (conversation ID + `leaveId`, **no message content**) to DataStore before sending. If sending fails, it retries on next launch/reconnect. Idempotent by `leaveId` |
+| **Presence lease** | `POST /conversations/{id}/enter` returns a `leaseId` with a TTL of 60 s. While the app is in front with the chat open, it calls `POST /conversations/{id}/heartbeat` every 20 s (the WebSocket `chat.heartbeat` in a later slice). A heartbeat for a lapsed lease applies the exit and returns `409 LEASE_EXPIRED`; the app then drops its list, enters again and says so. A server job runs every 15 s. Any lease whose `lease_expires_at` has passed is treated as an exit and runs the same clear transaction (not audited, like every clear). Leases are stored in PostgreSQL, so a backend restart does not lose them — the first run after startup (within 15 s) processes leases that expired during downtime |
+| **Pending-leave flag** | When the user exits, the app writes a small "leave pending" record (conversation ID + `leaveId`, **no message content**) to SharedPreferences before sending. If sending fails, it retries on next launch/reconnect. Idempotent by `leaveId` |
 | **Backstop expiry** (D-02: 24 h) | Every message is deleted 24 h after it was sent, even if no exit was recorded |
 
 **Honest limits:**
