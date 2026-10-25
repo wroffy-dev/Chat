@@ -275,7 +275,7 @@ the deployed system.
 | `GET /api/v1/ws` (`@fastify/websocket` 11.3.4): Bearer auth on the upgrade (no URL tokens; restricted sessions refused), ping 25 s, 16 KB frames, flood close, close at token expiry (4401) and after logout/revocation (4403) | Done (verified) | `test/realtime.integration.test.ts` (5 tests, real `ws` client); `/ws` in the security route inventory |
 | Signals `chat.changed {conversationId}` and `call.changed {callId}` — IDs only, after commit — from sends, exits, lease expiry, backstop and every call transition | Done (verified) | Same tests (no message text in frames) |
 | Android `RealtimeClient` (OkHttp, data layer): reconnect with backoff, token refresh on 4401, stops on 4403; runs while signed in and in front | Done (verified against the real backend) | `RealBackendChatTest` with live signals on both sides |
-| Chat re-reads at once on a signal; polls 10 s while connected (2 s otherwise); heartbeat time-based. Incoming-call check wakes on `call.changed` (3 s / 15 s polling) | Done (chat verified on JVM; watcher compile pending CI) | `ChatControllerTest` (signal + fallback test) |
+| Chat re-reads at once on a signal; polls 10 s while connected (2 s otherwise); heartbeat time-based. Incoming-call check wakes on `call.changed` (3 s / 15 s polling) | Done (chat verified on JVM; app compiles and lints, CI run 40190854554) | `ChatControllerTest` (signal + fallback test) |
 | The call screen still polls its own call every 2 s | Not changed | Could use `call.changed` later |
 
 ## Next task
