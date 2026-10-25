@@ -240,4 +240,38 @@ describe.skipIf(!TEST_DB_URL)("Admin Console (PostgreSQL)", () => {
     expect(page).not.toContain("<script>x");
     expect(page).toContain("&lt;script&gt;");
   });
+
+  it("ends one app session from the users page", async () => {
+    await createAdmin();
+    const { temporaryPassword } = await auth.createUser("alice", { type: "system", id: null });
+    await auth.login("alice", temporaryPassword, { ip: null });
+    const session = await database.prisma.session.findFirstOrThrow();
+    const { cookie, csrf } = await loginCookie();
+    const page = (await app.inject({ method: "GET", url: "/admin/users", headers: { cookie } })).body;
+    expect(page).toContain(`/admin/sessions/${session.id}/revoke`);
+    expect((await post(`/admin/sessions/${session.id}/revoke`, cookie, { csrf })).statusCode).toBe(303);
+    expect((await database.prisma.session.findUniqueOrThrow({ where: { id: session.id } })).revokedAt).not.toBeNull();
+    expect(await database.prisma.auditEvent.count({ where: { action: "admin.session_revoked", targetId: session.id } })).toBe(1);
+  });
+
+  it("changes the admin password only with the current password and a fresh code, then ends every admin session", async () => {
+    await createAdmin();
+    const { cookie, csrf } = await loginCookie();
+    nowMs += 60_000;
+    const wrong = await post("/admin/account/password", cookie, { csrf, currentPassword: "not it", newPassword: "another long passphrase 99", totp: code() });
+    expect(wrong.statusCode).toBe(403);
+    nowMs += 60_000;
+    const weak = await post("/admin/account/password", cookie, { csrf, currentPassword: ADMIN_PASSWORD, newPassword: "short", totp: code() });
+    expect(weak.statusCode).toBe(400);
+    nowMs += 60_000;
+    const ok = await post("/admin/account/password", cookie, { csrf, currentPassword: ADMIN_PASSWORD, newPassword: "another long passphrase 99", totp: code() });
+    expect(ok.statusCode).toBe(200);
+    // The old cookie no longer works; the new password does.
+    expect((await app.inject({ method: "GET", url: "/admin/users", headers: { cookie } })).headers.location).toBe("/admin/login");
+    nowMs += 60_000;
+    const relogin = await app.inject({ method: "POST", url: "/admin/login", payload: { username: "root", password: "another long passphrase 99", totp: code() } });
+    expect(relogin.statusCode).toBe(303);
+    expect(await database.prisma.auditEvent.count({ where: { action: "admin.password_changed" } })).toBe(1);
+    expect(await database.prisma.auditEvent.count({ where: { action: "admin.password_change_failed" } })).toBe(1);
+  });
 });

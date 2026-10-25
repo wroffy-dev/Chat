@@ -284,7 +284,9 @@ the deployed system.
 |---|---|---|
 | Health page made accurate: LiveKit reachable (`ListRooms`), FCM configured, open app connections, last backup time (flagged after 36 h) | Done (verified) | `test/admin.integration.test.ts` |
 | Calls page: last 24 h, outcome, connected time, each phone's quality summary (escaped) — for reading the call test results | Done (verified) | Same file |
-| Still not built from docs/05: Sessions page (per-session revoke), Errors page (`error_events` table does not exist), Settings (`app_settings`), admin Account page (password/TOTP change — use `cli admin:reset` meanwhile) | Not started | |
+| End one app session (button per session on the Users page; audited `admin.session_revoked`) | Done (verified) | `test/admin.integration.test.ts` |
+| Account page: admin password change with current password + fresh TOTP code; ends every admin session; 5 wrong attempts end all sessions; audited | Done (verified) | Same file |
+| Still not built from docs/05: Errors page (`error_events` table does not exist), Settings (`app_settings`), TOTP re-enrolment in the browser (use `cli admin:reset`) | Not started | |
 
 ## Next task
 

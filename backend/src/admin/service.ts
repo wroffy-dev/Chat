@@ -5,6 +5,7 @@ import { ADMIN_PASSWORD_MIN, checkPasswordStrength, type PasswordHasher } from "
 import { normalizeUsername, throttleDelayMs, USERNAME_PATTERN } from "../auth/service.js";
 import { generateToken, hashToken } from "../auth/tokens.js";
 import { decryptSecret, encryptSecret, verifyTotp } from "../auth/totp.js";
+import { AppError } from "../errors.js";
 
 const MINUTE = 60_000;
 
@@ -154,6 +155,43 @@ export class AdminService {
     await this.prisma.adminSession.update({ where: { id: session.id }, data: { lastUsedAt: now, idleExpiresAt } });
     const { admin, ...rest } = session;
     return { admin, session: rest };
+  }
+
+  /**
+   * The admin changes their own password: current password and a fresh TOTP code are required, so a
+   * stolen session cookie alone cannot do it. Ends every admin session, this one included.
+   * Five wrong attempts also end every session (the next login is throttled).
+   */
+  async changePassword(ctx: AdminContext, currentPassword: string, newPassword: string, totpCode: string): Promise<void> {
+    const now = this.now();
+    const admin = await this.prisma.adminAccount.findUniqueOrThrow({ where: { id: ctx.admin.id } });
+    const passwordOk = await this.hasher.verify(admin.passwordHash, currentPassword);
+    const secret = decryptSecret(Buffer.from(admin.totpSecretEnc), this.totpKeyBase64);
+    const step = passwordOk ? verifyTotp(secret, totpCode.trim(), now.getTime(), admin.totpLastUsedStep) : null;
+    if (!passwordOk || step === null) {
+      const failed = admin.failedLoginCount + 1;
+      await this.prisma.$transaction(async (tx) => {
+        await tx.adminAccount.update({ where: { id: admin.id }, data: { failedLoginCount: failed } });
+        if (failed >= 5) await tx.adminSession.updateMany({ where: { adminId: admin.id, revokedAt: null }, data: { revokedAt: now } });
+        await audit(tx, { actorType: "admin", actorId: admin.id, action: "admin.password_change_failed", metadata: { failedCount: failed } });
+      });
+      throw new AppError(403, "FORBIDDEN", "The current password or the code is wrong. Nothing was changed.");
+    }
+    try {
+      this.validateCredentials(admin.username, newPassword);
+    } catch (err) {
+      if (err instanceof AdminSetupError) throw new AppError(400, "WEAK_PASSWORD", err.message);
+      throw err;
+    }
+    const passwordHash = await this.hasher.hash(newPassword);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.adminAccount.update({
+        where: { id: admin.id },
+        data: { passwordHash, failedLoginCount: 0, throttledUntil: null, totpLastUsedStep: BigInt(step) },
+      });
+      await tx.adminSession.updateMany({ where: { adminId: admin.id, revokedAt: null }, data: { revokedAt: now } });
+      await audit(tx, { actorType: "admin", actorId: admin.id, action: "admin.password_changed" });
+    });
   }
 
   async logout(ctx: AdminContext): Promise<void> {

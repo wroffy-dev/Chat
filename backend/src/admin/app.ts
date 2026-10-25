@@ -9,6 +9,7 @@ import type { PrismaClient } from "../generated/prisma/client.js";
 import type { Config } from "../config/env.js";
 import type { Database } from "../db/database.js";
 import { AppError } from "../errors.js";
+import { audit } from "../auth/audit.js";
 import type { AuthService } from "../auth/service.js";
 import { MAX_USERS } from "../auth/service.js";
 import { safeEqual } from "../auth/tokens.js";
@@ -194,7 +195,8 @@ export function buildAdminApp(deps: AdminAppDeps): FastifyInstance {
     });
     const rows = users.map((u) => {
       const sessions = u.sessions
-        .map((s) => `${fmt(s.lastUsedAt)} · ${esc(s.deviceModel ?? "unknown device")} · v${esc(s.appVersionCode ?? "?")}${s.restricted ? " · must change password" : ""}`)
+        .map((s) => `${fmt(s.lastUsedAt)} · ${esc(s.deviceModel ?? "unknown device")} · v${esc(s.appVersionCode ?? "?")}${s.restricted ? " · must change password" : ""}
+          <form class="inline" method="post" action="/admin/sessions/${s.id}/revoke">${csrfField(csrf)}<button>End this session</button></form>`)
         .join("<br>") || "—";
       const toggle = u.status === "active" ? "disable" : "enable";
       return `<tr>
@@ -279,6 +281,61 @@ export function buildAdminApp(deps: AdminAppDeps): FastifyInstance {
       },
     );
   }
+
+  app.post<{ Params: { id: string } }>(
+    "/admin/sessions/:id/revoke",
+    { preHandler: requireAdmin, schema: { params: idParams, body: csrfBody } },
+    async (request, reply) => {
+      const session = await prisma.session.findUnique({ where: { id: request.params.id } });
+      if (!session) throw new AppError(404, "NOT_FOUND", "Session not found.");
+      await auth.revokeSession(session.id, "admin_revoke");
+      const a = actor(request);
+      await audit(prisma, { actorType: a.type, actorId: a.id, action: "admin.session_revoked", targetType: "session", targetId: session.id });
+      return reply.redirect("/admin/users", 303);
+    },
+  );
+
+  // ------------------------------------------------------------------ own account
+
+  app.get("/admin/account", { preHandler: requireAdmin }, async (request, reply) => {
+    const csrf = ctxOf(request).session.csrfToken;
+    return html(reply, page("Account", `<h1>Your admin account</h1>
+      <div class="card"><h2>Change password</h2>
+      <p class="muted">Needs your current password and a fresh code from your authenticator app. Afterwards every admin session ends and you sign in again.
+      To re-enrol the authenticator, use <code>node dist/cli.js admin:reset</code> on the server.</p>
+      <form method="post" action="/admin/account/password">${csrfField(csrf)}
+        <label for="cp">Current password</label><input id="cp" name="currentPassword" type="password" required autocomplete="current-password">
+        <label for="np">New password (at least 16 characters)</label><input id="np" name="newPassword" type="password" required minlength="16" autocomplete="new-password">
+        <label for="tc">Authenticator code</label><input id="tc" name="totp" required inputmode="numeric" pattern="[0-9]{6}" autocomplete="one-time-code">
+        <p><button class="primary">Change password</button></p>
+      </form></div>`, nav(request)));
+  });
+
+  app.post<{ Body: { csrf: string; currentPassword: string; newPassword: string; totp: string } }>(
+    "/admin/account/password",
+    {
+      preHandler: requireAdmin,
+      schema: {
+        body: {
+          type: "object",
+          required: ["csrf", "currentPassword", "newPassword", "totp"],
+          additionalProperties: false,
+          properties: {
+            csrf: { type: "string", maxLength: 100 },
+            currentPassword: { type: "string", maxLength: 512 },
+            newPassword: { type: "string", maxLength: 512 },
+            totp: { type: "string", maxLength: 10 },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { currentPassword, newPassword, totp } = request.body;
+      await admin.changePassword(ctxOf(request), currentPassword, newPassword, totp);
+      reply.clearCookie(COOKIE, { path: "/admin" });
+      return html(reply, page("Password changed", `<h1>Password changed</h1><p>Every admin session has ended. <a href="/admin/login">Sign in</a> with the new password.</p>`));
+    },
+  );
 
   // ------------------------------------------------------------------ health & audit
 
