@@ -243,7 +243,7 @@ Deviations from the original design, recorded in docs/07 and docs/14:
   the lease with `POST /heartbeat`. Same server rules; a WebSocket can replace polling later.
 - `clearedThroughSeq` was dropped: under option D a clear no longer removes everything below a sequence.
 - The keyboard's "no personalised learning" flag is set through a platform `EditText` input (Compose 1.7
-  has no API for it); added after slice 1, compile pending CI. Not checked with real keyboards.
+  has no API for it); added after slice 1, compiles (CI run 40182356147). Not checked with real keyboards.
 - "In chat" presence is not shown to the other user (D-11 is still open).
 
 ## Phase 6 — Security and reliability, slice 1
@@ -264,7 +264,7 @@ Deviations from the original design, recorded in docs/07 and docs/14:
 | Retention (D-12, decided 2026-10-25): calls + diagnostics 24 h, audit 365 days; plus docs/13 periods for sessions (30 d), admin sessions (7 d), finished connection requests (30 d, never the one behind the connection). Startup and hourly | Done (verified) | `test/retention.integration.test.ts` |
 | Backups keep only the last 24 hours (D-12): pruned after each successful backup | Done (verified locally) | 30 h-old file pruned; 2 h-old and new kept; unrelated files untouched |
 
-| Database roles: `vc_migrate` (schema), `vc_app` (no DDL; connections and audit log append-only; migrations read-only), `vc_maint` (read for backups; deletes old audit events). `deploy/postgres/grants.sql`; audit purge moved to `cli maint:purge-audit` | Done (verified locally; CI job added) | `deploy/postgres/verify-roles.sh`: 11 refusals each fail with "permission denied"; real API flows (`scripts/smoke-flows.mjs`), audit purge, backup and restore as the right roles; failed as expected when the audit-log restriction was removed |
+| Database roles: `vc_migrate` (schema), `vc_app` (no DDL; connections and audit log append-only; migrations read-only), `vc_maint` (read for backups; deletes old audit events). `deploy/postgres/grants.sql`; audit purge moved to `cli maint:purge-audit` | Done (verified locally and in CI, run 40182356147) | `deploy/postgres/verify-roles.sh`: 11 refusals each fail with "permission denied"; real API flows (`scripts/smoke-flows.mjs`), audit purge, backup and restore as the right roles; failed as expected when the audit-log restriction was removed |
 
 Not done in this slice: external port scan, uptime/disk/bandwidth alerts, ASVS/MASVS self-review — need
 the deployed system.
