@@ -38,7 +38,8 @@ done
 # 3. Connection strings with an inline password, unless it is an obvious placeholder or test value.
 while IFS= read -r hit; do
   case "$hit" in
-    *'<'*'>'* | *ci-only* | *test-only* | *unused* | *placeholder* | *example* | *'${'*) ;;
+    # Placeholders, test values, and passwords taken from a shell variable ($pw, ${PW}).
+    *'<'*'>'* | *ci-only* | *test-only* | *unused* | *placeholder* | *example* | *'${'* | *://*:\$*@*) ;;
     *) report "$hit" ;;
   esac
 done < <(git ls-files -z | grep -zv -e 'package-lock.json$' -e '^scripts/check-secrets.sh$' | xargs -0 grep -nIoE -e 'postgres(ql)?://[^:/@ ]+:[^@ ]+@[^ "]+' -- 2>/dev/null || true)
