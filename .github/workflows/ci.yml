@@ -134,7 +134,12 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: backend/package-lock.json
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends age postgresql-client
+      # pg_dump must match the server's major (16), as in the backup image: a newer client writes
+      # settings (e.g. transaction_timeout) that a 16 server rejects on restore.
+      - run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends age postgresql-client-16
+          echo /usr/lib/postgresql/16/bin >> "$GITHUB_PATH"
+      - run: pg_dump --version | grep -q ' 16\.'
       - run: npm ci && npm run build
         working-directory: backend
       - run: deploy/postgres/verify-roles.sh
