@@ -1,3 +1,5 @@
+import java.net.URI
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -122,7 +124,7 @@ android {
 
 androidComponents {
     onVariants(selector().withBuildType("debug")) { variant ->
-        val apiHost = java.net.URI(apiBaseUrl("debug")).host
+        val apiHost = URI(apiBaseUrl("debug")).host
             ?: throw GradleException("vaultchat.apiBaseUrl has no host")
         if (!Regex("^[A-Za-z0-9.-]+$").matches(apiHost)) throw GradleException("Unexpected API host: $apiHost")
         val task = tasks.register<DebugNetworkConfigTask>("generate${variant.name.replaceFirstChar { it.uppercase() }}NetworkConfig") {
