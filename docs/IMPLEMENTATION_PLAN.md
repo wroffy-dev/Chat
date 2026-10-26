@@ -303,7 +303,7 @@ the deployed system.
 | `deploy/coolify/README.md`: first-deployment runbook (DNS, firewall, roles, secrets, LiveKit, routing, migrate + grants order, admin and users, scheduled jobs, Android release, go-live checks, rollback) | Written, **not executed** | Coolify UI steps marked Verify |
 | docs/16 §4 variable table corrected to the real names (`TRUST_PROXY`, `FCM_CREDENTIALS_FILE`, `BACKUP_STATUS_FILE`, …) | Done | Matches `src/config/env.ts` |
 | `ADMIN_TOTP_ENC_KEY` required only by the server and admin CLI commands, so the `audit-retention` job (compose, vc_maint) holds no app secret | Done (verified) | Config test; CLI with/without the key; server refuses to start without it; verify-roles runs the job without it |
-| Two-phone test on a LAN: `docs/PHONE_TEST_GUIDE.md`; dev compose `DEV_LAN_IP` publishes LiveKit on the LAN address and sets its advertised `NODE_IP` (flag checked in livekit-server v1.13.7 source); debug network config generated from the API URL (plain HTTP only to that host and the emulator host) | Written; compose validated locally and in CI; **guide not yet carried out** | CI checks the debug APK's config for both URLs (run pending) |
+| Two-phone test on a LAN: `docs/PHONE_TEST_GUIDE.md`; dev compose `DEV_LAN_IP` publishes LiveKit on the LAN address and sets its advertised `NODE_IP` (flag checked in livekit-server v1.13.7 source); debug network config generated from the API URL (plain HTTP only to that host and the emulator host) | Written; compose validated locally and in CI; **guide not yet carried out** | CI checks the debug APK's config for the default and a LAN URL, and the dev compose binding (CI run 40370176552) |
 
 ## Next task
 
