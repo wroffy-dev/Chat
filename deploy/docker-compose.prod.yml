@@ -61,6 +61,18 @@ services:
       MIGRATE_DATABASE_URL: ${MIGRATE_DATABASE_URL:?migration role connection string}
     logging: *logging
 
+  audit-retention:
+    # Daily scheduled task: `docker compose ... --profile maint run --rm audit-retention`.
+    # Runs with the maintenance role only (DELETE on audit_events); it never holds the app's secrets.
+    profiles: ["maint"]
+    image: vaultchat-backend
+    <<: *hardening
+    command: ["node", "dist/cli.js", "maint:purge-audit"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${MAINT_DATABASE_URL:?maintenance role connection string}
+    logging: *logging
+
   livekit:
     image: livekit/livekit-server:v1.13.7   # pinned; read release notes before changing
     restart: unless-stopped

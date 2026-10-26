@@ -28,10 +28,12 @@ const envSchema = z.object({
   // Admin Console listener (docs/05-admin-console.md §2). Bound to loopback; reached via SSH tunnel.
   ADMIN_HOST: z.string().min(1).default("127.0.0.1"),
   ADMIN_PORT: port.default(3001),
-  // 32 random bytes, base64. Encrypts admin TOTP secrets at rest.
+  // 32 random bytes, base64. Encrypts admin TOTP secrets at rest. Required by the server and the
+  // admin CLI commands (requireAdminKey); maintenance jobs run without it, so they never hold it.
   ADMIN_TOTP_ENC_KEY: z
     .string()
-    .refine((v) => Buffer.from(v, "base64").length === 32, "must be 32 bytes, base64-encoded"),
+    .refine((v) => Buffer.from(v, "base64").length === 32, "must be 32 bytes, base64-encoded")
+    .optional(),
 
   // Argon2id cost (docs/04-accounts-and-authentication.md §3). Tests may lower these.
   ARGON2_MEMORY_KIB: z.coerce.number().int().min(1024).max(1_048_576).default(47_104),
@@ -77,6 +79,12 @@ export class ConfigError extends Error {
  * Validates environment variables. Error messages name the variable and the rule only —
  * never the supplied value, which may be a secret (e.g. a database URL with a password).
  */
+/** The admin TOTP encryption key, for the processes that need it (server, admin CLI commands). */
+export function requireAdminKey(config: Config): string {
+  if (!config.ADMIN_TOTP_ENC_KEY) throw new ConfigError(["ADMIN_TOTP_ENC_KEY: required (32 bytes, base64)"]);
+  return config.ADMIN_TOTP_ENC_KEY;
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const result = envSchema.safeParse(env);
   if (!result.success) {

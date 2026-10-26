@@ -16,7 +16,8 @@ column names used in the other docs.
   - `vc_app` — used by the running backend: `SELECT/INSERT/UPDATE/DELETE` as needed, **no DDL**,
     **no DELETE on `connections` and `audit_events`**.
   - Retention clean-up of `audit_events` runs in a scheduled job as `vc_maint` (DELETE on `audit_events`
-    only, by age): `node dist/cli.js maint:purge-audit` with the `vc_maint` connection string.
+    only, by age): `node dist/cli.js maint:purge-audit` with the `vc_maint` connection string (compose
+    service `audit-retention`; it runs without `ADMIN_TOTP_ENC_KEY` or any app secret).
   - `vc_maint` also runs backups, so it can SELECT every table (`pg_dump` must lock `messages` even
     though it skips its rows).
   - **Implemented** as `deploy/postgres/grants.sql` (idempotent, re-run after every migration) and

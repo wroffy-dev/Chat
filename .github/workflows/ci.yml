@@ -107,7 +107,8 @@ jobs:
           BACKUP_PGUSER: maint
           BACKUP_PGPASSWORD: placeholder
           AGE_RECIPIENT: placeholder
-        run: docker compose -f deploy/docker-compose.prod.yml --profile migrate --profile backup config -q
+          MAINT_DATABASE_URL: postgresql://maint:ci-only-password@db:5432/vc
+        run: docker compose -f deploy/docker-compose.prod.yml --profile migrate --profile backup --profile maint config -q
 
   database-roles:
     runs-on: ubuntu-latest

@@ -69,7 +69,8 @@ for _ in $(seq 1 30); do curl -fs http://127.0.0.1:3190/readyz >/dev/null && bre
 curl -fs http://127.0.0.1:3190/readyz >/dev/null || { echo "  FAILED  /readyz as vc_app"; exit 1; }
 echo "  ok      /readyz as vc_app"
 (cd backend && DATABASE_URL="$(url vc_app)" API=http://127.0.0.1:3190 node "$root/scripts/smoke-flows.mjs")
-DATABASE_URL="$(url vc_maint)" node backend/dist/cli.js maint:purge-audit
+# The maintenance job runs without the admin key, as in production.
+env -u ADMIN_TOTP_ENC_KEY DATABASE_URL="$(url vc_maint)" node backend/dist/cli.js maint:purge-audit
 
 if command -v age >/dev/null; then
   echo "backup as vc_maint, restore drill"

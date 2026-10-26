@@ -22,10 +22,12 @@ to reach it by its internal hostname (**Verify** the Coolify option name in the 
 ## 2. Repository / service layout for deployment
 
 ```
-backend/Dockerfile                  # multi-stage: build TS → slim Node runtime, non-root user
-deploy/docker-compose.prod.yml      # backend, livekit, backup (no secrets inside)
+backend/Dockerfile                  # multi-stage: build TS → slim Node runtime, non-root user (+ migrate target)
+deploy/docker-compose.prod.yml      # backend, migrate, livekit, backup (no secrets inside)
 deploy/livekit/livekit.yaml.example # config template with placeholders
-deploy/coolify/README.md            # resource-by-resource setup notes
+deploy/postgres/grants.sql          # database role privileges, re-run after every migration
+deploy/backup/                      # backup.sh, restore-test.sh, backup image
+deploy/coolify/README.md            # step-by-step first deployment (runbook)
 ```
 
 Docker strategy: one image per service, pinned base images by digest, non-root users, read-only root
@@ -58,20 +60,24 @@ A subdomain of an existing domain costs nothing extra. Use DNS-only records (no 
 \* Two LiveKit instances on one host need different media ports and firewall rules. If that is too much,
 skip staging LiveKit and test calls against production LiveKit with staging backend keys disabled — decide in D-10.
 
-### Backend environment variables (defined by this project — proposed names)
+### Backend environment variables (as implemented; the full list with comments is `backend/.env.example`)
 
 | Variable | Example (placeholder) | Secret? |
 |---|---|---|
 | `NODE_ENV` | `production` | No |
-| `PORT` / `ADMIN_PORT` | `3000` / `3001` | No |
+| `HOST` / `PORT` | `0.0.0.0` / `3000` | No |
+| `ADMIN_HOST` / `ADMIN_PORT` | `0.0.0.0` inside the container (published on `127.0.0.1` only) / `3001` | No |
 | `DATABASE_URL` | `postgresql://vc_app:<password>@<db-host>:5432/vaultchat` | **Yes** |
-| `MIGRATE_DATABASE_URL` | `postgresql://vc_migrate:<password>@…` | **Yes** |
-| `TRUST_PROXY_CIDR` | Docker network CIDR of Traefik | No |
+| `MIGRATE_DATABASE_URL` | `postgresql://vc_migrate:<password>@…` (migrate job only) | **Yes** |
+| `TRUST_PROXY` | Traefik's Docker network CIDR, comma-separated if several | No |
 | `LIVEKIT_PUBLIC_URL` | `wss://rtc.<domain>` | No |
 | `LIVEKIT_API_URL` | `http://livekit:7880` | No |
-| `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | `<livekit-key>` / `<livekit-secret>` | **Secret** |
+| `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | `<livekit-key>` / `<livekit-secret>` (32+ characters) | **Secret** |
 | `ADMIN_TOTP_ENC_KEY` | 32 random bytes, base64 | **Secret** |
-| `GOOGLE_APPLICATION_CREDENTIALS` | `/run/secrets/fcm-service-account.json` (mounted file) | File is **secret** |
+| `FCM_CREDENTIALS_FILE` | `/run/secrets/fcm-service-account.json` (mounted file; optional) | File is **secret** |
+| `BACKUP_STATUS_FILE` | `/backups/last-success` (read-only mount; optional) | No |
+| `CALL_RING_TIMEOUT_SECONDS` | `45` | No |
+| `ARGON2_MEMORY_KIB` / `ARGON2_TIME_COST` | defaults; production refuses less than 19456 KiB | No |
 | `LOG_LEVEL` | `info` | No |
 
 ### LiveKit environment variables (verified in `livekit/livekit` `cmd/server/main.go`, 2026-10-24)

@@ -30,7 +30,7 @@ describe.skipIf(!TEST_DB_URL)("Admin Console (PostgreSQL)", () => {
     const hasher = new PasswordHasher({ memoryCost: 1024, timeCost: 1 });
     const clock = () => new Date(nowMs);
     auth = new AuthService(database.prisma, hasher, clock);
-    adminService = new AdminService(database.prisma, hasher, config.ADMIN_TOTP_ENC_KEY, clock);
+    adminService = new AdminService(database.prisma, hasher, config.ADMIN_TOTP_ENC_KEY!, clock);
     const media = {
       publicUrl: "wss://rtc.example.test",
       createRoom: async () => {},

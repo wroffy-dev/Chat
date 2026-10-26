@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ConfigError, loadConfig } from "../src/config/env.js";
+import { ConfigError, loadConfig, requireAdminKey } from "../src/config/env.js";
 
 const base = {
   DATABASE_URL: "postgresql://u:test-only@localhost:5432/db",
@@ -36,6 +36,12 @@ describe("loadConfig", () => {
 
   it("requires a 32-byte admin TOTP key and production-grade Argon2 settings", () => {
     expect(() => loadConfig({ ...base, ADMIN_TOTP_ENC_KEY: "dG9vIHNob3J0" })).toThrow(/ADMIN_TOTP_ENC_KEY/);
+    // Optional at load time (maintenance jobs never hold it), required where it is used.
+    const withoutKey: Record<string, string | undefined> = { ...base };
+    delete withoutKey["ADMIN_TOTP_ENC_KEY"];
+    const noKey = loadConfig(withoutKey);
+    expect(() => requireAdminKey(noKey)).toThrow(/ADMIN_TOTP_ENC_KEY/);
+    expect(requireAdminKey(loadConfig(base))).toBe(base.ADMIN_TOTP_ENC_KEY);
     expect(() => loadConfig({ ...base, NODE_ENV: "production", ARGON2_MEMORY_KIB: "1024" })).toThrow(/ARGON2_MEMORY_KIB/);
     expect(loadConfig({ ...base, NODE_ENV: "production" }).ARGON2_MEMORY_KIB).toBe(47_104);
   });

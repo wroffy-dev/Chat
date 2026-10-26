@@ -5,7 +5,7 @@ import { PasswordHasher } from "./auth/passwords.js";
 import { AuthService } from "./auth/service.js";
 import { RetentionService } from "./retention/service.js";
 import { generateTotpSecret, otpauthUri, base32Encode, verifyTotp } from "./auth/totp.js";
-import { ConfigError, loadConfig } from "./config/env.js";
+import { ConfigError, loadConfig, requireAdminKey } from "./config/env.js";
 import { PrismaDatabase } from "./db/database.js";
 import { AppError } from "./errors.js";
 
@@ -115,7 +115,8 @@ async function main() {
   const database = new PrismaDatabase(config, resolve(config.MIGRATIONS_DIR));
   const hasher = new PasswordHasher({ memoryCost: config.ARGON2_MEMORY_KIB, timeCost: config.ARGON2_TIME_COST });
   const auth = new AuthService(database.prisma, hasher);
-  const admin = new AdminService(database.prisma, hasher, config.ADMIN_TOTP_ENC_KEY);
+  // Only the admin commands need the TOTP encryption key; maintenance jobs run without it.
+  const adminService = () => new AdminService(database.prisma, hasher, requireAdminKey(config));
   const reader = new LineReader();
   const system = { type: "system" as const, id: null };
 
@@ -125,6 +126,7 @@ async function main() {
       case "admin:reset": {
         const username = arg("username");
         if (!username) throw new AdminSetupError("--username is required");
+        const admin = adminService(); // fails here, before any prompt, if the key is missing
         if (command === "admin:create" && (await admin.isInitialised())) throw new AdminSetupError("An administrator already exists. Use admin:reset.");
         const password = await askNewPassword(reader, "New admin password (min 16 characters)");
         admin.validateCredentials(username, password);
@@ -169,7 +171,7 @@ async function main() {
         process.exitCode = 1;
     }
   } catch (err) {
-    if (err instanceof AdminSetupError || err instanceof AppError) {
+    if (err instanceof AdminSetupError || err instanceof AppError || err instanceof ConfigError) {
       console.error(`Error: ${err.message}`);
       process.exitCode = 1;
     } else {

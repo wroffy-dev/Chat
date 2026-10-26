@@ -288,6 +288,14 @@ the deployed system.
 | Account page: admin password change with current password + fresh TOTP code; ends every admin session; 5 wrong attempts end all sessions; audited | Done (verified) | Same file |
 | Still not built from docs/05: Errors page (`error_events` table does not exist), Settings (`app_settings`), TOTP re-enrolment in the browser (use `cli admin:reset`) | Not started | |
 
+## Deployment preparation
+
+| Item | Status | Evidence |
+|---|---|---|
+| `deploy/coolify/README.md`: first-deployment runbook (DNS, firewall, roles, secrets, LiveKit, routing, migrate + grants order, admin and users, scheduled jobs, Android release, go-live checks, rollback) | Written, **not executed** | Coolify UI steps marked Verify |
+| docs/16 §4 variable table corrected to the real names (`TRUST_PROXY`, `FCM_CREDENTIALS_FILE`, `BACKUP_STATUS_FILE`, …) | Done | Matches `src/config/env.ts` |
+| `ADMIN_TOTP_ENC_KEY` required only by the server and admin CLI commands, so the `audit-retention` job (compose, vc_maint) holds no app secret | Done (verified) | Config test; CLI with/without the key; server refuses to start without it; verify-roles runs the job without it |
+
 ## Next task
 
 1. **Owner actions to test for real:** create a Firebase project (android/README.md "Push notifications"),
@@ -295,5 +303,6 @@ the deployed system.
    phones; record results against docs/09 (T-SETUP-1/2, T-CLEAN, T-BG-VOICE/VIDEO).
 2. Chat on two phones: open, send both ways, Back on one phone, background for over a minute; record
    results.
-3. Phase 7 (private release) — needs the VPS and your go-ahead for any deployment.
+3. Phase 7 (private release) — needs the VPS and your go-ahead for any deployment. The step-by-step
+   runbook is `deploy/coolify/README.md` (not yet executed).
 4. Calling later: core-telecom (S-2), WebRTC stats in diagnostics, quality benchmarks (D-13).

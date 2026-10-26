@@ -11,13 +11,14 @@ import { RealtimeHub } from "./realtime/hub.js";
 import { RetentionService } from "./retention/service.js";
 import { LiveKitGateway } from "./calls/media.js";
 import { createFcmTransport, PushService } from "./push/service.js";
-import { ConfigError, loadConfig } from "./config/env.js";
+import { ConfigError, loadConfig, requireAdminKey } from "./config/env.js";
 import { PrismaDatabase } from "./db/database.js";
 
 async function main() {
   let config;
   try {
     config = loadConfig();
+    requireAdminKey(config);
   } catch (err) {
     if (err instanceof ConfigError) {
       // Messages name variables and rules only, never values.
@@ -30,7 +31,7 @@ async function main() {
   const database = new PrismaDatabase(config, resolve(config.MIGRATIONS_DIR));
   const hasher = new PasswordHasher({ memoryCost: config.ARGON2_MEMORY_KIB, timeCost: config.ARGON2_TIME_COST });
   const auth = new AuthService(database.prisma, hasher);
-  const admin = new AdminService(database.prisma, hasher, config.ADMIN_TOTP_ENC_KEY);
+  const admin = new AdminService(database.prisma, hasher, requireAdminKey(config));
   const connections = new ConnectionService(database.prisma);
   const media =
     config.LIVEKIT_PUBLIC_URL && config.LIVEKIT_API_URL && config.LIVEKIT_API_KEY && config.LIVEKIT_API_SECRET
