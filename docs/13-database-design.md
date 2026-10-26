@@ -301,6 +301,15 @@ Default isolation READ COMMITTED is sufficient with the explicit row locks above
   rolling back the schema.
 - Raw SQL migrations for things Prisma does not model: partial unique indexes, `CHECK` constraints, role grants.
 
+### app_settings (implemented)
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| `key` | text PK | no | CHECK: one of the allow-listed keys in docs/05 §5 |
+| `value` | jsonb | no | Validated by the backend before writing |
+| `updated_at` | timestamptz | no | |
+| `updated_by` | uuid | yes | Admin ID (no FK) |
+
 Retention is enforced by `RetentionService` (backend), run at startup and hourly.
 
 ## 7. Backup and restore

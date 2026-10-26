@@ -4,6 +4,7 @@ import { type AppError, appError } from "../errors.js";
 import type { MediaGateway, MediaWebhookEvent } from "./media.js";
 import type { PushService } from "../push/service.js";
 import type { EventPublisher } from "../realtime/events.js";
+import type { SettingsService } from "../settings/service.js";
 
 const SECOND = 1000;
 
@@ -42,7 +43,13 @@ export class CallService {
     private readonly now: () => Date = () => new Date(),
     private readonly push: PushService | null = null,
     private readonly events: EventPublisher | null = null,
+    /** Admin Console settings; without it the constructor's ring timeout and 1080p apply. */
+    private readonly settings: SettingsService | null = null,
   ) {}
+
+  private async ringSeconds(): Promise<number> {
+    return this.settings ? this.settings.get("call.ring_timeout_seconds") : this.ringTimeoutSeconds;
+  }
 
   /** Tells both parties' open apps that this call changed; they re-read it over the API. */
   private changed(call: Pick<Call, "id" | "callerUserId" | "calleeUserId">) {
@@ -52,8 +59,9 @@ export class CallService {
   /** Fire-and-forget push; failures are logged inside PushService and never affect the call. */
   private notify(userId: string, payload: { t: "call" | "call_end"; id: string }) {
     if (!this.push) return;
-    void this.push
-      .notifyUser(userId, payload, { highPriority: true, ttlSeconds: this.ringTimeoutSeconds })
+    const push = this.push;
+    void this.ringSeconds()
+      .then((ttlSeconds) => push.notifyUser(userId, payload, { highPriority: true, ttlSeconds }))
       .catch(() => undefined);
   }
 
@@ -71,7 +79,7 @@ export class CallService {
 
     const room = `call_${randomUUID()}`;
     try {
-      await media.createRoom(room, this.ringTimeoutSeconds + 30);
+      await media.createRoom(room, (await this.ringSeconds()) + 30);
     } catch {
       throw appError(503, "MEDIA_UNAVAILABLE");
     }
@@ -188,7 +196,7 @@ export class CallService {
   /** Ends calls nobody answered and accepted calls nobody joined. Run every few seconds. */
   async sweep(): Promise<number> {
     const now = this.now().getTime();
-    const ringingBefore = new Date(now - this.ringTimeoutSeconds * SECOND);
+    const ringingBefore = new Date(now - (await this.ringSeconds()) * SECOND);
     const acceptedBefore = new Date(now - JOIN_TIMEOUT_MS);
     const stale = await this.prisma.call.findMany({
       where: {
@@ -249,8 +257,8 @@ export class CallService {
       callId: call.id,
       livekitUrl: media.publicUrl,
       livekitToken,
-      maxVideoQuality: "1080p",
-      ringTimeoutSeconds: this.ringTimeoutSeconds,
+      maxVideoQuality: this.settings ? await this.settings.get("call.max_video_quality") : "1080p",
+      ringTimeoutSeconds: await this.ringSeconds(),
     };
   }
 

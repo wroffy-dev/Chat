@@ -4,6 +4,7 @@ import { UserRateLimiter } from "../connections/service.js";
 import { AppError, appError, DEFAULT_MESSAGES } from "../errors.js";
 import type { PushService } from "../push/service.js";
 import type { EventPublisher } from "../realtime/events.js";
+import type { SettingsService } from "../settings/service.js";
 
 const SECOND = 1000;
 const MINUTE = 60 * SECOND;
@@ -76,6 +77,8 @@ export class ChatService {
     private readonly now: () => Date = () => new Date(),
     private readonly push: PushService | null = null,
     private readonly events: EventPublisher | null = null,
+    /** Admin Console settings: may shorten the 24 h backstop (never lengthen it, D-02). */
+    private readonly settings: SettingsService | null = null,
   ) {}
 
   /** Tells both participants' open apps to re-read the conversation (new message or deletions). */
@@ -241,7 +244,10 @@ export class ChatService {
       expiredLeases += n;
     }
 
-    const cutoff = new Date(now.getTime() - CHAT_POLICY.backstopMs);
+    const backstopMs = this.settings
+      ? Math.min(CHAT_POLICY.backstopMs, (await this.settings.get("chat.unread_backstop_hours")) * 60 * MINUTE)
+      : CHAT_POLICY.backstopMs;
+    const cutoff = new Date(now.getTime() - backstopMs);
     const old = await this.prisma.message.findMany({
       where: { createdAt: { lt: cutoff } },
       distinct: ["conversationId"],

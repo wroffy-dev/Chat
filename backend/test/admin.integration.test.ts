@@ -7,6 +7,7 @@ import { AuthService } from "../src/auth/service.js";
 import { generateTotpSecret, totpCode, totpStep } from "../src/auth/totp.js";
 import { PrismaDatabase } from "../src/db/database.js";
 import { RealtimeHub } from "../src/realtime/hub.js";
+import { SettingsService } from "../src/settings/service.js";
 import { resetDatabase, TEST_DB_URL, testConfig } from "./helpers.js";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -39,7 +40,9 @@ describe.skipIf(!TEST_DB_URL)("Admin Console (PostgreSQL)", () => {
       verifyWebhook: async () => ({ event: "none" }),
       ping: async () => {},
     };
-    app = buildAdminApp({ config, prisma: database.prisma, database, auth, admin: adminService, media, pushEnabled: true, realtime: new RealtimeHub(), logger: false });
+    app = buildAdminApp({ config, prisma: database.prisma, database, auth, admin: adminService, media, pushEnabled: true, realtime: new RealtimeHub(),
+      settings: new SettingsService(database.prisma, { "call.max_video_quality": "1080p", "call.ring_timeout_seconds": 45, "chat.unread_backstop_hours": 24, "push.enabled": true }, 0),
+      logger: false });
     await app.ready();
   });
 
@@ -273,5 +276,19 @@ describe.skipIf(!TEST_DB_URL)("Admin Console (PostgreSQL)", () => {
     expect(relogin.statusCode).toBe(303);
     expect(await database.prisma.auditEvent.count({ where: { action: "admin.password_changed" } })).toBe(1);
     expect(await database.prisma.auditEvent.count({ where: { action: "admin.password_change_failed" } })).toBe(1);
+  });
+
+  it("edits allow-listed settings with the CSRF token, refusing bad values", async () => {
+    await createAdmin();
+    const { cookie, csrf } = await loginCookie();
+    const page = (await app.inject({ method: "GET", url: "/admin/settings", headers: { cookie } })).body;
+    expect(page).toContain("call.ring_timeout_seconds");
+    expect(page).toContain('<option selected>1080p</option>');
+
+    expect((await post("/admin/settings", cookie, { csrf, key: "call.ring_timeout_seconds", value: "30" })).statusCode).toBe(303);
+    expect((await app.inject({ method: "GET", url: "/admin/settings", headers: { cookie } })).body).toContain('value="30"');
+    expect((await post("/admin/settings", cookie, { csrf, key: "chat.unread_backstop_hours", value: "48" })).statusCode).toBe(400);
+    expect((await post("/admin/settings", cookie, { key: "push.enabled", value: "false" } as Record<string, string>)).statusCode).not.toBe(303);
+    expect(await database.prisma.appSetting.count()).toBe(1);
   });
 });

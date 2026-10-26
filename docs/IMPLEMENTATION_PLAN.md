@@ -286,7 +286,8 @@ the deployed system.
 | Calls page: last 24 h, outcome, connected time, each phone's quality summary (escaped) — for reading the call test results | Done (verified) | Same file |
 | End one app session (button per session on the Users page; audited `admin.session_revoked`) | Done (verified) | `test/admin.integration.test.ts` |
 | Account page: admin password change with current password + fresh TOTP code; ends every admin session; 5 wrong attempts end all sessions; audited | Done (verified) | Same file |
-| Still not built from docs/05: Errors page (`error_events` table does not exist), Settings (`app_settings`), TOTP re-enrolment in the browser (use `cli admin:reset`) | Not started | |
+| Settings page (`app_settings`, migration `app_settings`): video-quality cap, ring timeout, message lifetime (1–24 h, D-02 cap), push on/off; validated, audited, applied within ~10 s | Done (verified) | `test/settings.integration.test.ts`, admin test |
+| Still not built from docs/05: Errors page (`error_events` table does not exist), `app.*` version settings, TOTP re-enrolment in the browser (use `cli admin:reset`) | Not started | |
 
 ## Deployment preparation
 

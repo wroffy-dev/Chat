@@ -286,3 +286,17 @@ model Message {
   @@index([createdAt])
   @@map("messages")
 }
+
+// ---------------------------------------------------------------------------------------------
+// Admin-editable settings (docs/05-admin-console.md §5). Allow-listed keys, validated in code.
+// ---------------------------------------------------------------------------------------------
+
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(3)
+  /// Admin who last changed it (no FK: the admin can be reset).
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  @@map("app_settings")
+}

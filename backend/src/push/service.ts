@@ -19,6 +19,8 @@ export class PushService {
     private readonly prisma: PrismaClient,
     private readonly transport: PushTransport | null,
     private readonly log: (msg: string, extra?: Record<string, unknown>) => void = () => {},
+    /** The Admin Console's push.enabled switch; true when absent. */
+    private readonly switchedOn: () => Promise<boolean> = async () => true,
   ) {}
 
   get enabled(): boolean {
@@ -43,7 +45,7 @@ export class PushService {
    * (docs/10-notifications.md §6), and the caller sees "No answer" after the ring timeout.
    */
   async notifyUser(userId: string, payload: PushPayload, opts: { highPriority: boolean; ttlSeconds: number }): Promise<void> {
-    if (!this.transport) return;
+    if (!this.transport || !(await this.switchedOn())) return;
     const sessions = await this.prisma.session.findMany({
       where: { userId, revokedAt: null, fcmToken: { not: null } },
       select: { id: true, fcmToken: true },

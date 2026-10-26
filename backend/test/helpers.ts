@@ -43,6 +43,6 @@ export const TEST_DB_URL = process.env["TEST_DATABASE_URL"];
 /** Empties the Phase 2 tables. Only ever pointed at the disposable TEST_DATABASE_URL. */
 export async function resetDatabase(prisma: { $executeRawUnsafe(sql: string): Promise<unknown> }) {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE "messages", "conversation_participants", "conversations", "call_diagnostics", "calls", "connections", "connection_requests", "qr_tokens", "audit_events", "admin_sessions", "admin_accounts", "sessions", "users" RESTART IDENTITY CASCADE',
+    'TRUNCATE "app_settings", "messages", "conversation_participants", "conversations", "call_diagnostics", "calls", "connections", "connection_requests", "qr_tokens", "audit_events", "admin_sessions", "admin_accounts", "sessions", "users" RESTART IDENTITY CASCADE',
   );
 }

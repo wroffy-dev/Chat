@@ -36,7 +36,7 @@ const STYLE = `
 export function page(title: string, body: string, nav?: { csrf: string; username: string }): string {
   const header = nav
     ? `<header><strong>Vault Chat Admin</strong>
-        <a href="/admin/users">Users</a><a href="/admin/calls">Calls</a><a href="/admin/health">Health</a><a href="/admin/audit">Audit log</a><a href="/admin/account">Account</a>
+        <a href="/admin/users">Users</a><a href="/admin/calls">Calls</a><a href="/admin/health">Health</a><a href="/admin/settings">Settings</a><a href="/admin/audit">Audit log</a><a href="/admin/account">Account</a>
         <span class="muted">${esc(nav.username)}</span>
         <form class="inline" method="post" action="/admin/logout"><input type="hidden" name="csrf" value="${esc(nav.csrf)}"><button>Log out</button></form>
       </header>`

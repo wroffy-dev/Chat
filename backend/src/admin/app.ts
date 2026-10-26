@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import type { MediaGateway } from "../calls/media.js";
 import type { RealtimeHub } from "../realtime/hub.js";
+import { SETTING_DEFS, SETTING_KEYS, type SettingsService } from "../settings/service.js";
 import cookie from "@fastify/cookie";
 import formbody from "@fastify/formbody";
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest, type FastifyServerOptions } from "fastify";
@@ -29,6 +30,7 @@ export interface AdminAppDeps {
   media?: MediaGateway | null;
   pushEnabled?: boolean;
   realtime?: RealtimeHub;
+  settings?: SettingsService;
   logger?: FastifyServerOptions["logger"];
 }
 
@@ -381,6 +383,50 @@ export function buildAdminApp(deps: AdminAppDeps): FastifyInstance {
         <tbody>${rows.join("") || `<tr><td colspan="6" class="muted">No events.</td></tr>`}</tbody></table>${more}`, nav(request)));
     },
   );
+
+  // ------------------------------------------------------------------ settings (docs/05 §5)
+
+  const settings = deps.settings;
+  if (settings) {
+    app.get("/admin/settings", { preHandler: requireAdmin }, async (request, reply) => {
+      const csrf = ctxOf(request).session.csrfToken;
+      const values = await settings.all();
+      const forms = SETTING_KEYS.map((key) => {
+        const def = SETTING_DEFS[key];
+        const current = values[key];
+        const id = `s-${key.replace(/\W/g, "-")}`;
+        const input =
+          def.kind === "enum"
+            ? `<select id="${id}" name="value">${def.values.map((v) => `<option${v === current ? " selected" : ""}>${esc(v)}</option>`).join("")}</select>`
+            : def.kind === "int"
+              ? `<input id="${id}" name="value" type="number" min="${def.min}" max="${def.max}" value="${esc(String(current))}" required>`
+              : `<select id="${id}" name="value"><option value="true"${current === true ? " selected" : ""}>on</option><option value="false"${current === false ? " selected" : ""}>off</option></select>`;
+        return `<form class="card" method="post" action="/admin/settings">${csrfField(csrf)}<input type="hidden" name="key" value="${esc(key)}">
+          <label for="${id}"><strong>${esc(def.label)}</strong> <span class="muted">(${esc(key)})</span></label>${input}
+          <p><button>Save</button></p></form>`;
+      });
+      return html(reply, page("Settings", `<h1>Settings</h1><p class="muted">Changes apply within about 10 seconds and are recorded in the audit log.</p>${forms.join("")}`, nav(request)));
+    });
+
+    app.post<{ Body: { csrf: string; key: string; value: string } }>(
+      "/admin/settings",
+      {
+        preHandler: requireAdmin,
+        schema: {
+          body: {
+            type: "object",
+            required: ["csrf", "key", "value"],
+            additionalProperties: false,
+            properties: { csrf: { type: "string", maxLength: 100 }, key: { type: "string", maxLength: 64 }, value: { type: "string", maxLength: 32 } },
+          },
+        },
+      },
+      async (request, reply) => {
+        await settings.set(request.body.key, request.body.value, ctxOf(request).admin.id);
+        return reply.redirect("/admin/settings", 303);
+      },
+    );
+  }
 
   // ------------------------------------------------------------------ calls (D-12: kept 24 h)
 

@@ -65,10 +65,15 @@ Only keys in this allow-list can be changed. Each has a validated type and range
 |---|---|---|---|
 | `call.max_video_quality` | `1080p` \| `720p` \| `540p` \| `360p` | `1080p` | Server-side cap sent to clients with call tokens |
 | `call.ring_timeout_seconds` | 20–90 | 45 | How long an incoming call rings |
-| `chat.unread_backstop_hours` | 1–168 | **24** (D-02) | Maximum lifetime of any message |
+| `chat.unread_backstop_hours` | 1–**24** (D-02 caps it) | **24** (D-02) | Maximum lifetime of any message; can only be shortened |
 | `app.min_supported_version_code` | integer | 1 | Older APKs are told to update |
 | `app.latest_version_code` / `app.latest_apk_sha256` | integer / hex | — | Shown to users for manual update verification |
 | `push.enabled` | boolean | true | Emergency switch to stop all FCM sends |
+
+**Implemented:** `call.max_video_quality`, `call.ring_timeout_seconds`, `chat.unread_backstop_hours`,
+`push.enabled` — table `app_settings` (allow-listed keys enforced by a CHECK), values validated, every
+change audited with old → new value, applied within ~10 s. **Not yet:** the `app.*` version keys (they
+need the app to report its version on every request and a `426`/`403 UPGRADE_REQUIRED` path).
 
 ## 6. Logging and privacy
 
