@@ -209,7 +209,7 @@ fun VaultChatNavHost(container: AppContainer) {
             val kind = if (route.video) CallKind.VIDEO else CallKind.VOICE
             val viewModel: CallViewModel = viewModel(
                 factory = viewModelFactory {
-                    initializer { CallViewModel(context.applicationContext as Application, container.callRepository, container.realtime) }
+                    initializer { CallViewModel(context.applicationContext as Application, container.callRepository, container.realtime, container.systemCalls) }
                 },
             )
             CallScreen(

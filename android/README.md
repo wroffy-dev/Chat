@@ -51,3 +51,10 @@ committed. To enable it on the release/build machine:
 
 Without these, the app works but incoming calls ring only while it is open. FCM needs Google Play
 services on the phone (open decision D-08).
+
+## System call integration (experimental, off by default)
+
+`vaultchat.systemCalls=true` in `gradle.properties` (or `-Pvaultchat.systemCalls=true`) adds calls to
+Android's call framework with androidx core-telecom: headset, car and watch buttons can answer and end
+calls, and the system routes call audio. It compiles but has **not been tested on a phone**; try it on
+both phones before relying on it. Details and limits: docs/08-calling.md §10.2.

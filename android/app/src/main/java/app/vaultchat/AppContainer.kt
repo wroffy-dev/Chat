@@ -7,6 +7,8 @@ import app.vaultchat.data.auth.AuthorizedCaller
 import app.vaultchat.data.call.RemoteCallRepository
 import app.vaultchat.data.chat.RemoteChatRepository
 import app.vaultchat.data.realtime.RealtimeClient
+import app.vaultchat.domain.call.SystemCalls
+import app.vaultchat.platform.call.TelecomSystemCalls
 import app.vaultchat.domain.chat.ChatRepository
 import app.vaultchat.domain.chat.PendingLeaveStore
 import app.vaultchat.platform.chat.PrefsPendingLeaveStore
@@ -74,4 +76,7 @@ class AppContainer(context: Context) {
     val pendingIncomingCallId = MutableStateFlow<String?>(null)
 
     val permissionPreferences = PermissionPreferences(appContext)
+
+    /** Android's call framework for calls; null unless the build enables it (docs/08-calling.md §10). */
+    val systemCalls: SystemCalls? = if (BuildConfig.SYSTEM_CALLS) TelecomSystemCalls(appContext) else null
 }

@@ -20,8 +20,11 @@ import io.livekit.android.webrtc.getStats
 import kotlinx.coroutines.withTimeoutOrNull
 import livekit.org.webrtc.RTCStatsReport
 import com.twilio.audioswitch.AudioDevice
+import io.livekit.android.AudioOptions
 import io.livekit.android.LiveKit
+import io.livekit.android.LiveKitOverrides
 import io.livekit.android.RoomOptions
+import io.livekit.android.audio.AudioHandler
 import io.livekit.android.audio.AudioSwitchHandler
 import io.livekit.android.events.RoomEvent
 import io.livekit.android.room.Room
@@ -49,6 +52,8 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
     // nobody watches. Both are off by default in the SDK (docs/08-calling.md §8).
     val quality: CaptureQuality = chooseQuality(appContext)
 
+    private val audio = HandoverAudioHandler(AudioSwitchHandler(appContext))
+
     val room: Room = LiveKit.create(
         appContext,
         RoomOptions(
@@ -58,6 +63,7 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
             // Simulcast lets the server drop to a lower layer instantly when the receiver's network weakens.
             videoTrackPublishDefaults = VideoTrackPublishDefaults(videoEncoding = preset(quality).encoding, simulcast = true),
         ),
+        LiveKitOverrides(audioOptions = AudioOptions(audioHandler = audio)),
     )
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -112,8 +118,13 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
         (room.localParticipant.getTrackPublication(Track.Source.CAMERA)?.track as? LocalVideoTrack)?.switchCamera()
     }
 
+    /** The system call (core-telecom) routes audio from now on; see [HandoverAudioHandler]. */
+    fun handAudioToSystem() = audio.handOver()
+
     override fun setSpeakerphone(enabled: Boolean) {
-        val handler = room.audioHandler as? AudioSwitchHandler ?: return
+        // With a system call the speaker goes through telecom instead (SystemCallSync).
+        if (audio.handedOver) return
+        val handler = audio.own
         val wanted = handler.availableAudioDevices.firstOrNull {
             if (enabled) it is AudioDevice.Speakerphone else it is AudioDevice.Earpiece
         }
@@ -173,4 +184,36 @@ private fun chooseQuality(context: Context): CaptureQuality {
         false
     }
     return VideoQualityPolicy.choose(supports1080p30, power?.currentThermalStatus ?: 0, power?.isPowerSaveMode == true)
+}
+
+/**
+ * LiveKit's usual audio routing until a system call takes over (docs/08-calling.md §10). Two owners
+ * of audio mode, focus and routing would fight, so once Android's telecom framework has the call
+ * this stops LiveKit's handler. Without a system call it behaves exactly like [AudioSwitchHandler].
+ */
+private class HandoverAudioHandler(val own: AudioSwitchHandler) : AudioHandler {
+    private var started = false
+
+    @Volatile
+    var handedOver = false
+        private set
+
+    @Synchronized
+    override fun start() {
+        started = true
+        if (!handedOver) own.start()
+    }
+
+    @Synchronized
+    override fun stop() {
+        if (started && !handedOver) own.stop()
+        started = false
+    }
+
+    @Synchronized
+    fun handOver() {
+        if (handedOver) return
+        handedOver = true
+        if (started) own.stop()
+    }
 }

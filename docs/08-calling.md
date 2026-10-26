@@ -236,6 +236,25 @@ Permissions are requested at the moment they are needed, with a one-line explana
 - Incoming GSM/VoIP call during our call: Telecom `onSetCallInactive` → mute mic and pause video; on
   resume → unmute (if it was unmuted) and resume video.
 
+**Implemented, off by default, not yet tested on a phone (2026-10-26).** Build with
+`vaultchat.systemCalls=true` to switch it on. What exists:
+
+- `SystemCallSync` (domain, JVM-tested) follows the call state: it adds the call to the system when it
+  starts ringing, answers it (incoming) or sets it active (outgoing) when it connects, passes speaker
+  changes on, and disconnects it with a matching cause when the call ends. Answer and end from the
+  system (headset, car, watch) become the app's own accept/decline/hang-up. If the system refuses the
+  call, the call goes on in the app as before.
+- Hold from the system mutes the microphone; resuming unmutes only if the hold muted it. Video is not
+  paused yet.
+- Audio: LiveKit's own handler (`AudioSwitchHandler`) routes audio until the system call is registered,
+  then stops, and the speaker button uses Telecom endpoints (a connected headset is left alone). This
+  is the S-2 question: it compiles, but whether it routes correctly on both phones is unknown.
+- Android draws no call screen for self-managed calls; the app's call screen and notifications stay.
+- Not done: the call is added only while the app's call screen is open, so with the app closed a
+  headset cannot answer before the screen opens; the 5-second CallStyle notification rule is not
+  checked for calls added while the app is in the foreground; the foreground service keeps the
+  `microphone|camera` types (no `phoneCall`).
+
 ### 10.3 Backgrounding
 
 - Voice call: continues in the background via the foreground service.

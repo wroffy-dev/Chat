@@ -26,6 +26,10 @@ android {
             val value = findProperty("vaultchat.fcm.$key")?.toString() ?: ""
             buildConfigField("String", "FCM_${key.uppercase()}", "\"$value\"")
         }
+        // Calls through Android's call framework (headset/car/watch buttons, system audio routing).
+        // Off until tested on the two phones: set vaultchat.systemCalls=true to try it (docs/08 §10).
+        val systemCalls = findProperty("vaultchat.systemCalls")?.toString() == "true"
+        buildConfigField("boolean", "SYSTEM_CALLS", systemCalls.toString())
         // Working application ID; final name is open decision D-14 (docs/17-open-decisions.md).
         applicationId = "app.vaultchat"
         // Proposed floor; final value depends on the two users' phones (open decision D-09).
@@ -100,6 +104,8 @@ dependencies {
     implementation(libs.camerax.view)
     // WebRTC calls through the self-hosted LiveKit SFU (docs/08-calling.md).
     implementation(libs.livekit.android)
+    // Self-managed calls in Android's telecom framework; used only when SYSTEM_CALLS is on.
+    implementation(libs.core.telecom)
     // FCM only (no Analytics/Crashlytics). Initialised manually from build properties; see docs/10.
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)

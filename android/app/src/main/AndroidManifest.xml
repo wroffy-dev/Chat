@@ -15,6 +15,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <!-- Self-managed calls in Android's call framework (only used when the build enables it). -->
+    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
 
     <!-- allowBackup=false and the extraction rules keep session tokens out of cloud and
          device-transfer backups (docs/04-accounts-and-authentication.md §4). -->

@@ -14,6 +14,7 @@ okhttp = "4.12.0"
 zxing = "3.5.3"
 camerax = "1.4.1"
 livekit = "2.29.1"
+coreTelecom = "1.0.0"
 firebaseBom = "33.7.0"
 junit = "4.13.2"
 
@@ -37,6 +38,7 @@ zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" 
 camerax-camera2 = { group = "androidx.camera", name = "camera-camera2", version.ref = "camerax" }
 camerax-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "camerax" }
 camerax-view = { group = "androidx.camera", name = "camera-view", version.ref = "camerax" }
+core-telecom = { group = "androidx.core", name = "core-telecom", version.ref = "coreTelecom" }
 livekit-android = { group = "io.livekit", name = "livekit-android", version.ref = "livekit" }
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
 firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging" }
