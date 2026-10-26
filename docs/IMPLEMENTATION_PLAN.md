@@ -277,7 +277,7 @@ the deployed system.
 | Android `RealtimeClient` (OkHttp, data layer): reconnect with backoff, token refresh on 4401, stops on 4403; runs while signed in and in front | Done (verified against the real backend) | `RealBackendChatTest` with live signals on both sides |
 | Chat re-reads at once on a signal; polls 10 s while connected (2 s otherwise); heartbeat time-based. Incoming-call check wakes on `call.changed` (3 s / 15 s polling) | Done (chat verified on JVM; app compiles and lints, CI run 40190854554) | `ChatControllerTest` (signal + fallback test) |
 | The call screen re-reads its call at once on `call.changed` (10 s polling while connected, 2 s otherwise) | Done (verified on JVM) | `CallControllerTest` |
-| Debug-build overlay on the call screen with live RTT, jitter, loss, resolution/fps, limitation reason, freezes and path — for the two-phone tests | Done (logic verified on JVM; screen compile pending CI) | `CallControllerTest` |
+| Debug-build overlay on the call screen with live RTT, jitter, loss, resolution/fps, limitation reason, freezes and path — for the two-phone tests | Done (logic verified on JVM; compiles, CI run 40270659380) | `CallControllerTest` |
 
 ## Admin Console additions
 
@@ -288,7 +288,7 @@ the deployed system.
 | End one app session (button per session on the Users page; audited `admin.session_revoked`) | Done (verified) | `test/admin.integration.test.ts` |
 | Account page: admin password change with current password + fresh TOTP code; ends every admin session; 5 wrong attempts end all sessions; audited | Done (verified) | Same file |
 | Settings page (`app_settings`, migration `app_settings`): video-quality cap, ring timeout, message lifetime (1–24 h, D-02 cap), push on/off; validated, audited, applied within ~10 s | Done (verified) | `test/settings.integration.test.ts`, admin test |
-| App version control: `app.min_supported_version_code` / `latest_version_code` / `latest_apk_sha256` settings; `X-App-Version` header from the app; `426 UPGRADE_REQUIRED`; public `GET /api/v1/app/version`; app shows an update-required screen and its own APK SHA-256 on Home | Done (backend verified; app logic verified on JVM; screens compile pending CI) | `test/settings.integration.test.ts`, `AppVersionHeaderTest` |
+| App version control: `app.min_supported_version_code` / `latest_version_code` / `latest_apk_sha256` settings; `X-App-Version` header from the app; `426 UPGRADE_REQUIRED`; public `GET /api/v1/app/version`; app shows an update-required screen and its own APK SHA-256 on Home | Done (backend verified; app logic verified on JVM; compiles, CI run 40270405733) | `test/settings.integration.test.ts`, `AppVersionHeaderTest` |
 | Still not built from docs/05: Errors page (`error_events` table does not exist), TOTP re-enrolment in the browser (use `cli admin:reset`) | Not started | |
 
 ## Deployment preparation
