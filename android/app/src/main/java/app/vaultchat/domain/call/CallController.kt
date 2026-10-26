@@ -70,6 +70,11 @@ class CallController(
     private val _state = MutableStateFlow(CallState())
     val state: StateFlow<CallState> = _state.asStateFlow()
 
+    private val _liveStats = MutableStateFlow<StatsSample?>(null)
+
+    /** The latest statistics sample, for the debug overlay used in testing (docs/08 §11). */
+    val liveStats: StateFlow<StatsSample?> = _liveStats.asStateFlow()
+
     private var poller: Job? = null
     private var mediaEvents: Job? = null
     private var watchdog: Job? = null
@@ -269,7 +274,11 @@ class CallController(
         if (statsJob != null) return
         statsJob = scope.launch {
             while (isActive) {
-                media.stats()?.let { stats.add(it.copy(atMs = nowMs())) }
+                media.stats()?.let {
+                    val sample = it.copy(atMs = nowMs())
+                    stats.add(sample)
+                    _liveStats.value = sample
+                }
                 delay(STATS_INTERVAL_MS)
             }
         }

@@ -257,6 +257,7 @@ class CallControllerTest {
             media.nextStats = media.nextStats!!.copy(bytesSent = sent, rttMs = 80.0 + it * 10)
             advanceTimeBy(CallController.STATS_INTERVAL_MS)
         }
+        assertEquals("the debug overlay sees the latest sample", 120.0, c.liveStats.value?.rttMs)
         c.hangup()
         runCurrent()
         val d = repo.diagnostics.single()

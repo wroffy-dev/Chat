@@ -4,6 +4,7 @@ import android.app.Activity
 import androidx.activity.compose.BackHandler
 import app.vaultchat.platform.call.CallForegroundService
 import app.vaultchat.platform.push.Push
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,6 +41,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.vaultchat.R
+import app.vaultchat.domain.call.StatsSample
+import app.vaultchat.BuildConfig
 import app.vaultchat.domain.call.CallEndReason
 import app.vaultchat.domain.call.CallKind
 import app.vaultchat.domain.call.CallPhase
@@ -66,6 +69,7 @@ fun CallScreen(
     val state by viewModel.controller.state.collectAsStateWithLifecycle()
     val remoteVideo by viewModel.media.remoteVideo.collectAsStateWithLifecycle()
     val localVideo by viewModel.media.localVideo.collectAsStateWithLifecycle()
+    val liveStats by viewModel.controller.liveStats.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     val mic = rememberPermissionRequest(AppPermission.MICROPHONE, permissionPreferences)
@@ -120,6 +124,23 @@ fun CallScreen(
                         .size(width = 112.dp, height = 160.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .align(Alignment.TopEnd),
+                )
+            }
+
+            // Debug builds only: live call statistics for the two-phone tests (docs/09).
+            val live = liveStats
+            if (BuildConfig.DEBUG && live != null && state.phase in setOf(CallPhase.ACTIVE, CallPhase.RECONNECTING)) {
+                Text(
+                    statsOverlayText(live),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White,
+                    modifier = Modifier
+                        .safeDrawingPadding()
+                        .padding(8.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color.Black.copy(alpha = 0.55f))
+                        .padding(6.dp)
+                        .align(Alignment.TopStart),
                 )
             }
 
@@ -257,3 +278,13 @@ private fun phaseText(phase: CallPhase, reason: CallEndReason?, incoming: Boolea
         }
     },
 )
+
+/** Compact live values for testers; numbers only. */
+private fun statsOverlayText(s: StatsSample): String = buildString {
+    fun n(v: Double?) = v?.let { "%.0f".format(it) } ?: "–"
+    appendLine("RTT ${n(s.rttMs)} ms · jitter ${n(s.jitterMs)} ms")
+    appendLine("lost ${s.packetsLost} / recv ${s.packetsReceived}")
+    appendLine("send ${s.sendWidth ?: "–"}x${s.sendHeight ?: "–"} @${n(s.sendFps)} · ${s.qualityLimitation ?: "–"}")
+    appendLine("recv ${s.recvWidth ?: "–"}x${s.recvHeight ?: "–"} @${n(s.recvFps)} · freezes ${s.freezeCount}")
+    append("path ${s.candidateType ?: "–"}/${s.protocol ?: "–"}")
+}

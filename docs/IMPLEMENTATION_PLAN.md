@@ -277,6 +277,7 @@ the deployed system.
 | Android `RealtimeClient` (OkHttp, data layer): reconnect with backoff, token refresh on 4401, stops on 4403; runs while signed in and in front | Done (verified against the real backend) | `RealBackendChatTest` with live signals on both sides |
 | Chat re-reads at once on a signal; polls 10 s while connected (2 s otherwise); heartbeat time-based. Incoming-call check wakes on `call.changed` (3 s / 15 s polling) | Done (chat verified on JVM; app compiles and lints, CI run 40190854554) | `ChatControllerTest` (signal + fallback test) |
 | The call screen re-reads its call at once on `call.changed` (10 s polling while connected, 2 s otherwise) | Done (verified on JVM) | `CallControllerTest` |
+| Debug-build overlay on the call screen with live RTT, jitter, loss, resolution/fps, limitation reason, freezes and path — for the two-phone tests | Done (logic verified on JVM; screen compile pending CI) | `CallControllerTest` |
 
 ## Admin Console additions
 
