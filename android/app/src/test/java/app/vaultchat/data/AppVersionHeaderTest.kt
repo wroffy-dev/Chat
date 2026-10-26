@@ -1,35 +1,47 @@
 package app.vaultchat.data
 
 import app.vaultchat.data.network.ApiClient
-import com.sun.net.httpserver.HttpServer
+import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.net.InetSocketAddress
+import java.net.InetAddress
+import java.net.ServerSocket
+import kotlin.concurrent.thread
 
 /** The app tells the server its version, and notices when the server says it is too old. */
 class AppVersionHeaderTest {
-    private val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
-    private var seenVersion: String? = null
-    private var status = 200
+    // A one-line HTTP server on a plain socket (Android unit tests have no JDK HTTP server).
+    private val server = ServerSocket(0, 10, InetAddress.getLoopbackAddress())
+    @Volatile private var seenVersion: String? = null
+    @Volatile private var status = 200
 
     init {
-        server.createContext("/") { exchange ->
-            seenVersion = exchange.requestHeaders.getFirst("X-App-Version")
-            exchange.sendResponseHeaders(status, -1)
-            exchange.close()
+        thread(isDaemon = true) {
+            while (!server.isClosed) {
+                val socket = try { server.accept() } catch (_: Exception) { break }
+                socket.use { s ->
+                    val reader = s.getInputStream().bufferedReader()
+                    while (true) {
+                        val line = reader.readLine() ?: break
+                        if (line.isEmpty()) break
+                        if (line.startsWith("X-App-Version:", ignoreCase = true)) seenVersion = line.substringAfter(":").trim()
+                    }
+                    s.getOutputStream().write("HTTP/1.1 $status X\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".toByteArray())
+                    s.getOutputStream().flush()
+                }
+            }
         }
-        server.start()
     }
 
     @After
-    fun stop() = server.stop(0)
+    fun stop() = server.close()
 
-    private fun get(client: okhttp3.OkHttpClient) =
-        client.newCall(Request.Builder().url("http://127.0.0.1:${server.address.port}/api/v1/me").build()).execute().close()
+    private fun get(client: OkHttpClient) =
+        client.newCall(Request.Builder().url("http://127.0.0.1:${server.localPort}/api/v1/me").build()).execute().close()
 
     @Test
     fun `every request carries the version code`() {
