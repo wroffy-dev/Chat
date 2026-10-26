@@ -303,12 +303,12 @@ the deployed system.
 | `deploy/coolify/README.md`: first-deployment runbook (DNS, firewall, roles, secrets, LiveKit, routing, migrate + grants order, admin and users, scheduled jobs, Android release, go-live checks, rollback) | Written, **not executed** | Coolify UI steps marked Verify |
 | docs/16 §4 variable table corrected to the real names (`TRUST_PROXY`, `FCM_CREDENTIALS_FILE`, `BACKUP_STATUS_FILE`, …) | Done | Matches `src/config/env.ts` |
 | `ADMIN_TOTP_ENC_KEY` required only by the server and admin CLI commands, so the `audit-retention` job (compose, vc_maint) holds no app secret | Done (verified) | Config test; CLI with/without the key; server refuses to start without it; verify-roles runs the job without it |
+| Two-phone test on a LAN: `docs/PHONE_TEST_GUIDE.md`; dev compose `DEV_LAN_IP` publishes LiveKit on the LAN address and sets its advertised `NODE_IP` (flag checked in livekit-server v1.13.7 source); debug network config generated from the API URL (plain HTTP only to that host and the emulator host) | Written; compose validated locally and in CI; **guide not yet carried out** | CI checks the debug APK's config for both URLs (run pending) |
 
 ## Next task
 
-1. **Owner actions to test for real:** create a Firebase project (android/README.md "Push notifications"),
-   then run PostgreSQL + LiveKit locally (`deploy/docker-compose.dev.yml`) and make a call between two
-   phones; record results against docs/09 (T-SETUP-1/2, T-CLEAN, T-BG-VOICE/VIDEO).
+1. **Owner: first two-phone test** following `docs/PHONE_TEST_GUIDE.md` (no Firebase needed for it);
+   send back the results table. Firebase (android/README.md "Push notifications") comes after.
 2. Chat on two phones: open, send both ways, Back on one phone, background for over a minute; record
    results.
 3. Phase 7 (private release) — needs the VPS and your go-ahead for any deployment. The step-by-step

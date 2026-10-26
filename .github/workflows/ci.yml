@@ -56,6 +56,18 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       # GitHub-hosted Ubuntu runners include the Android SDK (ANDROID_HOME is preset).
       - run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
+      # The debug network config is generated from the API URL: plain HTTP only to the emulator host
+      # and the URL's host (docs/PHONE_TEST_GUIDE.md). Check the built APKs actually carry it.
+      - name: Debug APK allows plain HTTP only to the development hosts
+        run: |
+          aapt2="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)aapt2"
+          nsc() { "$aapt2" dump xmltree --file res/xml/network_security_config.xml app/build/outputs/apk/debug/app-debug.apk; }
+          nsc | tee default.txt
+          grep -q '10\.0\.2\.2' default.txt
+          ! grep -q '192\.0\.2\.10' default.txt
+          ./gradlew --no-daemon :app:assembleDebug -Pvaultchat.apiBaseUrl=http://192.0.2.10:3000/
+          nsc | tee lan.txt
+          grep -q '192\.0\.2\.10' lan.txt
       # Unsigned release build with a placeholder URL: checks that R8 shrinking works with the
       # libraries in use. No signing material exists in CI.
       - run: ./gradlew --no-daemon :app:assembleRelease -Pvaultchat.apiBaseUrl.release=https://api.example.invalid/
@@ -109,6 +121,16 @@ jobs:
           AGE_RECIPIENT: placeholder
           MAINT_DATABASE_URL: postgresql://maint:ci-only-password@db:5432/vc
         run: docker compose -f deploy/docker-compose.prod.yml --profile migrate --profile backup --profile maint config -q
+      - name: Dev compose is valid, LiveKit on loopback by default and on the LAN address when set
+        env:
+          POSTGRES_PASSWORD: placeholder
+          LIVEKIT_KEYS: "devkey: placeholder"
+        run: |
+          docker compose -f deploy/docker-compose.dev.yml config | grep -q 'host_ip: 127.0.0.1'
+          ! docker compose -f deploy/docker-compose.dev.yml config | grep -q 'host_ip: 0.0.0.0'
+          DEV_LAN_IP=192.0.2.10 docker compose -f deploy/docker-compose.dev.yml config > lan.yml
+          grep -q 'NODE_IP: 192.0.2.10' lan.yml
+          test "$(grep -c 'host_ip: 192.0.2.10' lan.yml)" = 3
 
   database-roles:
     # 24.04 ships the PostgreSQL 16 client; newer images only carry newer majors.

@@ -2,12 +2,8 @@
 
 Kotlin + Jetpack Compose. Design: `../docs/15-android-ui-ux.md`, status: `../docs/IMPLEMENTATION_PLAN.md`.
 
-> **Not yet compiled.** The project was written in an environment without Android SDK access. The
-> first real build happens in CI (`.github/workflows/ci.yml`) or Android Studio. Library versions in
-> `gradle/libs.versions.toml` are older stable releases and can be bumped to current ones.
-
-Current scope (Phase 1): app shell, theme, navigation, login screen (sign-in reports "not available"
-until Phase 2 adds accounts), server reachability check, permission-handling helpers.
+Status: compiled, unit-tested and linted in CI on every change (`.github/workflows/ci.yml`); **not yet
+run on a phone**. First phone test: `../docs/PHONE_TEST_GUIDE.md`.
 
 ## Build
 
@@ -21,8 +17,8 @@ cd android
 ## Backend URL
 
 - Debug: `http://10.0.2.2:3000/` (the development machine as seen from the emulator). For a physical
-  phone, pass `-Pvaultchat.apiBaseUrl=http://<lan-ip>:3000/` and add that host to
-  `app/src/debug/res/xml/network_security_config.xml`.
+  phone, pass `-Pvaultchat.apiBaseUrl=http://<lan-ip>:3000/`. The debug network security config is
+  generated from that URL: plain HTTP is allowed only to its host (and the emulator host).
 - Release: must be `https://` (the build fails otherwise). Set `vaultchat.apiBaseUrl.release` in
   `~/.gradle/gradle.properties` on the release machine.
 

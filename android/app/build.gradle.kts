@@ -15,6 +15,43 @@ fun apiBaseUrl(buildType: String): String {
     return if (url.endsWith("/")) url else "$url/"
 }
 
+/**
+ * Debug builds may use plain HTTP only to the development machine: the emulator's host alias and the
+ * host in the debug API base URL (e.g. a LAN address for phones on the same Wi-Fi). LiveKit runs on the
+ * same machine, so its ws:// URL uses the same host. Release builds keep the HTTPS-only config.
+ */
+abstract class DebugNetworkConfigTask : DefaultTask() {
+    @get:Input
+    abstract val hosts: ListProperty<String>
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun write() {
+        val domains = hosts.get().joinToString("\n") { "        <domain includeSubdomains=\"false\">$it</domain>" }
+        val file = outputDir.get().file("xml/network_security_config.xml").asFile
+        file.parentFile.mkdirs()
+        file.writeText(
+            """
+            |<?xml version="1.0" encoding="utf-8"?>
+            |<!-- Generated for debug builds by app/build.gradle.kts; do not edit. -->
+            |<network-security-config>
+            |    <base-config cleartextTrafficPermitted="false">
+            |        <trust-anchors>
+            |            <certificates src="system" />
+            |        </trust-anchors>
+            |    </base-config>
+            |    <domain-config cleartextTrafficPermitted="true">
+            |$domains
+            |    </domain-config>
+            |</network-security-config>
+            |
+            """.trimMargin(),
+        )
+    }
+}
+
 android {
     namespace = "app.vaultchat"
     compileSdk = 35
@@ -80,6 +117,18 @@ android {
     }
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+    }
+}
+
+androidComponents {
+    onVariants(selector().withBuildType("debug")) { variant ->
+        val apiHost = java.net.URI(apiBaseUrl("debug")).host
+            ?: throw GradleException("vaultchat.apiBaseUrl has no host")
+        if (!Regex("^[A-Za-z0-9.-]+$").matches(apiHost)) throw GradleException("Unexpected API host: $apiHost")
+        val task = tasks.register<DebugNetworkConfigTask>("generate${variant.name.replaceFirstChar { it.uppercase() }}NetworkConfig") {
+            hosts.set(listOf("10.0.2.2", "localhost", "127.0.0.1", apiHost).distinct())
+        }
+        variant.sources.res?.addGeneratedSourceDirectory(task, DebugNetworkConfigTask::outputDir)
     }
 }
 
