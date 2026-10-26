@@ -6,7 +6,8 @@ This file tracks what has **actually** been built and verified. Design lives in 
 Status words: **Done (verified)** = built and checked by the tests/commands listed; **Done (unverified)** =
 written but not compiled or run; **Not started**; **Blocked**.
 
-Last updated: 2026-10-25 (UTC), after the chat phase (slice 1).
+Last updated: 2026-10-26 (UTC). Rows in the earlier phase tables that later work completed point to
+where it was done; nothing below has been run on a phone or on the VPS.
 
 ## Phase order
 
@@ -15,10 +16,13 @@ Last updated: 2026-10-25 (UTC), after the chat phase (slice 1).
 | 1 | Foundation | **Done** — backend verified locally and in CI; Android builds, unit-tests and lints in CI. Not yet launched on an emulator/device |
 | 2 | Authentication and Admin Console | **Done (backend verified; Android verified in CI, not yet on a device)** — see below |
 | 3 | QR connection (moved before calling, Q-1) | **Done (backend verified; Android logic verified on JVM and against the real backend; screens compiled in CI, not yet on a device)** |
-| 4 | Calling | **In progress (slices 1–2 built)** — server + app logic verified; real media and real push untested (no LiveKit server, Firebase project or phones available here). See below |
+| 4 | Calling | **In progress (slices 1–2 built; core-telecom behind a build flag)** — server + app logic verified; real media and real push untested (no LiveKit server, Firebase project or phones available here). See below |
 | 5 | Text chat | **Slice 1 built** — backend verified; app logic verified on JVM and against the real backend; screens compiled in CI; not yet on a device. See below |
 | 6 | Security and reliability | **Slice 1 built** — see below; deployment-side items wait for the VPS |
 | 7 | Private release | Not started |
+
+Current totals (2026-10-26): backend 120 tests against PostgreSQL 16; Android 78 JVM unit tests; CI green
+on every job (backend, android incl. release build, repo secret scan, images, database-roles).
 
 ### Q-1 (decided 2026-10-24): QR connection before calling
 
@@ -43,22 +47,22 @@ require an accepted connection. The calling design is unchanged.
 | ESLint (typescript-eslint) | Done (verified) | `npm run lint` |
 | `.env.example` with placeholders only | Done | Reviewed |
 | Dependency audit | Done (verified) | `npm audit`: 0 vulnerabilities |
-| Admin listener (port 3001) | Not started | Phase 2 |
-| Rate limiting | Not started | Phase 2 (with auth endpoints) |
-| Dockerfile | Not started | Phase 7 |
+| Admin listener (port 3001) | Done in Phase 2 | See Phase 2 (Admin Console) |
+| Rate limiting | Done in Phase 2 | See Phase 2 (brute-force protection) |
+| Dockerfile | Done in Phase 6 | See Phase 6 (`backend/Dockerfile`, CI `images` job) |
 
 ### Android (`android/`)
 
 | Item | Status | Evidence |
 |---|---|---|
-| Gradle project (wrapper 8.14.3, AGP 8.7.3, Kotlin 2.1.0, Compose BOM 2024.12.01, minSdk 29, target/compile 35) | Done (unverified) | Cannot build here: `dl.google.com` (Android SDK + Google Maven) is blocked by the environment's network policy |
-| App entry point (`VaultChatApplication`, `MainActivity`, manual DI `AppContainer`) | Done (unverified) | |
-| Navigation (type-safe Compose routes: Login → Home) | Done (unverified) | |
-| Login screen + ViewModel (validation, loading, errors, server-reachability banner) | Done (unverified) | |
-| Sign-in | **Deliberately not functional**: `NotYetAvailableAuthRepository` always returns "not available" — no fake success | JVM unit test asserts it never succeeds |
-| Theme (Material 3, light/dark, single accent) and reusable components | Done (unverified) | |
+| Gradle project (wrapper 8.14.3, AGP 8.7.3, Kotlin 2.1.0, Compose BOM 2024.12.01, minSdk 29, target/compile 35) | Done (builds in CI) | Not buildable in this environment (`dl.google.com` blocked); every Android change since CI run #1 is compiled, unit-tested and linted there |
+| App entry point (`VaultChatApplication`, `MainActivity`, manual DI `AppContainer`) | Done (compiles in CI) | Not run on a device |
+| Navigation (type-safe Compose routes: Login → Home) | Done (compiles in CI) | Not run on a device |
+| Login screen + ViewModel (validation, loading, errors, server-reachability banner) | Done (compiles in CI) | Not run on a device |
+| Sign-in | Phase 1 placeholder (never succeeded) replaced by the real `RemoteAuthRepository` in Phase 2 | See Phase 2 |
+| Theme (Material 3, light/dark, single accent) and reusable components | Done (compiles in CI) | Not run on a device |
 | Permission architecture (`AppPermission`, `PermissionStatusResolver`, `rememberPermissionRequest`, `openAppSettings`) | Done (unverified for Android parts) | Resolver logic verified by JVM unit tests |
-| Release hardening: HTTPS-only network config, cleartext only in debug for the emulator host, no backups, R8 | Done (unverified) | |
+| Release hardening: HTTPS-only network config, cleartext only in debug for the emulator host, no backups, R8 | Done (release APK builds in CI) | Not run on a device; see Phase 6 |
 | Platform-independent code (`domain/`, `data/`) | Done (verified on plain JVM) | Compiled with Kotlin 2.1.0 + serialization plugin; 16 JUnit tests pass; `ApiClient.checkHealth()` returned `Reachable` against the real local backend |
 | CI (`.github/workflows/ci.yml`) runs `testDebugUnitTest`, `assembleDebug`, `lintDebug` on GitHub's runner (which has the Android SDK) | Done (verified) | CI run #1 (commit 0a2bb32): backend and android jobs both green |
 
@@ -95,7 +99,7 @@ Android JVM-only check (scratch, outside the repo): `kotlinc` 2.1.0 (embeddable 
 
 | Blocker | Impact | Needed |
 |---|---|---|
-| Android SDK / Google Maven unreachable from this environment | Android code not compiled | CI run on GitHub, or a build in Android Studio. Library versions may then be bumped to current stable |
+| Android SDK / Google Maven unreachable from this environment | Android compiles only in CI, not here | Resolved by the CI `android` job. Library versions may still be bumped to current stable |
 | No Docker daemon here | Dev compose file not exercised | Run locally |
 
 ## Phase 2 — Authentication and Admin Console
@@ -115,16 +119,17 @@ Android JVM-only check (scratch, outside the repo): `kotlinc` 2.1.0 (embeddable 
 | Admin Console (loopback listener `ADMIN_PORT`): password + TOTP login (replay-protected, throttled), CSRF tokens, `HttpOnly; Secure; SameSite=Strict` cookie, strict CSP, Users / Health / Audit log pages | Done (verified) | `test/admin.integration.test.ts`; real HTTP login in smoke test |
 | Server CLI: `admin:create` (TOTP enrolment, confirm code), `admin:reset`, `user:create`, `user:reset-password`, `user:list` | Done (verified) | End-to-end smoke run of the compiled CLI |
 | Audit events for logins, failures, throttling, refresh reuse, resets, revocations, status changes, admin login/logout | Done (verified) | Integration tests read them back |
-| Console pages for per-session revoke, settings, error events, calls | Not started | Need `app_settings` / `error_events` / `calls` tables from later phases |
-| `UPGRADE_REQUIRED` app-version check, FCM token endpoints | Not started | Notifications / release phases |
+| Console pages for per-session revoke, settings, calls | Done later | See "Admin Console additions" |
+| Console Errors page | Not started | `error_events` table does not exist; its retention is undecided |
+| `UPGRADE_REQUIRED` app-version check, FCM token endpoints | Done later | See "Admin Console additions" (version control) and Phase 4 slice 2 (push tokens) |
 
 ### Android
 
 | Item | Status | Evidence |
 |---|---|---|
 | `RemoteAuthRepository` (login, `/me`, change password, logout, one serialised refresh-and-retry on `TOKEN_EXPIRED`, local session cleared on revoke/disable) | Done (verified on JVM) | 8 scripted-backend tests + opt-in test that passed against the real local backend (login → forced change → `/me` → logout) |
-| `KeystoreTokenStore` (AES-256-GCM, non-exportable Keystore key, ciphertext only) | Done (CI compile pending) | Needs a device/emulator to exercise the Keystore |
-| Forced change-password screen, optional change from Home, Home with log out, start destination from stored session | Done (CI compile pending) | Not yet run on a device |
+| `KeystoreTokenStore` (AES-256-GCM, non-exportable Keystore key, ciphertext only) | Done (compiles in CI) | Needs a device/emulator to exercise the Keystore |
+| Forced change-password screen, optional change from Home, Home with log out, start destination from stored session | Done (compiles in CI) | Not yet run on a device |
 
 ### End-to-end check performed (2026-10-24)
 
@@ -155,7 +160,7 @@ user. Server logs scanned afterwards: no passwords or tokens present.
 | Per-user limits: 6 QR/min, 60/h; 10 redeems/min | Done (verified) | Test: 7th QR in a minute → 429 |
 | `/me` returns the connection; Admin users page shows whether the pair is connected | Done (verified) | Tests |
 | Hourly cleanup of QR tokens older than 24 h | Done (unit not separately tested) | Runs in `server.ts` |
-| Live push of new requests (WebSocket `connection_request.created`) | **Not started** — screens poll every 3 s while visible instead | WebSocket hub comes with calling/chat |
+| Live push of new requests | **Not started** — screens poll every 3 s while visible | The WebSocket exists now (see "Realtime signals") but sends no connection-request signal |
 
 ### Android
 
@@ -196,15 +201,15 @@ user. Server logs scanned afterwards: no passwords or tokens present.
 | `LiveKitMediaSession` (adaptive stream + dynacast, mic/camera, switch camera, speaker/earpiece, video tracks) | Done (compiled, unit-tested, linted in CI run 40132109201 attempt 2; attempt 1 failed on a Maven Central 429 before compiling) | API names checked against SDK v2.29.1 source |
 | Call screen (all phases, controls, permission prompts, keep-screen-on, Back = hang up), Home call buttons | Done (compiled in CI run 40132109201) | Not run on a device |
 
-### Known limitations of this slice (planned next)
+### Limitations of this slice, and where they stand
 
-- **Calls ring only while the callee's app is open** (polling `GET /calls/current` every 3 s). FCM push,
-  full-screen incoming-call UI and `core-telecom` integration are not built yet.
-- **No foreground service yet:** a call may be cut off if the app goes to the background.
-- **No real media test yet:** no LiveKit server or phones were available in this environment. The first
-  real call needs a local LiveKit (`deploy/docker-compose.dev.yml`) or the VPS, plus two devices.
-- Quality settings (1080p capability check, codec choice, thermal caps) and detailed WebRTC stats are not
-  wired yet; LiveKit defaults (720p capture, simulcast) apply.
+- Calls ringing only while the app is open: FCM push and the full-screen incoming-call notification were
+  built in slice 2 (untested without a Firebase project). core-telecom: built in slice 2, off by default.
+- No foreground service: built in slice 2.
+- Quality settings and WebRTC stats: 1080p capability check and stats built in slice 2; codec choice is
+  still D-13.
+- **Still open: no real media test.** No LiveKit server or phones were available in this environment.
+  The first real call needs a local LiveKit (`deploy/docker-compose.dev.yml`) or the VPS, plus two devices.
 
 ## Phase 4 — Calling, slice 2
 
