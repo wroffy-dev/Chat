@@ -8,7 +8,7 @@ import { ConnectionService } from "./connections/service.js";
 import { CallService } from "./calls/service.js";
 import { ChatService } from "./chat/service.js";
 import { RealtimeHub } from "./realtime/hub.js";
-import { SettingsService } from "./settings/service.js";
+import { defaultSettings, SettingsService } from "./settings/service.js";
 import { RetentionService } from "./retention/service.js";
 import { LiveKitGateway } from "./calls/media.js";
 import { createFcmTransport, PushService } from "./push/service.js";
@@ -39,19 +39,14 @@ async function main() {
       ? new LiveKitGateway(config.LIVEKIT_PUBLIC_URL, config.LIVEKIT_API_URL, config.LIVEKIT_API_KEY, config.LIVEKIT_API_SECRET)
       : null;
   // Admin Console settings; these defaults apply until the admin changes a value (docs/05 §5).
-  const settings = new SettingsService(database.prisma, {
-    "call.max_video_quality": "1080p",
-    "call.ring_timeout_seconds": config.CALL_RING_TIMEOUT_SECONDS,
-    "chat.unread_backstop_hours": 24,
-    "push.enabled": true,
-  });
+  const settings = new SettingsService(database.prisma, defaultSettings(config.CALL_RING_TIMEOUT_SECONDS));
   const transport = config.FCM_CREDENTIALS_FILE ? await createFcmTransport(config.FCM_CREDENTIALS_FILE) : null;
   let logPush: (msg: string, extra?: Record<string, unknown>) => void = () => {};
   const push = new PushService(database.prisma, transport, (msg, extra) => logPush(msg, extra), () => settings.get("push.enabled"));
   const hub = new RealtimeHub();
   const calls = new CallService(database.prisma, media, config.CALL_RING_TIMEOUT_SECONDS, undefined, push, hub, settings);
   const chat = new ChatService(database.prisma, undefined, push, hub, settings);
-  const app = buildApp({ config, database, auth, connections, calls, chat, media, push, realtime: { hub } });
+  const app = buildApp({ config, database, auth, connections, calls, chat, media, push, realtime: { hub }, settings });
   logPush = (msg, extra) => app.log.warn(extra ?? {}, msg);
   // The database is owned (and closed) by the public app; the admin app shares it.
   const adminApp = buildAdminApp({ config, prisma: database.prisma, database, auth, admin, media, pushEnabled: push.enabled, realtime: hub, settings });

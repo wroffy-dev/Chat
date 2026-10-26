@@ -149,4 +149,10 @@
     <string name="chat_notice_cleared_not_sent">The chat was cleared before your message was sent. It is back in the input box.</string>
     <string name="chat_notice_left_while_away">You were away for more than a minute, so you left the chat.</string>
     <string name="chat_notice_rate_limited">You are sending too fast. Wait a moment.</string>
+    <string name="about_version">App version %1$d · APK SHA-256: %2$s</string>
+    <string name="upgrade_title">Update required</string>
+    <string name="upgrade_body">This version of the app is no longer supported. Install the latest version you received from the administrator, then open the app again.</string>
+    <string name="upgrade_installed">Installed: version %1$d, APK SHA-256 %2$s</string>
+    <string name="upgrade_latest">Latest: version %1$d, APK SHA-256 %2$s</string>
+    <string name="upgrade_no_hash">not published</string>
 </resources>

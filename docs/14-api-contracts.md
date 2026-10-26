@@ -36,6 +36,7 @@ No stack traces, SQL errors or internal names are ever returned.
 | 413 | `PAYLOAD_TOO_LARGE` |
 | 415 | `UNSUPPORTED_MEDIA_TYPE` (request body is not JSON) |
 | 422 | `MESSAGE_TOO_LONG`, `WEAK_PASSWORD` |
+| 426 | `UPGRADE_REQUIRED` |
 | 429 | `RATE_LIMITED` (+ `Retry-After` header) |
 | 500 / 503 | `INTERNAL_ERROR`, `SERVICE_UNAVAILABLE`, `MEDIA_UNAVAILABLE` |
 
@@ -156,6 +157,16 @@ Request bodies of these routes are never logged. In slice 1 the app polls instea
 ### POST /conversations/{id}/read
 - **Request:** `{ "seq": int }` — the highest sequence displayed. Monotonic (lower values ignored) and
   capped at the last allocated sequence. **Response:** `204`.
+
+## 5a. App version
+
+### GET /app/version
+- **Auth:** none (an outdated app must still be able to read it). Rate-limited.
+- **Response 200:** `{ "minSupportedVersionCode", "latestVersionCode", "latestApkSha256": hex | null }` from the Admin Console settings.
+
+Every request may carry `X-App-Version: <versionCode>`. If it is below `app.min_supported_version_code`,
+every API route except this one answers `426 UPGRADE_REQUIRED`. This nudges updates; it is **not** a
+security control (a request without the header is not refused).
 
 ## 6. Calls
 

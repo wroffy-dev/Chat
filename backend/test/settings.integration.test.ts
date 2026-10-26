@@ -5,15 +5,13 @@ import { CallService } from "../src/calls/service.js";
 import { ChatService } from "../src/chat/service.js";
 import { PrismaDatabase } from "../src/db/database.js";
 import { PushService, type PushPayload, type PushTransport } from "../src/push/service.js";
-import { SettingsService, type Settings } from "../src/settings/service.js";
+import { defaultSettings, SettingsService, type Settings } from "../src/settings/service.js";
+import { buildApp } from "../src/app.js";
+import { PasswordHasher } from "../src/auth/passwords.js";
+import { AuthService } from "../src/auth/service.js";
 import { resetDatabase, TEST_DB_URL, testConfig } from "./helpers.js";
 
-const defaults: Settings = {
-  "call.max_video_quality": "1080p",
-  "call.ring_timeout_seconds": 45,
-  "chat.unread_backstop_hours": 24,
-  "push.enabled": true,
-};
+const defaults: Settings = defaultSettings(45);
 const media: MediaGateway = {
   publicUrl: "wss://rtc.example.test",
   createRoom: async () => {},
@@ -119,5 +117,32 @@ describe.skipIf(!TEST_DB_URL)("admin settings (PostgreSQL)", () => {
     expect((await chat.sweep()).backstopDeleted).toBe(0);
     await settings.set("chat.unread_backstop_hours", "1", admin);
     expect((await chat.sweep()).backstopDeleted).toBe(1);
+  });
+
+  it("refuses apps older than the minimum version with 426, and tells any app the latest version", async () => {
+    const app = buildApp({
+      config,
+      database: { checkReadiness: database.checkReadiness.bind(database), close: async () => {} },
+      auth: new AuthService(database.prisma, new PasswordHasher({ memoryCost: 1024, timeCost: 1 })),
+      settings,
+      logger: false,
+    });
+    await app.ready();
+    const me = (version?: string) => app.inject({ method: "GET", url: "/api/v1/me", headers: version ? { "x-app-version": version } : {} });
+    expect((await me("3")).statusCode).toBe(401); // allowed through to authentication
+    await settings.set("app.min_supported_version_code", "5", admin);
+    await settings.set("app.latest_version_code", "7", admin);
+    await settings.set("app.latest_apk_sha256", "AB".repeat(32), admin);
+    const old = await me("4");
+    expect(old.statusCode).toBe(426);
+    expect(old.json().error.code).toBe("UPGRADE_REQUIRED");
+    expect((await me("5")).statusCode).toBe(401);
+    expect((await me()).statusCode).toBe(401); // no header: not a version gate (it is not a security control)
+
+    // An outdated app can still learn what to install.
+    const v = await app.inject({ method: "GET", url: "/api/v1/app/version", headers: { "x-app-version": "1" } });
+    expect(v.json()).toEqual({ minSupportedVersionCode: 5, latestVersionCode: 7, latestApkSha256: "ab".repeat(32) });
+    await expect(settings.set("app.latest_apk_sha256", "not-hex", admin)).rejects.toMatchObject({ statusCode: 400 });
+    await app.close();
   });
 });

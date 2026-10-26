@@ -25,6 +25,7 @@ export type ErrorCode =
   | "CONVERSATION_CLEARED"
   | "LEASE_EXPIRED"
   | "MESSAGE_TOO_LONG"
+  | "UPGRADE_REQUIRED"
   | "PAYLOAD_TOO_LARGE"
   | "UNSUPPORTED_MEDIA_TYPE"
   | "RATE_LIMITED"
@@ -88,6 +89,7 @@ export const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   CONVERSATION_CLEARED: "The chat was cleared. Your message was not sent.",
   LEASE_EXPIRED: "You left the chat. Open it again to continue.",
   MESSAGE_TOO_LONG: "The message is too long.",
+  UPGRADE_REQUIRED: "This version of the app is no longer supported. Install the latest version.",
   PAYLOAD_TOO_LARGE: "The request is too large.",
   UNSUPPORTED_MEDIA_TYPE: "Unsupported content type.",
   RATE_LIMITED: "Too many requests. Try again later.",
@@ -114,6 +116,8 @@ export function codeForStatus(statusCode: number): ErrorCode {
       return "PAYLOAD_TOO_LARGE";
     case 415:
       return "UNSUPPORTED_MEDIA_TYPE";
+    case 426:
+      return "UPGRADE_REQUIRED";
     case 429:
       return "RATE_LIMITED";
     case 503:

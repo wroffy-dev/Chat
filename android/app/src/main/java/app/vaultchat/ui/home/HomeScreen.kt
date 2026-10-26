@@ -22,6 +22,7 @@ import app.vaultchat.platform.push.Push
 import app.vaultchat.ui.permissions.openAppSettings
 import app.vaultchat.ui.permissions.rememberPermissionRequest
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import app.vaultchat.ui.about.AboutApp
 import app.vaultchat.ui.components.PrimaryButton
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -120,6 +121,7 @@ fun HomeScreen(
             val connection = state.connection
             if (connection != null) {
                 EmptyState(
+                    modifier = Modifier.weight(1f),
                     title = stringResource(R.string.home_connected_title, connection.peerUsername),
                     body = stringResource(R.string.home_connected_body),
                     action = {
@@ -142,11 +144,13 @@ fun HomeScreen(
                 )
             } else {
                 EmptyState(
+                    modifier = Modifier.weight(1f),
                     title = stringResource(R.string.home_not_connected_title),
                     body = stringResource(R.string.home_not_connected_body),
                     action = { PrimaryButton(stringResource(R.string.home_connect), onOpenInbox) },
                 )
             }
+            AboutApp(modifier = Modifier.padding(16.dp))
         }
     }
 }

@@ -14,6 +14,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import app.vaultchat.data.push.PushTokenApi
+import app.vaultchat.data.app.AppVersionApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import app.vaultchat.data.connection.ConnectionApi
 import app.vaultchat.domain.call.CallRepository
@@ -30,7 +31,10 @@ import app.vaultchat.ui.permissions.PermissionPreferences
 /** Manual dependency container. Small enough that a DI framework would add more than it saves. */
 class AppContainer(context: Context) {
     private val appContext = context.applicationContext
-    private val http = ApiClient.defaultHttpClient()
+    /** Set when the server says this build is too old (426); the app then shows only the update screen. */
+    val upgradeRequired = MutableStateFlow(false)
+
+    private val http = ApiClient.defaultHttpClient(BuildConfig.VERSION_CODE) { upgradeRequired.value = true }
 
     val apiClient = ApiClient(BuildConfig.API_BASE_URL, http)
 
@@ -53,6 +57,8 @@ class AppContainer(context: Context) {
     val callRepository: CallRepository = RemoteCallRepository(httpJson, caller)
 
     val pushTokenApi = PushTokenApi(httpJson, caller)
+
+    val appVersionApi = AppVersionApi(httpJson)
 
     val chatRepository: ChatRepository = RemoteChatRepository(httpJson, caller)
 

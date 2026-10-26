@@ -60,7 +60,15 @@ class ApiClient(
     companion object {
         val defaultJson = Json { ignoreUnknownKeys = true }
 
-        fun defaultHttpClient(): OkHttpClient = OkHttpClient.Builder()
+        /**
+         * [appVersionCode] is sent as `X-App-Version` on every request; a `426` answer (this build is
+         * older than the server's minimum, docs/05 §5) calls [onUpgradeRequired].
+         */
+        fun defaultHttpClient(appVersionCode: Int? = null, onUpgradeRequired: (() -> Unit)? = null): OkHttpClient = OkHttpClient.Builder()
+            .addInterceptor { chain ->
+                val request = if (appVersionCode != null) chain.request().newBuilder().header("X-App-Version", appVersionCode.toString()).build() else chain.request()
+                chain.proceed(request).also { if (it.code == 426) onUpgradeRequired?.invoke() }
+            }
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
             .writeTimeout(15, TimeUnit.SECONDS)

@@ -11,6 +11,7 @@ import { ConnectionService } from "../src/connections/service.js";
 import { PrismaDatabase } from "../src/db/database.js";
 import { PushService, type PushTransport } from "../src/push/service.js";
 import { RealtimeHub } from "../src/realtime/hub.js";
+import { defaultSettings, SettingsService } from "../src/settings/service.js";
 import { captureLogs, resetDatabase, TEST_DB_URL, testConfig } from "./helpers.js";
 
 /**
@@ -30,7 +31,7 @@ const media: MediaGateway = {
 const pushTransport: PushTransport = { send: async () => {} };
 
 /** Routes reachable without a session. Everything else under /api/v1 must refuse anonymous callers. */
-const PUBLIC = new Set(["POST /api/v1/auth/login", "POST /api/v1/auth/refresh"]);
+const PUBLIC = new Set(["POST /api/v1/auth/login", "POST /api/v1/auth/refresh", "GET /api/v1/app/version"]);
 /** Routes a session that must still change its password may use (docs/04 §5). */
 const RESTRICTED_OK = new Set([
   "POST /api/v1/auth/logout",
@@ -72,6 +73,7 @@ describe.skipIf(!TEST_DB_URL)("security (PostgreSQL)", () => {
       media,
       push,
       realtime: { hub: new RealtimeHub() },
+      settings: new SettingsService(database.prisma, defaultSettings(45)),
       logger: captured.logger,
     });
     routes = [];
@@ -87,7 +89,7 @@ describe.skipIf(!TEST_DB_URL)("security (PostgreSQL)", () => {
   const send = (method: string, url: string, headers: Record<string, string> = {}) =>
     app.inject({ method: method as "GET", url: concrete(url), headers, remoteAddress: `203.0.113.${++ip % 250}` });
 
-  it("every API route except login and refresh refuses anonymous and malformed credentials", async () => {
+  it("every API route except login, refresh and the version check refuses anonymous and malformed credentials", async () => {
     // Guard against a vacuous pass: the inventory must include every feature area.
     const names = routes.map((r) => `${r.method} ${r.url}`);
     expect(names.length).toBeGreaterThanOrEqual(25);

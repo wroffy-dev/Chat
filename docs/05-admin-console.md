@@ -72,8 +72,10 @@ Only keys in this allow-list can be changed. Each has a validated type and range
 
 **Implemented:** `call.max_video_quality`, `call.ring_timeout_seconds`, `chat.unread_backstop_hours`,
 `push.enabled` — table `app_settings` (allow-listed keys enforced by a CHECK), values validated, every
-change audited with old → new value, applied within ~10 s. **Not yet:** the `app.*` version keys (they
-need the app to report its version on every request and a `426`/`403 UPGRADE_REQUIRED` path).
+change audited with old → new value, applied within ~10 s. The `app.*` keys are implemented too: the app
+sends `X-App-Version` on every request; builds below `app.min_supported_version_code` get
+`426 UPGRADE_REQUIRED` and show only an "update required" screen with the installed and latest version
+and APK SHA-256 (from the public `GET /api/v1/app/version`).
 
 ## 6. Logging and privacy
 

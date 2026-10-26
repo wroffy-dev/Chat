@@ -19,8 +19,9 @@ import { chatRoutes } from "./routes/chat.js";
 import { deviceRoutes } from "./routes/devices.js";
 import { realtimeRoutes } from "./routes/realtime.js";
 import type { RealtimeHub } from "./realtime/hub.js";
+import type { SettingsService } from "./settings/service.js";
 import { healthRoutes } from "./routes/health.js";
-import { AppError } from "./errors.js";
+import { AppError, appError } from "./errors.js";
 
 export interface AppDeps {
   config: Config;
@@ -35,11 +36,13 @@ export interface AppDeps {
   push?: PushService;
   /** Live change signals over GET /api/v1/ws. */
   realtime?: { hub: RealtimeHub; recheckMs?: number; pingMs?: number };
+  /** Admin settings; enables the app-version check and GET /api/v1/app/version. */
+  settings?: SettingsService;
   /** Overrides the logger (tests pass `false` or a capturing stream). */
   logger?: FastifyServerOptions["logger"];
 }
 
-export function buildApp({ config, database, auth, connections, calls, chat, media, push, realtime, logger }: AppDeps): FastifyInstance {
+export function buildApp({ config, database, auth, connections, calls, chat, media, push, realtime, settings, logger }: AppDeps): FastifyInstance {
   const app = Fastify({
     logger: logger ?? buildLoggerOptions(config),
     // Client-supplied request IDs are not trusted; every request gets a fresh one.
@@ -75,6 +78,40 @@ export function buildApp({ config, database, auth, connections, calls, chat, med
         errorResponseBuilder: (_req, context) =>
           new AppError(429, "RATE_LIMITED", "Too many requests. Try again later.", undefined, Math.ceil(context.ttl / 1000)),
       });
+      if (settings) {
+        // Apps send X-App-Version (their versionCode). Builds older than the admin's minimum are
+        // refused with 426 so they show "update required" — except the version endpoint itself.
+        api.addHook("onRequest", async (request) => {
+          if (request.url.split("?")[0] === "/api/v1/app/version") return;
+          const header = request.headers["x-app-version"];
+          if (typeof header !== "string" || !/^\d{1,10}$/.test(header)) return;
+          if (Number(header) < (await settings.get("app.min_supported_version_code"))) throw appError(426, "UPGRADE_REQUIRED");
+        });
+        api.get(
+          "/app/version",
+          {
+            config: { rateLimit: { max: 30, timeWindow: 60_000 } },
+            schema: {
+              response: {
+                200: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["minSupportedVersionCode", "latestVersionCode", "latestApkSha256"],
+                  properties: { minSupportedVersionCode: { type: "integer" }, latestVersionCode: { type: "integer" }, latestApkSha256: { type: ["string", "null"] } },
+                },
+              },
+            },
+          },
+          async () => {
+            const s = await settings.all();
+            return {
+              minSupportedVersionCode: s["app.min_supported_version_code"],
+              latestVersionCode: s["app.latest_version_code"],
+              latestApkSha256: s["app.latest_apk_sha256"] || null,
+            };
+          },
+        );
+      }
       await api.register(authRoutes, connections ? { auth, connections } : { auth });
       if (connections) await api.register(connectionRoutes, { auth, connections });
       if (calls) await api.register(callRoutes, { auth, calls });

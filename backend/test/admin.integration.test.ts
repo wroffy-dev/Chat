@@ -7,7 +7,7 @@ import { AuthService } from "../src/auth/service.js";
 import { generateTotpSecret, totpCode, totpStep } from "../src/auth/totp.js";
 import { PrismaDatabase } from "../src/db/database.js";
 import { RealtimeHub } from "../src/realtime/hub.js";
-import { SettingsService } from "../src/settings/service.js";
+import { defaultSettings, SettingsService } from "../src/settings/service.js";
 import { resetDatabase, TEST_DB_URL, testConfig } from "./helpers.js";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -41,7 +41,7 @@ describe.skipIf(!TEST_DB_URL)("Admin Console (PostgreSQL)", () => {
       ping: async () => {},
     };
     app = buildAdminApp({ config, prisma: database.prisma, database, auth, admin: adminService, media, pushEnabled: true, realtime: new RealtimeHub(),
-      settings: new SettingsService(database.prisma, { "call.max_video_quality": "1080p", "call.ring_timeout_seconds": 45, "chat.unread_backstop_hours": 24, "push.enabled": true }, 0),
+      settings: new SettingsService(database.prisma, defaultSettings(45), 0),
       logger: false });
     await app.ready();
   });

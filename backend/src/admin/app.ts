@@ -400,7 +400,9 @@ export function buildAdminApp(deps: AdminAppDeps): FastifyInstance {
             ? `<select id="${id}" name="value">${def.values.map((v) => `<option${v === current ? " selected" : ""}>${esc(v)}</option>`).join("")}</select>`
             : def.kind === "int"
               ? `<input id="${id}" name="value" type="number" min="${def.min}" max="${def.max}" value="${esc(String(current))}" required>`
-              : `<select id="${id}" name="value"><option value="true"${current === true ? " selected" : ""}>on</option><option value="false"${current === false ? " selected" : ""}>off</option></select>`;
+              : def.kind === "hex"
+                ? `<input id="${id}" name="value" maxlength="64" pattern="([0-9a-fA-F]{64})?" value="${esc(String(current))}">`
+                : `<select id="${id}" name="value"><option value="true"${current === true ? " selected" : ""}>on</option><option value="false"${current === false ? " selected" : ""}>off</option></select>`;
         return `<form class="card" method="post" action="/admin/settings">${csrfField(csrf)}<input type="hidden" name="key" value="${esc(key)}">
           <label for="${id}"><strong>${esc(def.label)}</strong> <span class="muted">(${esc(key)})</span></label>${input}
           <p><button>Save</button></p></form>`;
@@ -417,7 +419,7 @@ export function buildAdminApp(deps: AdminAppDeps): FastifyInstance {
             type: "object",
             required: ["csrf", "key", "value"],
             additionalProperties: false,
-            properties: { csrf: { type: "string", maxLength: 100 }, key: { type: "string", maxLength: 64 }, value: { type: "string", maxLength: 32 } },
+            properties: { csrf: { type: "string", maxLength: 100 }, key: { type: "string", maxLength: 64 }, value: { type: "string", maxLength: 80 } },
           },
         },
       },

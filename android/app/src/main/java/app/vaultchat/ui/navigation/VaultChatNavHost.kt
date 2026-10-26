@@ -25,6 +25,7 @@ import app.vaultchat.domain.call.CallInfo
 import app.vaultchat.domain.call.CallKind
 import app.vaultchat.domain.call.CallStatus
 import app.vaultchat.domain.chat.flushPendingLeave
+import app.vaultchat.ui.about.UpgradeRequiredScreen
 import app.vaultchat.ui.call.CallScreen
 import app.vaultchat.ui.chat.ChatScreen
 import app.vaultchat.ui.chat.ChatViewModel
@@ -85,6 +86,12 @@ private fun NavHostController.replaceAll(route: Any) {
 
 @Composable
 fun VaultChatNavHost(container: AppContainer) {
+    // An outdated build can do nothing but tell the user to update (docs/05 §5, docs/16 §9).
+    val upgradeRequired by container.upgradeRequired.collectAsStateWithLifecycle()
+    if (upgradeRequired) {
+        UpgradeRequiredScreen(container.appVersionApi)
+        return
+    }
     val navController = rememberNavController()
     // Decided once from the stored session; the Home screen then confirms it with the server.
     val start: Any = remember {

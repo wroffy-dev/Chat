@@ -11,6 +11,9 @@ export const SETTING_DEFS = {
   "call.ring_timeout_seconds": { kind: "int", min: 20, max: 90, label: "How long an incoming call rings (seconds)" },
   "chat.unread_backstop_hours": { kind: "int", min: 1, max: 24, label: "Longest a message can exist (hours; D-02 caps it at 24)" },
   "push.enabled": { kind: "bool", label: "Send push notifications (emergency off switch)" },
+  "app.min_supported_version_code": { kind: "int", min: 1, max: 2_000_000_000, label: "Oldest app version allowed (older apps must update)" },
+  "app.latest_version_code": { kind: "int", min: 0, max: 2_000_000_000, label: "Latest app version (0 = not announced)" },
+  "app.latest_apk_sha256": { kind: "hex", label: "SHA-256 of the latest APK, so users can check their file (empty = none)" },
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFS;
@@ -19,9 +22,25 @@ export interface Settings {
   "call.ring_timeout_seconds": number;
   "chat.unread_backstop_hours": number;
   "push.enabled": boolean;
+  "app.min_supported_version_code": number;
+  "app.latest_version_code": number;
+  "app.latest_apk_sha256": string;
 }
 
 export const SETTING_KEYS = Object.keys(SETTING_DEFS) as SettingKey[];
+
+/** Values in force until the admin changes them. */
+export function defaultSettings(ringTimeoutSeconds: number): Settings {
+  return {
+    "call.max_video_quality": "1080p",
+    "call.ring_timeout_seconds": ringTimeoutSeconds,
+    "chat.unread_backstop_hours": 24,
+    "push.enabled": true,
+    "app.min_supported_version_code": 1,
+    "app.latest_version_code": 0,
+    "app.latest_apk_sha256": "",
+  };
+}
 
 export class SettingsService {
   private cache: { at: number; values: Settings } | null = null;
@@ -73,6 +92,7 @@ function parseRaw(key: SettingKey, raw: string): unknown {
   const def = SETTING_DEFS[key];
   if (def.kind === "int") return /^\d{1,4}$/.test(raw.trim()) ? Number(raw.trim()) : undefined;
   if (def.kind === "bool") return raw === "true" ? true : raw === "false" ? false : undefined;
+  if (def.kind === "hex") return raw.trim().toLowerCase();
   return raw;
 }
 
@@ -85,5 +105,7 @@ function validate(key: SettingKey, v: unknown): string | number | boolean | unde
       return typeof v === "number" && Number.isInteger(v) && v >= def.min && v <= def.max ? v : undefined;
     case "bool":
       return typeof v === "boolean" ? v : undefined;
+    case "hex":
+      return typeof v === "string" && /^([0-9a-f]{64})?$/.test(v) ? v : undefined;
   }
 }
