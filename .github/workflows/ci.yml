@@ -65,7 +65,7 @@ jobs:
           nsc | tee default.txt
           grep -q '10\.0\.2\.2' default.txt
           ! grep -q '192\.0\.2\.10' default.txt
-          ./gradlew --no-daemon :app:assembleDebug -Pvaultchat.apiBaseUrl=http://192.0.2.10:3000/
+          ./gradlew --no-daemon :app:assembleDebug -Pvaultchat.apiBaseUrl.debug=http://192.0.2.10:3000/
           nsc | tee lan.txt
           grep -q '192\.0\.2\.10' lan.txt
       # Unsigned release build with a placeholder URL: checks that R8 shrinking works with the

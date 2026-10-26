@@ -92,7 +92,7 @@ Admin Console (on the computer only): `http://127.0.0.1:3001/admin` — password
 
 ```sh
 cd android
-./gradlew :app:assembleDebug -Pvaultchat.apiBaseUrl=http://<lan-ip>:3000/
+./gradlew :app:assembleDebug -Pvaultchat.apiBaseUrl.debug=http://<lan-ip>:3000/
 ```
 The debug build allows plain HTTP only to `<lan-ip>` (and the emulator's host); the release build stays
 HTTPS-only. Install on each phone (USB, one at a time):

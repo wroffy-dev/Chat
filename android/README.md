@@ -17,7 +17,7 @@ cd android
 ## Backend URL
 
 - Debug: `http://10.0.2.2:3000/` (the development machine as seen from the emulator). For a physical
-  phone, pass `-Pvaultchat.apiBaseUrl=http://<lan-ip>:3000/`. The debug network security config is
+  phone, pass `-Pvaultchat.apiBaseUrl.debug=http://<lan-ip>:3000/`. The debug network security config is
   generated from that URL: plain HTTP is allowed only to its host (and the emulator host).
 - Release: must be `https://` (the build fails otherwise). Set `vaultchat.apiBaseUrl.release` in
   `~/.gradle/gradle.properties` on the release machine.
