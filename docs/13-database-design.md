@@ -20,7 +20,8 @@ column names used in the other docs.
     service `audit-retention`; it runs without `ADMIN_TOTP_ENC_KEY` or any app secret).
   - `vc_maint` also runs backups, so it can SELECT every table (`pg_dump` must lock `messages` even
     though it skips its rows).
-  - **Implemented** as `deploy/postgres/grants.sql` (idempotent, re-run after every migration) and
+  - **Implemented** as `backend/prisma/grants.sql` (idempotent; the migrate image applies it as
+    `vc_migrate` after every migration) and
     checked by `deploy/postgres/verify-roles.sh` in CI: each refused action must fail with
     "permission denied", and the backend's real flows run as `vc_app`.
 

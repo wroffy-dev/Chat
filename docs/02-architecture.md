@@ -149,6 +149,6 @@ Documentation only — none of these directories except `docs/` exist yet.
 │   └── Dockerfile
 └── deploy/
     ├── docker-compose.dev.yml    # local dev stack
-    ├── livekit/livekit.yaml.example  # no secrets
+    ├── docker-compose.prod.yml   # incl. LiveKit's config (no secrets)
     └── coolify/README.md         # resource-by-resource setup notes
 ```

@@ -23,9 +23,9 @@ to reach it by its internal hostname (**Verify** the Coolify option name in the 
 
 ```
 backend/Dockerfile                  # multi-stage: build TS → slim Node runtime, non-root user (+ migrate target)
-deploy/docker-compose.prod.yml      # backend, migrate, livekit, backup (no secrets inside)
-deploy/livekit/livekit.yaml.example # config template with placeholders
-deploy/postgres/grants.sql          # database role privileges, re-run after every migration
+deploy/docker-compose.prod.yml      # backend, migrate, livekit (config inline), backup (no secrets inside)
+backend/prisma/grants.sql           # database role privileges, applied by `migrate` after every migration
+deploy/postgres/verify-roles.sh     # CI check of the grants
 deploy/backup/                      # backup.sh, restore-test.sh, backup image
 deploy/coolify/README.md            # step-by-step first deployment (runbook)
 ```
@@ -94,8 +94,10 @@ skip staging LiveKit and test calls against production LiveKit with staging back
 ## 5. Backend deployment
 
 1. Coolify builds the image from the Git commit.
-2. Pre-deployment step: `prisma migrate deploy` with `MIGRATE_DATABASE_URL` (after the automatic pre-migration backup, §11),
-   then `psql -f deploy/postgres/grants.sql` as the database owner (new tables get the right privileges).
+2. The compose `migrate` service runs first on every deployment: `prisma migrate deploy` with
+   `MIGRATE_DATABASE_URL`, then `backend/prisma/grants.sql` as the same owning role (new tables get the
+   right privileges). The backend starts only if it succeeded (`depends_on: service_completed_successfully`).
+   Take a backup first when a deployment brings a migration (§11).
 3. Container starts as non-root; `/readyz` must pass before Traefik routes traffic.
 4. Traefik routes `api.<domain>` → `backend:3000`, with `/internal/*` **not** routed (path rule excludes it).
 5. Admin listener: compose `ports: ["127.0.0.1:3001:3001"]` — reachable only from the VPS itself (SSH tunnel).
@@ -106,7 +108,7 @@ skip staging LiveKit and test calls against production LiveKit with staging back
 
 - Coolify database resource with a persistent volume; **no public port mapping**.
 - Create roles `vc_migrate`, `vc_app`, `vc_maint` with the grants in [13 §1](13-database-design.md#1-conventions):
-  the one-time commands are at the top of `deploy/postgres/grants.sql`; passwords are set with `\password`,
+  the one-time commands are at the top of `backend/prisma/grants.sql`; passwords are set with `\password`,
   never written to a file.
 - Scheduled jobs with `vc_maint`: daily backup (§11) and `maint:purge-audit` (D-12: audit events older than 365 days).
 - `max_connections` modest (e.g. 50); backend pool ~10.
@@ -152,8 +154,9 @@ Signalling: Traefik router `rtc.<domain>` → `livekit:7880` (WebSocket upgrade 
 
 ### 8.2 Configuration
 
-Use the config in [08 §13](08-calling.md#13-livekit-server-configuration-proposed-values). Keys via
-`LIVEKIT_KEYS`. Never run `--dev` in production. Pin the image version; read release notes before upgrading.
+Use the config in [08 §13](08-calling.md#13-livekit-server-configuration-proposed-values). It lives in
+`deploy/docker-compose.prod.yml` as the `LIVEKIT_CONFIG` environment variable (no file on the server);
+the webhook key name comes from `LIVEKIT_API_KEY`. Keys via `LIVEKIT_KEYS`. Never run `--dev` in production. Pin the image version; read release notes before upgrading.
 
 ### 8.3 TURN
 
@@ -194,7 +197,8 @@ Use the config in [08 §13](08-calling.md#13-livekit-server-configuration-propos
 - Secrets live only in Coolify's environment variables / secret files for the resource, the offline
   keystore vault, and the admin's password manager. Never in Git, docs, Docker images, the APK, or screenshots.
 - `.gitignore` covers `.env*` (except `.env.example`), `*.jks`, `*.keystore`, `google-services.json`,
-  `*service-account*.json`, `livekit.yaml` (only `.example` is committed).
+  `*service-account*.json`, `livekit.yaml` (the config itself is inline in the compose file and holds
+  no secrets).
 - CI runs a secret scanner on every push.
 - Rotation:
   - LiveKit: add a second key pair to `LIVEKIT_KEYS`, switch backend to it, remove the old pair.

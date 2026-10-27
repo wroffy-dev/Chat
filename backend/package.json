@@ -17,7 +17,8 @@
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "postinstall": "prisma generate",
-    "cli": "node dist/cli.js"
+    "cli": "node dist/cli.js",
+    "db:grants": "node dist/db/apply-grants.js"
   },
   "dependencies": {
     "@fastify/cookie": "11.1.3",

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Verifies grants.sql on a throwaway database: migrations as vc_migrate, then what vc_app and
-# vc_maint may and may not do, then the backend's real flows as vc_app, then a backup and restore
+# Verifies backend/prisma/grants.sql on a throwaway database: migrations and grants as vc_migrate
+# (as the migrate image does), then what vc_app and vc_maint may and may not do, then the backend's real flows as vc_app, then a backup and restore
 # drill as vc_maint. For local machines and CI only — never point it at a real server.
 #
 # Needs: libpq variables for a SUPERUSER (PGHOST, PGPORT, PGUSER, PGPASSWORD), psql, node with
@@ -40,8 +40,8 @@ asadmin -d postgres -c "CREATE DATABASE $db OWNER vc_migrate"
 
 echo "migrations as vc_migrate"
 (cd backend && MIGRATE_DATABASE_URL="$(url vc_migrate)" npx --no-install prisma migrate deploy >/dev/null)
-asadmin -d "$db" -f deploy/postgres/grants.sql
-asadmin -d "$db" -f deploy/postgres/grants.sql   # idempotent
+(cd backend && MIGRATE_DATABASE_URL="$(url vc_migrate)" node dist/db/apply-grants.js >/dev/null)
+(cd backend && MIGRATE_DATABASE_URL="$(url vc_migrate)" node dist/db/apply-grants.js >/dev/null)   # idempotent
 
 echo "privileges"
 ok vc_app   "SELECT count(*) FROM users"
