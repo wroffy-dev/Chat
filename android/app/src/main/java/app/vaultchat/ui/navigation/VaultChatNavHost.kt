@@ -230,7 +230,7 @@ fun VaultChatNavHost(container: AppContainer) {
         }
         composable<InboxRoute> {
             val viewModel: InboxViewModel = viewModel(
-                factory = viewModelFactory { initializer { InboxViewModel(container.connectionRepository) } },
+                factory = viewModelFactory { initializer { InboxViewModel(container.connectionRepository, container.realtime) } },
             )
             InboxScreen(
                 viewModel = viewModel,
@@ -242,7 +242,7 @@ fun VaultChatNavHost(container: AppContainer) {
         }
         composable<ShowQrRoute> {
             val viewModel: ShowQrViewModel = viewModel(
-                factory = viewModelFactory { initializer { ShowQrViewModel(container.connectionRepository) } },
+                factory = viewModelFactory { initializer { ShowQrViewModel(container.connectionRepository, container.realtime) } },
             )
             ShowQrScreen(
                 viewModel = viewModel,
@@ -253,7 +253,7 @@ fun VaultChatNavHost(container: AppContainer) {
         }
         composable<ScanQrRoute> {
             val viewModel: ScanQrViewModel = viewModel(
-                factory = viewModelFactory { initializer { ScanQrViewModel(container.connectionRepository) } },
+                factory = viewModelFactory { initializer { ScanQrViewModel(container.connectionRepository, container.realtime) } },
             )
             ScanQrScreen(
                 viewModel = viewModel,

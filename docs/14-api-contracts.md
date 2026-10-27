@@ -269,7 +269,8 @@ Envelope: `{ "type": string, "data": object }`
 | S→C | `ready` | `{}` | — |
 | S→C | `chat.changed` | `{ conversationId }` | New message or deletions: `GET /conversations/{id}/messages` now |
 | S→C | `call.changed` | `{ callId }` | Incoming call or status change: `GET /calls/current` now |
+| S→C | `connection.changed` | `{ requestId }` | Pairing request made, answered or withdrawn (sent to both people): re-read requests now |
 
 Signals are best effort. Polling stays as the fallback: the chat polls every 2 s without a socket and
-every 10 s with one; the incoming-call check every 3 s / 15 s. The chat heartbeat stays on REST
+every 10 s with one; the incoming-call check every 3 s / 15 s; the pairing screens every 3 s / 15 s. The chat heartbeat stays on REST
 (`POST /conversations/{id}/heartbeat`).

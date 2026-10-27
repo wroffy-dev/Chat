@@ -11,6 +11,9 @@ import app.vaultchat.domain.connection.QrCode
 import app.vaultchat.domain.connection.QrPayload
 import app.vaultchat.domain.connection.RequestDirection
 import app.vaultchat.domain.connection.RequestStatus
+import app.vaultchat.domain.realtime.RealtimeSignal
+import app.vaultchat.domain.realtime.RealtimeSignals
+import app.vaultchat.domain.realtime.pollWithSignals
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,10 +24,13 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
- * Polling interval while a pairing screen is visible. Live push (WebSocket) arrives in a later
- * phase; until then screens poll only while in the foreground (started/stopped by the UI).
+ * Pairing screens re-read at once on a live `connection.changed` signal, and poll as a fallback while
+ * visible (started/stopped by the UI): every 3 s without the signal socket, every 15 s with it.
  */
 private const val POLL_MS = 3_000L
+private const val SIGNALLED_POLL_MS = 15_000L
+
+private val pairingSignal: (RealtimeSignal) -> Boolean = { it is RealtimeSignal.ConnectionChanged }
 
 // ------------------------------------------------------------------------------------------------
 // Inbox
@@ -40,7 +46,7 @@ data class InboxUiState(
     val sessionEnded: Boolean = false,
 )
 
-class InboxViewModel(private val repo: ConnectionRepository) : ViewModel() {
+class InboxViewModel(private val repo: ConnectionRepository, private val signals: RealtimeSignals? = null) : ViewModel() {
     private val _state = MutableStateFlow(InboxUiState())
     val state: StateFlow<InboxUiState> = _state.asStateFlow()
     private var poller: Job? = null
@@ -48,9 +54,9 @@ class InboxViewModel(private val repo: ConnectionRepository) : ViewModel() {
     fun startPolling() {
         if (poller?.isActive == true) return
         poller = viewModelScope.launch {
-            while (isActive) {
+            pollWithSignals(signals, pairingSignal, POLL_MS, SIGNALLED_POLL_MS) {
                 refresh()
-                delay(POLL_MS)
+                true
             }
         }
     }
@@ -113,6 +119,7 @@ data class ShowQrUiState(
 
 class ShowQrViewModel(
     private val repo: ConnectionRepository,
+    private val signals: RealtimeSignals? = null,
     private val nowMs: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
     private val _state = MutableStateFlow(ShowQrUiState())
@@ -125,16 +132,21 @@ class ShowQrViewModel(
     fun start() {
         if (loop?.isActive == true) return
         loop = viewModelScope.launch {
+            // A scan of this code shows up at once; the timed check below is the fallback.
+            val listener = signals?.let { live -> launch { live.signals.collect { if (pairingSignal(it)) pollIncoming() } } }
             var lastPoll = 0L
             while (isActive) {
                 val s = _state.value
-                if (s.connected || s.sessionEnded) return@launch
+                if (s.connected || s.sessionEnded) {
+                    listener?.cancel()
+                    return@launch
+                }
                 val qr = s.qr
                 if (qr == null || qr.expiresAtEpochMs - nowMs() <= refreshBeforeExpiryMs) {
                     // While a request is waiting for an answer there is no need for a new code.
                     if (s.incoming == null) generate()
                 }
-                if (nowMs() - lastPoll >= POLL_MS) {
+                if (nowMs() - lastPoll >= if (signals?.connected?.value == true) SIGNALLED_POLL_MS else POLL_MS) {
                     lastPoll = nowMs()
                     pollIncoming()
                 }
@@ -213,7 +225,7 @@ data class ScanUiState(
     val sessionEnded: Boolean = false,
 )
 
-class ScanQrViewModel(private val repo: ConnectionRepository) : ViewModel() {
+class ScanQrViewModel(private val repo: ConnectionRepository, private val signals: RealtimeSignals? = null) : ViewModel() {
     private val _state = MutableStateFlow(ScanUiState())
     val state: StateFlow<ScanUiState> = _state.asStateFlow()
     private var poller: Job? = null
@@ -251,11 +263,10 @@ class ScanQrViewModel(private val repo: ConnectionRepository) : ViewModel() {
     fun startPolling() {
         if (poller?.isActive == true || _state.value.stage !is ScanStage.Waiting) return
         poller = viewModelScope.launch {
-            while (isActive) {
-                delay(POLL_MS)
-                val waiting = _state.value.stage as? ScanStage.Waiting ?: return@launch
+            pollWithSignals(signals, pairingSignal, POLL_MS, SIGNALLED_POLL_MS) {
+                val waiting = _state.value.stage as? ScanStage.Waiting ?: return@pollWithSignals false
                 val r = repo.requests(RequestDirection.OUTGOING)
-                val current = (r as? ConnResult.Ok)?.value?.firstOrNull { it.id == waiting.request.id } ?: continue
+                val current = (r as? ConnResult.Ok)?.value?.firstOrNull { it.id == waiting.request.id } ?: return@pollWithSignals true
                 val next = when (current.status) {
                     RequestStatus.PENDING -> null
                     RequestStatus.ACCEPTED -> ScanStage.Connected
@@ -263,10 +274,8 @@ class ScanQrViewModel(private val repo: ConnectionRepository) : ViewModel() {
                     RequestStatus.EXPIRED -> ScanStage.Failed(ScanFailure.EXPIRED)
                     RequestStatus.CANCELLED -> ScanStage.Failed(ScanFailure.CANCELLED)
                 }
-                if (next != null) {
-                    _state.update { it.copy(stage = next) }
-                    return@launch
-                }
+                if (next != null) _state.update { it.copy(stage = next) }
+                next == null
             }
         }
     }

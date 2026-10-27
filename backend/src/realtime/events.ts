@@ -5,7 +5,8 @@
  */
 export type RealtimeEvent =
   | { type: "chat.changed"; conversationId: string }
-  | { type: "call.changed"; callId: string };
+  | { type: "call.changed"; callId: string }
+  | { type: "connection.changed"; requestId: string };
 
 export interface EventPublisher {
   /** Best effort and immediate: users without an open socket simply miss it (they poll or get a push). */

@@ -2,6 +2,7 @@ import type { PrismaClient, Prisma } from "../generated/prisma/client.js";
 import { audit } from "../auth/audit.js";
 import { generateToken, hashToken } from "../auth/tokens.js";
 import { AppError, appError, DEFAULT_MESSAGES } from "../errors.js";
+import type { EventPublisher } from "../realtime/events.js";
 
 const SECOND = 1000;
 const MINUTE = 60 * SECOND;
@@ -66,7 +67,13 @@ export class ConnectionService {
   constructor(
     private readonly prisma: PrismaClient,
     private readonly now: () => Date = () => new Date(),
+    /** Live "request changed" signals to both people, so pairing screens update at once. */
+    private readonly events: EventPublisher | null = null,
   ) {}
+
+  private changed(requestId: string, userIds: readonly string[]) {
+    this.events?.publish(userIds, { type: "connection.changed", requestId });
+  }
 
   async connectionFor(userId: string): Promise<ConnectionView | null> {
     const c = await this.prisma.connection.findFirst({
@@ -139,6 +146,7 @@ export class ConnectionService {
       await audit(tx, { actorType: "user", actorId: userId, action: "connection.request_created", targetType: "connection_request", targetId: created.id, ip });
       return created;
     });
+    this.changed(request.id, [request.requesterUserId, request.ownerUserId]);
 
     return {
       id: request.id,
@@ -183,7 +191,7 @@ export class ConnectionService {
   /** The QR owner accepts: creates the permanent connection (docs/06 §4.3). */
   async accept(userId: string, requestId: string, ip: string | null): Promise<ConnectionView> {
     const now = this.now();
-    await this.prisma.$transaction(async (tx) => {
+    const pair = await this.prisma.$transaction(async (tx) => {
       const peek = await tx.connectionRequest.findUnique({ where: { id: requestId } });
       if (!peek || peek.ownerUserId !== userId) throw appError(404, "NOT_FOUND");
       // Lock every request between this pair in one consistent order (by id). Two users accepting
@@ -218,7 +226,10 @@ export class ConnectionService {
         data: { status: "cancelled", decidedAt: now },
       });
       await audit(tx, { actorType: "user", actorId: userId, action: "connection.accepted", targetType: "connection_request", targetId: req.id, ip });
+      return [a!, b!];
     });
+    // Cross-scan requests cancelled above are covered: both people re-read their requests.
+    this.changed(requestId, pair);
     const view = await this.connectionFor(userId);
     if (!view) throw appError(409, "CONFLICT");
     return view;
@@ -250,14 +261,16 @@ export class ConnectionService {
     ip: string | null,
   ) {
     const now = this.now();
-    await this.prisma.$transaction(async (tx) => {
+    const pair = await this.prisma.$transaction(async (tx) => {
       const req = await this.lockRequest(tx, requestId);
       const actorId = role === "owner" ? req?.owner_user_id : req?.requester_user_id;
       if (!req || actorId !== userId) throw appError(404, "NOT_FOUND");
       if (req.status !== "pending" || req.expires_at <= now) throw appError(409, "REQUEST_NOT_PENDING");
       await tx.connectionRequest.update({ where: { id: req.id }, data: { status, decidedAt: now } });
       await audit(tx, { actorType: "user", actorId: userId, action, targetType: "connection_request", targetId: req.id, ip });
+      return [req.owner_user_id, req.requester_user_id];
     });
+    this.changed(requestId, pair);
   }
 
   private async lockRequest(tx: Prisma.TransactionClient, id: string) {

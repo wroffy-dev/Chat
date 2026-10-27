@@ -72,7 +72,7 @@ describe.skipIf(!TEST_DB_URL)("realtime signals over /api/v1/ws (PostgreSQL)", (
       config,
       database: { checkReadiness: database.checkReadiness.bind(database), close: async () => {} },
       auth,
-      connections: new ConnectionService(database.prisma),
+      connections: new ConnectionService(database.prisma, undefined, hub),
       calls: new CallService(database.prisma, media, 45, undefined, null, hub),
       chat: new ChatService(database.prisma, undefined, null, hub),
       media,
@@ -156,6 +156,38 @@ describe.skipIf(!TEST_DB_URL)("realtime signals over /api/v1/ws (PostgreSQL)", (
     await req(bob, "POST", `/conversations/${conv}/leave`, { leaveId: randomUUID() });
     await b.waitFor(() => b.frames.length > before, "signal after the clear");
     expect(b.raw.join("")).not.toContain("secret");
+  });
+
+  it("signals both people as a pairing request is made, answered or withdrawn", async () => {
+    const alice = await login("alice");
+    const bob = await login("bob");
+    const a = await connect(bearer(alice));
+    const b = await connect(bearer(bob));
+    const signals = (c: Client) => c.frames.filter((f) => f.type === "connection.changed");
+
+    // Bob scans and then withdraws; Alice sees both at once.
+    const first = (await req(alice, "POST", "/connection-qr", {})).json();
+    const r1 = (await req(bob, "POST", "/connection-requests", { token: first.token })).json();
+    await a.waitFor(() => signals(a).length === 1, "request signal for the QR owner");
+    expect(signals(a)[0]).toEqual({ type: "connection.changed", data: { requestId: r1.id } });
+    await b.waitFor(() => signals(b).length === 1, "request signal for the scanner");
+    await req(bob, "POST", `/connection-requests/${r1.id}/cancel`, {});
+    await a.waitFor(() => signals(a).length === 2, "cancel signal");
+
+    // Rejected, then a new scan accepted: the scanner learns each answer.
+    const second = (await req(alice, "POST", "/connection-qr", {})).json();
+    const r2 = (await req(bob, "POST", "/connection-requests", { token: second.token })).json();
+    await req(alice, "POST", `/connection-requests/${r2.id}/reject`, {});
+    await b.waitFor(() => signals(b).filter((f) => f.data.requestId === r2.id).length === 2, "reject signal");
+    const third = (await req(alice, "POST", "/connection-qr", {})).json();
+    const r3 = (await req(bob, "POST", "/connection-requests", { token: third.token })).json();
+    expect((await req(alice, "POST", `/connection-requests/${r3.id}/accept`, {})).statusCode).toBe(200);
+    await b.waitFor(() => signals(b).filter((f) => f.data.requestId === r3.id).length === 2, "accept signal");
+    // IDs only: no usernames or QR tokens on the socket.
+    for (const raw of [...a.raw, ...b.raw]) {
+      expect(raw).not.toContain("bob");
+      expect(raw).not.toContain(third.token);
+    }
   });
 
   it("signals an incoming call and its end", async () => {

@@ -33,7 +33,6 @@ async function main() {
   const hasher = new PasswordHasher({ memoryCost: config.ARGON2_MEMORY_KIB, timeCost: config.ARGON2_TIME_COST });
   const auth = new AuthService(database.prisma, hasher);
   const admin = new AdminService(database.prisma, hasher, requireAdminKey(config));
-  const connections = new ConnectionService(database.prisma);
   const media =
     config.LIVEKIT_PUBLIC_URL && config.LIVEKIT_API_URL && config.LIVEKIT_API_KEY && config.LIVEKIT_API_SECRET
       ? new LiveKitGateway(config.LIVEKIT_PUBLIC_URL, config.LIVEKIT_API_URL, config.LIVEKIT_API_KEY, config.LIVEKIT_API_SECRET)
@@ -44,6 +43,7 @@ async function main() {
   let logPush: (msg: string, extra?: Record<string, unknown>) => void = () => {};
   const push = new PushService(database.prisma, transport, (msg, extra) => logPush(msg, extra), () => settings.get("push.enabled"));
   const hub = new RealtimeHub();
+  const connections = new ConnectionService(database.prisma, undefined, hub);
   const calls = new CallService(database.prisma, media, config.CALL_RING_TIMEOUT_SECONDS, undefined, push, hub, settings);
   const chat = new ChatService(database.prisma, undefined, push, hub, settings);
   const app = buildApp({ config, database, auth, connections, calls, chat, media, push, realtime: { hub }, settings });
