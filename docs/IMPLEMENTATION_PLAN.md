@@ -160,7 +160,7 @@ user. Server logs scanned afterwards: no passwords or tokens present.
 | Per-user limits: 6 QR/min, 60/h; 10 redeems/min | Done (verified) | Test: 7th QR in a minute → 429 |
 | `/me` returns the connection; Admin users page shows whether the pair is connected | Done (verified) | Tests |
 | Hourly cleanup of QR tokens older than 24 h | Done (unit not separately tested) | Runs in `server.ts` |
-| Live pairing updates: `connection.changed {requestId}` to both people on scan, accept, reject and cancel; pairing screens re-read at once (polling 3 s / 15 s as fallback) | Done (backend verified; app logic verified on JVM; CI run pending) | `test/realtime.integration.test.ts` (fails with the signal removed), `PollWithSignalsTest`. Not run on a device |
+| Live pairing updates: `connection.changed {requestId}` to both people on scan, accept, reject and cancel; pairing screens re-read at once (polling 3 s / 15 s as fallback) | Done (backend verified; app logic verified on JVM; compiles, unit-tested and linted in CI run 40450293732) | `test/realtime.integration.test.ts` (fails with the signal removed), `PollWithSignalsTest`. Not run on a device |
 
 ### Android
 
