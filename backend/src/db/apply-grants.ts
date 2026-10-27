@@ -3,7 +3,7 @@
  * schema-owning role. Runs after `prisma migrate deploy` in the migrate image, so new tables get the
  * right privileges on every deployment. Idempotent. Never prints the connection string.
  *
- *   MIGRATE_DATABASE_URL=postgresql://vc_migrate:…@host/vaultchat node dist/db/apply-grants.js
+ *   MIGRATE_DATABASE_URL=postgresql://vc_migrate:<password>@<host>/vaultchat node dist/db/apply-grants.js
  */
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
