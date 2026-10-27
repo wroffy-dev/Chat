@@ -21,7 +21,7 @@ where it was done; nothing below has been run on a phone or on the VPS.
 | 6 | Security and reliability | **Slice 1 built** — see below; deployment-side items wait for the VPS |
 | 7 | Private release | Not started |
 
-Current totals (2026-10-26): backend 120 tests against PostgreSQL 16; Android 78 JVM unit tests; CI green
+Current totals (2026-10-27): backend 121 tests against PostgreSQL 16; Android 81 JVM unit tests; CI green
 on every job (backend, android incl. release build, repo secret scan, images, database-roles).
 
 ### Q-1 (decided 2026-10-24): QR connection before calling
@@ -160,7 +160,7 @@ user. Server logs scanned afterwards: no passwords or tokens present.
 | Per-user limits: 6 QR/min, 60/h; 10 redeems/min | Done (verified) | Test: 7th QR in a minute → 429 |
 | `/me` returns the connection; Admin users page shows whether the pair is connected | Done (verified) | Tests |
 | Hourly cleanup of QR tokens older than 24 h | Done (unit not separately tested) | Runs in `server.ts` |
-| Live push of new requests | **Not started** — screens poll every 3 s while visible | The WebSocket exists now (see "Realtime signals") but sends no connection-request signal |
+| Live pairing updates: `connection.changed {requestId}` to both people on scan, accept, reject and cancel; pairing screens re-read at once (polling 3 s / 15 s as fallback) | Done (backend verified; app logic verified on JVM; compiles, unit-tested and linted in CI run 40450293732) | `test/realtime.integration.test.ts` (fails with the signal removed), `PollWithSignalsTest`. Not run on a device |
 
 ### Android
 

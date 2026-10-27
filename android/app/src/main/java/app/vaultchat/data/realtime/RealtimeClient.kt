@@ -109,6 +109,7 @@ class RealtimeClient(
         when (frame.type) {
             "chat.changed" -> field("conversationId")?.let { RealtimeSignal.ChatChanged(it) }
             "call.changed" -> field("callId")?.let { RealtimeSignal.CallChanged(it) }
+            "connection.changed" -> field("requestId")?.let { RealtimeSignal.ConnectionChanged(it) }
             else -> null
         }
     } catch (_: Exception) {

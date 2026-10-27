@@ -26,8 +26,7 @@ and Node when asked.
 ## 1. Get the code
 
 ```sh
-git clone https://github.com/wroffy-dev/Chat.git && cd Chat
-git checkout claude/new-session-8x6iea      # until PR #1 is merged into main
+git clone https://github.com/wroffy-dev/Chat.git && cd Chat      # main has everything
 ```
 
 ## 2. Database and LiveKit (Docker)
