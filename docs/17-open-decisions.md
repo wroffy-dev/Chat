@@ -19,7 +19,6 @@ recommendation is given, it is labelled as such and still needs sign-off.
 | D-15 | TURN/TLS on port 443 | Not in MVP · add if a real network fails | Add only if T-NET-ONLY-443 matters for the users' networks | Deployment |
 | D-16 | End-to-end encryption | Not in MVP · evaluate later with key exchange during QR pairing | Evaluate after MVP; never claim before verified | Security roadmap |
 | D-17 | Offsite backup provider | Any S3-compatible provider with low/zero cost at this size | Choose by current pricing and region | Backups |
-| D-18 | Domain names | Reuse an existing domain's subdomains · new domain | Reuse existing domain (₹0) | DNS/TLS |
 | D-19 | Data saver default | Off · on for mobile data | Off, user-controlled | Calling |
 
 ## Decided
@@ -29,6 +28,7 @@ recommendation is given, it is labelled as such and still needs sign-off.
 | Q-1 | Build QR connection before calling | 2026-10-24 | Owner ("Go" to the recommendation) |
 | D-01 | **Option D.** On any exit, delete messages the recipient has already seen. Unseen messages wait for the recipient, and are deleted on the next exit after they are seen. | 2026-10-24 | Owner |
 | D-12 | **Retention.** Call records and call diagnostics: 24 h. Audit log: 365 days. Backups: only the last 24 h are kept. (Error records: no table exists yet.) | 2026-10-25 | Owner ("Just 24", then chose the scope) |
+| D-18 | **Domains:** subdomains of the owner's existing domain `fluteconsulatancy.com` (spelling as given by the owner; to be confirmed against the registrar): `api.fluteconsulatancy.com` (backend), `rtc.fluteconsulatancy.com` (LiveKit), `coolify.fluteconsulatancy.com` (Coolify dashboard, for API access). | 2026-10-27 | Owner ("use this domain") |
 | D-02 | **Exit after about a minute.** The chat holds a 60 s presence lease renewed every 20 s; when it lapses (background, crash, power or network loss) the server applies the exit rule. **Backstop: every message is deleted at most 24 h after it was sent**, seen or not. | 2026-10-24 | Owner |
 
 ## How to record a decision

@@ -311,7 +311,14 @@ the deployed system.
    send back the results table. Firebase (android/README.md "Push notifications") comes after.
 2. Chat on two phones: open, send both ways, Back on one phone, background for over a minute; record
    results.
-3. Phase 7 (private release) — needs the VPS and your go-ahead for any deployment. The step-by-step
-   runbook is `deploy/coolify/README.md` (not yet executed).
+3. **Phase 7 — deployment to the VPS: authorised by the owner on 2026-10-27** ("now you can do it"),
+   so the two-phone test can run against the VPS instead of a local setup. Domains (D-18):
+   `api.` / `rtc.` / `coolify.fluteconsulatancy.com`. Still open: D-10 (staging; proposed: production
+   only, two users). Access: Coolify's HTTPS API, with `coolify.fluteconsulatancy.com` allowed in the
+   environment's network settings and a Coolify API token in the environment variable
+   `COOLIFY_API_TOKEN` (never in chat or git). SSH from the agent environment is blocked.
+   Follow `deploy/coolify/README.md`; confirm with the owner before each step that changes the server
+   (creating resources, setting secrets, migrations, starting services). The owner does DNS, firewall
+   and the admin account (authenticator app) — guide them step by step.
 4. Calling later: try the core-telecom build (`vaultchat.systemCalls=true`) on both phones — spike S-2 —
    then decide whether to switch it on; quality benchmarks (D-13).
