@@ -22,10 +22,12 @@ to reach it by its internal hostname (**Verify** the Coolify option name in the 
 ## 2. Repository / service layout for deployment
 
 ```
-backend/Dockerfile                  # multi-stage: build TS → slim Node runtime, non-root user
-deploy/docker-compose.prod.yml      # backend, livekit, backup (no secrets inside)
+backend/Dockerfile                  # multi-stage: build TS → slim Node runtime, non-root user (+ migrate target)
+deploy/docker-compose.prod.yml      # backend, migrate, livekit, backup (no secrets inside)
 deploy/livekit/livekit.yaml.example # config template with placeholders
-deploy/coolify/README.md            # resource-by-resource setup notes
+deploy/postgres/grants.sql          # database role privileges, re-run after every migration
+deploy/backup/                      # backup.sh, restore-test.sh, backup image
+deploy/coolify/README.md            # step-by-step first deployment (runbook)
 ```
 
 Docker strategy: one image per service, pinned base images by digest, non-root users, read-only root
@@ -58,20 +60,24 @@ A subdomain of an existing domain costs nothing extra. Use DNS-only records (no 
 \* Two LiveKit instances on one host need different media ports and firewall rules. If that is too much,
 skip staging LiveKit and test calls against production LiveKit with staging backend keys disabled — decide in D-10.
 
-### Backend environment variables (defined by this project — proposed names)
+### Backend environment variables (as implemented; the full list with comments is `backend/.env.example`)
 
 | Variable | Example (placeholder) | Secret? |
 |---|---|---|
 | `NODE_ENV` | `production` | No |
-| `PORT` / `ADMIN_PORT` | `3000` / `3001` | No |
+| `HOST` / `PORT` | `0.0.0.0` / `3000` | No |
+| `ADMIN_HOST` / `ADMIN_PORT` | `0.0.0.0` inside the container (published on `127.0.0.1` only) / `3001` | No |
 | `DATABASE_URL` | `postgresql://vc_app:<password>@<db-host>:5432/vaultchat` | **Yes** |
-| `MIGRATE_DATABASE_URL` | `postgresql://vc_migrate:<password>@…` | **Yes** |
-| `TRUST_PROXY_CIDR` | Docker network CIDR of Traefik | No |
+| `MIGRATE_DATABASE_URL` | `postgresql://vc_migrate:<password>@…` (migrate job only) | **Yes** |
+| `TRUST_PROXY` | Traefik's Docker network CIDR, comma-separated if several | No |
 | `LIVEKIT_PUBLIC_URL` | `wss://rtc.<domain>` | No |
 | `LIVEKIT_API_URL` | `http://livekit:7880` | No |
-| `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | `<livekit-key>` / `<livekit-secret>` | **Secret** |
+| `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | `<livekit-key>` / `<livekit-secret>` (32+ characters) | **Secret** |
 | `ADMIN_TOTP_ENC_KEY` | 32 random bytes, base64 | **Secret** |
-| `GOOGLE_APPLICATION_CREDENTIALS` | `/run/secrets/fcm-service-account.json` (mounted file) | File is **secret** |
+| `FCM_CREDENTIALS_FILE` | `/run/secrets/fcm-service-account.json` (mounted file; optional) | File is **secret** |
+| `BACKUP_STATUS_FILE` | `/backups/last-success` (read-only mount; optional) | No |
+| `CALL_RING_TIMEOUT_SECONDS` | `45` | No |
+| `ARGON2_MEMORY_KIB` / `ARGON2_TIME_COST` | defaults; production refuses less than 19456 KiB | No |
 | `LOG_LEVEL` | `info` | No |
 
 ### LiveKit environment variables (verified in `livekit/livekit` `cmd/server/main.go`, 2026-10-24)
@@ -88,7 +94,8 @@ skip staging LiveKit and test calls against production LiveKit with staging back
 ## 5. Backend deployment
 
 1. Coolify builds the image from the Git commit.
-2. Pre-deployment step: `prisma migrate deploy` with `MIGRATE_DATABASE_URL` (after the automatic pre-migration backup, §11).
+2. Pre-deployment step: `prisma migrate deploy` with `MIGRATE_DATABASE_URL` (after the automatic pre-migration backup, §11),
+   then `psql -f deploy/postgres/grants.sql` as the database owner (new tables get the right privileges).
 3. Container starts as non-root; `/readyz` must pass before Traefik routes traffic.
 4. Traefik routes `api.<domain>` → `backend:3000`, with `/internal/*` **not** routed (path rule excludes it).
 5. Admin listener: compose `ports: ["127.0.0.1:3001:3001"]` — reachable only from the VPS itself (SSH tunnel).
@@ -98,7 +105,10 @@ skip staging LiveKit and test calls against production LiveKit with staging back
 ## 6. PostgreSQL
 
 - Coolify database resource with a persistent volume; **no public port mapping**.
-- Create roles `vc_migrate`, `vc_app`, `vc_maint` with the grants in [13 §1](13-database-design.md#1-conventions).
+- Create roles `vc_migrate`, `vc_app`, `vc_maint` with the grants in [13 §1](13-database-design.md#1-conventions):
+  the one-time commands are at the top of `deploy/postgres/grants.sql`; passwords are set with `\password`,
+  never written to a file.
+- Scheduled jobs with `vc_maint`: daily backup (§11) and `maint:purge-audit` (D-12: audit events older than 365 days).
 - `max_connections` modest (e.g. 50); backend pool ~10.
 - **Coolify's built-in scheduled backup is not used for this database**, because it would include message
   data (ADR-05). Use the custom backup job (§11). If Coolify gains per-table exclusion, reconsider.
@@ -200,11 +210,17 @@ Use the config in [08 §13](08-calling.md#13-livekit-server-configuration-propos
 | When | Daily at a quiet hour (UTC time chosen per users' time zone), plus automatically before each migration |
 | Encryption | Pipe through `age` (or `gpg`) with a **public** key; the private key is stored offline only |
 | Where | Offsite S3-compatible bucket, private, with credentials that can write but not list/delete if the provider supports it; plus the latest copy on the VPS |
-| Retention | 7 daily + 4 weekly (proposed) |
+| Retention | Only the last 24 hours (D-12, 2026-10-25): `backup.sh` deletes older files after each successful backup. Apply the same rule to the offsite bucket (lifecycle rule) |
 | Monitoring | Backup job writes a status file read by the backend; Admin Console Health shows last success time; alert if older than 36 h |
 | Restore test | Monthly: download latest, decrypt, `pg_restore` into a scratch database, run `prisma migrate status` and a row-count sanity check; record result |
 | Not backed up | Message text and location (by design); LiveKit (stateless); Redis (none) |
 | Also keep | Coolify configuration export and a copy of this repo's `deploy/` files (no secrets) |
+
+Implemented as scripts (not yet run on the VPS): `deploy/backup/backup.sh` (dump without message rows,
+streamed into `age`) and `deploy/backup/restore-test.sh` (the monthly drill: restore into a new scratch
+database, check, drop), packaged as the `backup` service in `deploy/docker-compose.prod.yml`. The
+backup directory keeps only the last 24 hours (D-12). Consequence: a problem noticed more than a day
+later cannot be restored from backup.
 
 Restore procedure (summary): stop backend → create empty DB → `pg_restore` → run `prisma migrate deploy` →
 start backend → verify `/readyz` and admin login. Restored sessions remain valid; revoke all sessions

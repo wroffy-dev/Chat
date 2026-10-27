@@ -1,6 +1,6 @@
 # 13 — Database Design (PostgreSQL + Prisma)
 
-Status: **Proposed schema.** No migrations exist. This document is the source of truth for table and
+Status: **Partly implemented.** §3.1–3.4 and §3.13 exist as migration `phase2_accounts_sessions_audit`; §3.5–3.7 as `qr_connection` (permanence enforced by a trigger rather than role grants, because a separate app role is not set up yet). §3.8–3.10 exist as migration `chat`; §3.11–3.12 as `calls`. The other tables are still proposed. This document is the source of truth for table and
 column names used in the other docs.
 
 ## 1. Conventions
@@ -16,7 +16,13 @@ column names used in the other docs.
   - `vc_app` — used by the running backend: `SELECT/INSERT/UPDATE/DELETE` as needed, **no DDL**,
     **no DELETE on `connections` and `audit_events`**.
   - Retention clean-up of `audit_events` runs in a scheduled job as `vc_maint` (DELETE on `audit_events`
-    only, by age).
+    only, by age): `node dist/cli.js maint:purge-audit` with the `vc_maint` connection string (compose
+    service `audit-retention`; it runs without `ADMIN_TOTP_ENC_KEY` or any app secret).
+  - `vc_maint` also runs backups, so it can SELECT every table (`pg_dump` must lock `messages` even
+    though it skips its rows).
+  - **Implemented** as `deploy/postgres/grants.sql` (idempotent, re-run after every migration) and
+    checked by `deploy/postgres/verify-roles.sh` in CI: each refused action must fail with
+    "permission denied", and the backend's real flows run as `vc_app`.
 
 ## 2. Entity overview and justification
 
@@ -117,7 +123,7 @@ On revoke, `fcm_token` is set to NULL immediately.
 
 ### 3.4 admin_sessions
 
-`id`, `admin_id` FK, `token_hash` (UNIQUE), `csrf_secret`, `created_at`, `last_used_at`,
+`id`, `admin_id` FK, `token_hash` (UNIQUE), `csrf_token` (per-session random value echoed in forms), `created_at`, `last_used_at`,
 `idle_expires_at` (+15 min), `absolute_expires_at` (+8 h), `revoked_at`. Retention: deleted 7 days after expiry.
 
 ### 3.5 qr_tokens
@@ -172,8 +178,7 @@ UNIQUE `(user_a_id, user_b_id)`. Immutable: `vc_app` has no UPDATE or DELETE pri
 | `id` | uuid PK | no | |
 | `connection_id` | uuid FK → connections.id | no | UNIQUE (one conversation per connection) |
 | `last_seq` | bigint | no | default 0; last allocated message sequence |
-| `clear_epoch` | bigint | no | default 0; +1 per clear |
-| `cleared_through_seq` | bigint | no | default 0 |
+| `clear_epoch` | bigint | no | default 0; +1 whenever messages are deleted (exit or backstop) |
 | `cleared_at` | timestamptz | yes | |
 
 Row is locked `FOR UPDATE` by every send and clear ([07 §3](07-chat-and-disappearing-messages.md#3-server-side-model)).
@@ -203,7 +208,7 @@ Row is locked `FOR UPDATE` by every send and clear ([07 §3](07-chat-and-disappe
 | `created_at` | timestamptz | no | |
 
 UNIQUE `(conversation_id, seq)`; UNIQUE `(conversation_id, sender_user_id, client_message_id)`.
-Deletion: **hard DELETE** by the clear transaction; backstop job by `created_at` if D-01/D-02 sets one.
+Deletion: **hard DELETE** by the clear transaction (D-01 option D: rows whose recipient's `last_read_seq >= seq`); backstop job deletes rows with `created_at` older than 24 h (D-02).
 Backups: data excluded. Never logged.
 
 ### 3.11 calls
@@ -220,7 +225,7 @@ Backups: data excluded. Never logged.
 | `created_at`, `accepted_at`, `active_at`, `ended_at` | timestamptz | | |
 
 Partial unique index: `(connection_id) WHERE status IN ('ringing','accepted','active')` — one live call at a time.
-Retention: 30 days (proposed), then deleted (cascades to diagnostics).
+Retention (D-12): 24 hours, then deleted (cascades to diagnostics); live calls are never deleted.
 
 ### 3.12 call_diagnostics
 
@@ -242,7 +247,7 @@ No IP addresses, no location. Retention: same as `calls`.
 | `ip_truncated` | inet | yes | /24 (IPv4) or /48 (IPv6) |
 | `metadata` | jsonb | yes | Never secrets, message text, coordinates |
 
-Index `(occurred_at DESC)`, `(action, occurred_at DESC)`. Append-only for `vc_app`. Retention: 365 days (proposed).
+Index `(occurred_at DESC)`, `(action, occurred_at DESC)`. Append-only for `vc_app`. Retention (D-12): 365 days.
 
 ### 3.14 location_shares (proposed — only if D-06 approved)
 
@@ -296,8 +301,19 @@ Default isolation READ COMMITTED is sufficient with the explicit row locks above
   rolling back the schema.
 - Raw SQL migrations for things Prisma does not model: partial unique indexes, `CHECK` constraints, role grants.
 
+### app_settings (implemented)
+
+| Column | Type | Null | Notes |
+|---|---|---|---|
+| `key` | text PK | no | CHECK: one of the allow-listed keys in docs/05 §5 |
+| `value` | jsonb | no | Validated by the backend before writing |
+| `updated_at` | timestamptz | no | |
+| `updated_by` | uuid | yes | Admin ID (no FK) |
+
+Retention is enforced by `RetentionService` (backend), run at startup and hourly.
+
 ## 7. Backup and restore
 
 Details in [16 §11](16-deployment-and-operations.md#11-backups-and-restore). Summary:
 daily `pg_dump` (custom format) with `--exclude-table-data=messages --exclude-table-data=location_shares`,
-encrypted, uploaded offsite; 7 daily + 4 weekly kept; monthly restore test into a scratch database.
+encrypted, uploaded offsite; only the last 24 hours of backups kept (D-12); monthly restore test into a scratch database.

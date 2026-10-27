@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Vault Chat</string>
+
+    <string name="login_title">Sign in</string>
+    <string name="login_subtitle">Private calls and messages</string>
+    <string name="login_username">Username</string>
+    <string name="login_password">Password</string>
+    <string name="login_submit">Log in</string>
+    <string name="login_show_password">Show password</string>
+    <string name="login_hide_password">Hide password</string>
+    <string name="login_forgot_hint">Forgot your password? Ask the administrator to reset it.</string>
+    <string name="login_error_username_required">Enter your username</string>
+    <string name="login_error_username_format">Usernames are 3–32 characters: letters, numbers, dot, dash or underscore</string>
+    <string name="login_error_password_required">Enter your password</string>
+    <string name="login_error_password_too_long">Passwords are at most 128 characters</string>
+    <string name="login_error_disabled">This account is disabled. Contact the administrator.</string>
+    <string name="login_error_invalid_credentials">Username or password is incorrect</string>
+    <string name="login_error_rate_limited">Too many attempts. Try again later.</string>
+    <string name="login_error_network">Can\'t reach the server. Check your connection.</string>
+    <string name="login_error_unexpected">Something went wrong. Try again.</string>
+
+    <string name="server_checking">Checking server…</string>
+    <string name="server_reachable">Server reachable</string>
+    <string name="server_unreachable">Can\'t reach the server</string>
+    <string name="server_unreachable_detail">Check your internet connection. If it persists, the server may be down.</string>
+    <string name="action_retry">Retry</string>
+    <string name="action_open_settings">Open settings</string>
+
+    <string name="home_signed_in_as">Signed in as %1$s</string>
+    <string name="home_change_password">Change password</string>
+    <string name="action_log_out">Log out</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="session_ended">Your session has ended. Log in again.</string>
+
+    <string name="password_title">Change password</string>
+    <string name="password_forced_explanation">Your password was set by the administrator. Choose your own password to continue.</string>
+    <string name="password_current">Current password</string>
+    <string name="password_current_temporary">Temporary password</string>
+    <string name="password_new">New password</string>
+    <string name="password_confirm">Repeat new password</string>
+    <string name="password_rules">At least 12 characters. A few unrelated words make a strong, memorable password.</string>
+    <string name="password_submit">Save password</string>
+    <string name="password_error_current_required">Enter your current password</string>
+    <string name="password_error_too_short">Use at least 12 characters</string>
+    <string name="password_error_too_long">Use at most 128 characters</string>
+    <string name="password_error_same">Choose a password different from the current one</string>
+    <string name="password_error_mismatch">The passwords do not match</string>
+    <string name="password_error_wrong_current">The current password is incorrect</string>
+    <string name="password_error_weak">That password is too common. Choose another.</string>
+
+    <string name="home_connect">Connect</string>
+    <string name="home_connected_title">Connected with %1$s</string>
+    <string name="home_connected_body">Messages you have both seen are deleted when either of you leaves the chat.</string>
+    <string name="home_video_call">Video call</string>
+    <string name="home_voice_call">Voice call</string>
+    <string name="action_back">Back</string>
+    <string name="action_accept">Accept</string>
+    <string name="action_reject">Reject</string>
+
+    <string name="inbox_title">Inbox</string>
+    <string name="inbox_how_it_works">To connect, one of you shows a QR code and the other scans it. The person who showed the code then accepts.</string>
+    <string name="inbox_show_qr">Show my QR code</string>
+    <string name="inbox_scan_qr">Scan a QR code</string>
+    <string name="inbox_requests">Requests</string>
+    <string name="inbox_no_requests">No pending requests.</string>
+    <string name="inbox_incoming">%1$s wants to connect</string>
+    <string name="inbox_outgoing">Waiting for %1$s to accept</string>
+    <string name="inbox_connected_with">You are connected with %1$s.</string>
+
+    <string name="show_qr_title">My QR code</string>
+    <string name="show_qr_instructions">Ask the other person to scan this code. It changes every minute and works only once.</string>
+    <string name="show_qr_countdown">New code in %1$d s</string>
+    <string name="show_qr_image_description">QR code for connecting. Valid for one minute.</string>
+    <string name="show_qr_accept_explainer">If you accept, you will be connected permanently.</string>
+
+    <string name="scan_qr_title">Scan QR code</string>
+    <string name="scan_qr_instructions">Point the camera at the other person\'s QR code.</string>
+    <string name="scan_qr_camera_rationale">The camera is needed to scan the QR code.</string>
+    <string name="scan_qr_camera_privacy">Camera frames are read on this phone only and are never saved or uploaded.</string>
+    <string name="scan_qr_allow_camera">Allow camera</string>
+    <string name="scan_qr_camera_denied">Camera access is turned off for this app. You can turn it on in Settings.</string>
+    <string name="scan_qr_waiting">Request sent. Waiting for %1$s to accept…</string>
+    <string name="scan_qr_not_our_code">This isn\'t a Vault Chat code.</string>
+    <string name="scan_qr_rejected">The request was rejected.</string>
+    <string name="scan_qr_expired">The request expired. Ask for a new code.</string>
+    <string name="scan_qr_cancelled">The request was cancelled.</string>
+    <string name="scan_qr_again">Scan again</string>
+
+    <string name="connect_error_already_connected">You are already connected.</string>
+    <string name="connect_error_qr_invalid">This code has expired or was already used. Ask for a new one.</string>
+    <string name="connect_error_already_pending">You already sent a request. Wait for an answer.</string>
+    <string name="connect_error_not_pending">This request was already answered or has expired.</string>
+
+    <string name="channel_calls">Incoming calls</string>
+    <string name="channel_ongoing_call">Ongoing call</string>
+    <string name="call_ongoing">Call in progress</string>
+    <string name="home_notifications_off">Notifications are off, so calls can\'t ring when the app is closed.</string>
+    <string name="home_enable">Enable</string>
+    <string name="call_starting">Starting call…</string>
+    <string name="call_ringing">Ringing…</string>
+    <string name="call_incoming">Incoming call</string>
+    <string name="call_connecting">Connecting…</string>
+    <string name="call_connected">Connected</string>
+    <string name="call_reconnecting">Reconnecting…</string>
+    <string name="call_ended">Call ended</string>
+    <string name="call_ended_declined">Call declined</string>
+    <string name="call_ended_no_answer">No answer</string>
+    <string name="call_ended_network">Call ended — connection lost</string>
+    <string name="call_ended_unavailable">Calling is temporarily unavailable</string>
+    <string name="call_ended_busy">A call is already in progress</string>
+    <string name="call_ended_failed">The call could not be connected</string>
+    <string name="call_ended_cancelled">Call cancelled</string>
+    <string name="call_accept">Accept</string>
+    <string name="call_allow_and_accept">Allow and accept</string>
+    <string name="call_decline">Decline</string>
+    <string name="call_close">Close</string>
+    <string name="call_end">End call</string>
+    <string name="call_mute">Mute</string>
+    <string name="call_unmute">Unmute</string>
+    <string name="call_speaker">Speaker</string>
+    <string name="call_earpiece">Earpiece</string>
+    <string name="call_camera_off">Camera off</string>
+    <string name="call_camera_on">Camera on</string>
+    <string name="call_switch_camera">Switch camera</string>
+    <string name="call_permission_needed">Calls need the microphone (and the camera for video). Nothing is recorded.</string>
+    <string name="call_permission_blocked">Microphone or camera access is turned off for this app. Turn it on in Settings to make calls.</string>
+    <string name="call_allow_microphone">Allow microphone</string>
+    <string name="call_allow_camera">Allow camera</string>
+
+    <string name="home_not_connected_title">You\'re not connected yet</string>
+    <string name="home_not_connected_body">Connect with the other person using a QR code.</string>
+
+    <string name="loading">Loading</string>
+    <string name="home_open_chat">Open chat</string>
+    <string name="channel_messages">Messages</string>
+    <string name="chat_new_message">New message</string>
+    <string name="chat_deletion_rule">Messages you have both seen are deleted when either of you leaves the chat, including about a minute after you leave the app. Unseen messages wait, for up to 24 hours. Screenshots are still possible.</string>
+    <string name="chat_input_hint">Message</string>
+    <string name="chat_send">Send</string>
+    <string name="chat_sending">Sending…</string>
+    <string name="chat_not_sent">Not sent</string>
+    <string name="chat_discard">Discard</string>
+    <string name="chat_dismiss">OK</string>
+    <string name="chat_empty">No messages.</string>
+    <string name="chat_too_long">Messages can be at most %1$d characters.</string>
+    <string name="chat_unavailable">This chat is not available.</string>
+    <string name="chat_notice_cleared">Messages you had both seen were deleted.</string>
+    <string name="chat_notice_cleared_not_sent">The chat was cleared before your message was sent. It is back in the input box.</string>
+    <string name="chat_notice_left_while_away">You were away for more than a minute, so you left the chat.</string>
+    <string name="chat_notice_rate_limited">You are sending too fast. Wait a moment.</string>
+    <string name="about_version">App version %1$d · APK SHA-256: %2$s</string>
+    <string name="upgrade_title">Update required</string>
+    <string name="upgrade_body">This version of the app is no longer supported. Install the latest version you received from the administrator, then open the app again.</string>
+    <string name="upgrade_installed">Installed: version %1$d, APK SHA-256 %2$s</string>
+    <string name="upgrade_latest">Latest: version %1$d, APK SHA-256 %2$s</string>
+    <string name="upgrade_no_hash">not published</string>
+</resources>

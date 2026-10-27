@@ -1,0 +1,55 @@
+# Local development infrastructure only. Not for production (see docs/16-deployment-and-operations.md).
+#
+# Usage (from the repository root):
+#   cp deploy/.env.dev.example deploy/.env.dev   # then set a local password
+#   docker compose --env-file deploy/.env.dev -f deploy/docker-compose.dev.yml up -d
+#
+# PostgreSQL is published on 127.0.0.1 only, so it is not reachable from other machines.
+# LiveKit uses deploy/livekit/livekit.dev.yaml with keys from deploy/.env.dev (local only).
+# For real phones on the same Wi-Fi set DEV_LAN_IP in deploy/.env.dev to this computer's LAN address:
+# LiveKit's ports are then published on it and advertised to the phones (docs/PHONE_TEST_GUIDE.md).
+
+name: vaultchat-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: vaultchat
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in deploy/.env.dev}
+      POSTGRES_DB: vaultchat
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - vaultchat-dev-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vaultchat -d vaultchat"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  livekit:
+    image: livekit/livekit-server:v1.13.7   # pinned; read release notes before changing
+    restart: unless-stopped
+    command: ["--config", "/etc/livekit.yaml", "--bind", "0.0.0.0"]
+    environment:
+      # "<key>: <secret>" from deploy/.env.dev (git-ignored). The secret must be 32+ characters.
+      LIVEKIT_KEYS: ${LIVEKIT_KEYS:?Set LIVEKIT_KEYS in deploy/.env.dev}
+      # The address put in ICE candidates; inside Docker LiveKit would otherwise offer its container IP.
+      # Without DEV_LAN_IP only this computer can reach the media ports, so call media needs phones
+      # with DEV_LAN_IP set; the emulator can still test everything except audio/video.
+      # NODE_IP is read by livekit-server (cmd/server/main.go, v1.13.7, checked 2026-10-26).
+      NODE_IP: ${DEV_LAN_IP:-127.0.0.1}
+    volumes:
+      - ./livekit/livekit.dev.yaml:/etc/livekit.yaml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      # 127.0.0.1 unless DEV_LAN_IP is set; never 0.0.0.0, so nothing else on the machine is exposed.
+      - "${DEV_LAN_IP:-127.0.0.1}:7880:7880"     # signalling + RoomService API
+      - "${DEV_LAN_IP:-127.0.0.1}:7881:7881"     # ICE over TCP
+      - "${DEV_LAN_IP:-127.0.0.1}:7882:7882/udp" # media
+
+volumes:
+  vaultchat-dev-pg:

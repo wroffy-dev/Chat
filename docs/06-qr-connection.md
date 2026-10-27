@@ -1,6 +1,6 @@
 # 06 — QR-Based Connection
 
-Status: **Proposed**. Not implemented.
+Status: **Implemented** (backend + Android; see docs/IMPLEMENTATION_PLAN.md). Differences from this design: new requests are discovered by polling every 3 s while a pairing screen is open (no WebSocket yet); `conversations` rows are created later by the chat phase; connection permanence is enforced by a database trigger.
 
 ## 1. User flow
 

@@ -2,14 +2,22 @@
 
 Guidance for AI assistants and contributors working in this repository.
 
-## Current phase: documentation only
+## Current phase: implementation (foundation, accounts/admin, QR pairing done; see docs/IMPLEMENTATION_PLAN.md)
 
-The repository contains design documentation for **Vault Chat** (working name), a private
-Android video-calling and text-chat app for exactly two pre-approved users. **No application code
-exists yet.** Do not start implementing unless the owner explicitly asks for implementation.
+The owner has authorised implementation, one phase at a time, in the order listed in
+`docs/IMPLEMENTATION_PLAN.md`. That file is the record of what is actually built and verified —
+update it with every change and never mark something done without evidence (tests, build output).
 
-Start with `README.md`, then `docs/17-open-decisions.md` — several product decisions are
-intentionally unresolved and must not be decided silently.
+Start with `README.md`, `docs/IMPLEMENTATION_PLAN.md`, then `docs/17-open-decisions.md` — product
+decisions there are either recorded as decided or still open; never decide an open one silently.
+
+## Working in the code
+
+- Backend (`backend/`): `npm run typecheck`, `npm run lint`, `npm test` must pass. DB integration tests
+  need `TEST_DATABASE_URL` pointing at a disposable database — never a production URL.
+- Android (`android/`): `./gradlew :app:testDebugUnitTest :app:assembleDebug`. Keep `domain/` and `data/`
+  free of Android imports so they stay testable on a plain JVM.
+- Only add database tables in the phase that needs them, through Prisma migrations.
 
 ## Non-negotiable rules
 
@@ -19,7 +27,7 @@ intentionally unresolved and must not be decided silently.
 - No public signup, no user search, no profiles, no profile photos, no media uploads, no file
   attachments, no voice notes. Text chat only.
 - Exactly two app users. The administrator is a separate operational identity, not a third app user.
-- Do not decide the "messages sent while neither user is in the chat" policy — it is open decision D-01.
+- Chat deletion follows decisions D-01 (option D) and D-02 (60 s lease, 24 h backstop) in docs/17 — do not change them without the owner.
 - Location sharing is a **proposal requiring approval**; do not implement it without sign-off.
 - Do not claim end-to-end encryption, screenshot prevention, or guaranteed deletion.
 - Do not claim the VPS supports N simultaneous calls or 1080p without real-device test results.
@@ -35,7 +43,7 @@ intentionally unresolved and must not be decided silently.
 ## Documentation conventions
 
 - Mark status explicitly: **Proposed**, **Planned**, **Requires verification**, **Open decision**,
-  **Implemented** (nothing is implemented yet).
+  **Implemented** (check docs/IMPLEMENTATION_PLAN.md for what is).
 - Timestamps are UTC. Units: Mbps = megabits per second, GB = 10^9 bytes.
 - When a third-party fact (port, config key, env var) is added, cite the official source and date.
 - Keep the docs consistent: table names in `docs/13-database-design.md` and routes in

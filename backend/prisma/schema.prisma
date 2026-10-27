@@ -1,0 +1,302 @@
+// Vault Chat database schema. Source of truth for the design: docs/13-database-design.md.
+//
+// Phase 1 (foundation) intentionally defines no models: only connectivity and migration
+// tooling are set up. Tables are added by the phase that needs them, through migrations.
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------------------------
+// Phase 2 — accounts, sessions, admin, audit (docs/13-database-design.md §3.1–3.4, §3.13).
+// CHECK constraints, partial indexes and role grants that Prisma cannot express live in the
+// migration SQL.
+// ---------------------------------------------------------------------------------------------
+
+model User {
+  id                 String    @id @default(uuid()) @db.Uuid
+  /// 1 or 2 (CHECK in SQL); unique, so at most two app users can ever exist.
+  slot               Int       @unique @db.SmallInt
+  username           String    @unique
+  passwordHash       String    @map("password_hash")
+  passwordChangedAt  DateTime  @map("password_changed_at") @db.Timestamptz(3)
+  mustChangePassword Boolean   @default(true) @map("must_change_password")
+  /// "active" | "disabled" (CHECK in SQL)
+  status             String    @default("active")
+  failedLoginCount   Int       @default(0) @map("failed_login_count")
+  throttledUntil     DateTime? @map("throttled_until") @db.Timestamptz(3)
+  lastSeenAt         DateTime? @map("last_seen_at") @db.Timestamptz(3)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  sessions Session[]
+
+  ownedQrTokens              QrToken[]                 @relation("QrOwner")
+  consumedQrTokens           QrToken[]                 @relation("QrConsumer")
+  sentConnectionRequests     ConnectionRequest[]       @relation("RequestRequester")
+  receivedConnectionRequests ConnectionRequest[]       @relation("RequestOwner")
+  connectionsAsA             Connection[]              @relation("ConnectionA")
+  connectionsAsB             Connection[]              @relation("ConnectionB")
+  callsMade                  Call[]                    @relation("CallCaller")
+  callsReceived              Call[]                    @relation("CallCallee")
+  callDiagnostics            CallDiagnostic[]
+  conversationParticipants   ConversationParticipant[]
+  sentMessages               Message[]
+
+  @@map("users")
+}
+
+model AdminAccount {
+  id               String    @id @default(uuid()) @db.Uuid
+  /// Always true and unique: exactly one administrator can exist.
+  singleton        Boolean   @unique @default(true)
+  username         String    @unique
+  passwordHash     String    @map("password_hash")
+  totpSecretEnc    Bytes     @map("totp_secret_enc")
+  totpLastUsedStep BigInt?   @map("totp_last_used_step")
+  failedLoginCount Int       @default(0) @map("failed_login_count")
+  throttledUntil   DateTime? @map("throttled_until") @db.Timestamptz(3)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  sessions AdminSession[]
+
+  @@map("admin_accounts")
+}
+
+model Session {
+  id                       String    @id @default(uuid()) @db.Uuid
+  userId                   String    @map("user_id") @db.Uuid
+  accessTokenHash          Bytes     @unique @map("access_token_hash")
+  accessExpiresAt          DateTime  @map("access_expires_at") @db.Timestamptz(3)
+  refreshTokenHash         Bytes     @unique @map("refresh_token_hash")
+  previousRefreshTokenHash Bytes?    @map("previous_refresh_token_hash")
+  idleExpiresAt            DateTime  @map("idle_expires_at") @db.Timestamptz(3)
+  absoluteExpiresAt        DateTime  @map("absolute_expires_at") @db.Timestamptz(3)
+  restricted               Boolean   @default(false)
+  fcmToken                 String?   @map("fcm_token")
+  fcmTokenUpdatedAt        DateTime? @map("fcm_token_updated_at") @db.Timestamptz(3)
+  appVersionCode           Int?      @map("app_version_code")
+  deviceModel              String?   @map("device_model")
+  createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastUsedAt               DateTime  @default(now()) @map("last_used_at") @db.Timestamptz(3)
+  revokedAt                DateTime? @map("revoked_at") @db.Timestamptz(3)
+  revokeReason             String?   @map("revoke_reason")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([previousRefreshTokenHash])
+  @@map("sessions")
+}
+
+model AdminSession {
+  id                String    @id @default(uuid()) @db.Uuid
+  adminId           String    @map("admin_id") @db.Uuid
+  tokenHash         Bytes     @unique @map("token_hash")
+  csrfToken         String    @map("csrf_token")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastUsedAt        DateTime  @default(now()) @map("last_used_at") @db.Timestamptz(3)
+  idleExpiresAt     DateTime  @map("idle_expires_at") @db.Timestamptz(3)
+  absoluteExpiresAt DateTime  @map("absolute_expires_at") @db.Timestamptz(3)
+  revokedAt         DateTime? @map("revoked_at") @db.Timestamptz(3)
+
+  admin AdminAccount @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@map("admin_sessions")
+}
+
+model AuditEvent {
+  id          BigInt   @id @default(autoincrement())
+  occurredAt  DateTime @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  /// "user" | "admin" | "system"
+  actorType   String   @map("actor_type")
+  actorId     String?  @map("actor_id") @db.Uuid
+  action      String
+  targetType  String?  @map("target_type")
+  targetId    String?  @map("target_id") @db.Uuid
+  ipTruncated String?  @map("ip_truncated") @db.Inet
+  metadata    Json?
+
+  @@index([occurredAt(sort: Desc)])
+  @@index([action, occurredAt(sort: Desc)])
+  @@map("audit_events")
+}
+
+// ---------------------------------------------------------------------------------------------
+// QR connection phase (docs/06-qr-connection.md, docs/13-database-design.md §3.5–3.7).
+// ---------------------------------------------------------------------------------------------
+
+model QrToken {
+  id               String    @id @default(uuid()) @db.Uuid
+  ownerUserId      String    @map("owner_user_id") @db.Uuid
+  tokenHash        Bytes     @unique @map("token_hash")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt        DateTime  @map("expires_at") @db.Timestamptz(3)
+  supersededAt     DateTime? @map("superseded_at") @db.Timestamptz(3)
+  consumedAt       DateTime? @map("consumed_at") @db.Timestamptz(3)
+  consumedByUserId String?   @map("consumed_by_user_id") @db.Uuid
+
+  owner      User               @relation("QrOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  consumedBy User?              @relation("QrConsumer", fields: [consumedByUserId], references: [id], onDelete: SetNull)
+  request    ConnectionRequest?
+
+  @@map("qr_tokens")
+}
+
+model ConnectionRequest {
+  id              String    @id @default(uuid()) @db.Uuid
+  qrTokenId       String?   @unique @map("qr_token_id") @db.Uuid
+  requesterUserId String    @map("requester_user_id") @db.Uuid
+  ownerUserId     String    @map("owner_user_id") @db.Uuid
+  /// pending | accepted | rejected | cancelled | expired (CHECK in SQL)
+  status          String    @default("pending")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt       DateTime  @map("expires_at") @db.Timestamptz(3)
+  decidedAt       DateTime? @map("decided_at") @db.Timestamptz(3)
+
+  qrToken    QrToken?    @relation(fields: [qrTokenId], references: [id], onDelete: SetNull)
+  requester  User        @relation("RequestRequester", fields: [requesterUserId], references: [id], onDelete: Cascade)
+  owner      User        @relation("RequestOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  connection Connection?
+
+  @@map("connection_requests")
+}
+
+model Connection {
+  id                   String   @id @default(uuid()) @db.Uuid
+  userAId              String   @map("user_a_id") @db.Uuid
+  userBId              String   @map("user_b_id") @db.Uuid
+  createdFromRequestId String?  @unique @map("created_from_request_id") @db.Uuid
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  userA        User               @relation("ConnectionA", fields: [userAId], references: [id], onDelete: Restrict)
+  userB        User               @relation("ConnectionB", fields: [userBId], references: [id], onDelete: Restrict)
+  fromRequest  ConnectionRequest? @relation(fields: [createdFromRequestId], references: [id], onDelete: SetNull)
+  calls        Call[]
+  conversation Conversation?
+
+  @@unique([userAId, userBId])
+  @@map("connections")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Calling phase (docs/08-calling.md, docs/13-database-design.md §3.11–3.12).
+// ---------------------------------------------------------------------------------------------
+
+model Call {
+  id           String    @id @default(uuid()) @db.Uuid
+  connectionId String    @map("connection_id") @db.Uuid
+  callerUserId String    @map("caller_user_id") @db.Uuid
+  calleeUserId String    @map("callee_user_id") @db.Uuid
+  /// "video" | "voice" (CHECK in SQL)
+  kind         String
+  livekitRoom  String    @unique @map("livekit_room")
+  /// ringing | accepted | active | ended | declined | cancelled | missed | failed (CHECK in SQL)
+  status       String    @default("ringing")
+  endReason    String?   @map("end_reason")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  acceptedAt   DateTime? @map("accepted_at") @db.Timestamptz(3)
+  activeAt     DateTime? @map("active_at") @db.Timestamptz(3)
+  endedAt      DateTime? @map("ended_at") @db.Timestamptz(3)
+
+  connection  Connection       @relation(fields: [connectionId], references: [id], onDelete: Restrict)
+  caller      User             @relation("CallCaller", fields: [callerUserId], references: [id], onDelete: Cascade)
+  callee      User             @relation("CallCallee", fields: [calleeUserId], references: [id], onDelete: Cascade)
+  diagnostics CallDiagnostic[]
+
+  @@index([createdAt])
+  @@map("calls")
+}
+
+model CallDiagnostic {
+  id        String   @id @default(uuid()) @db.Uuid
+  callId    String   @map("call_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  /// Quality summary (no media, IPs or location). Validated by the API schema.
+  summary   Json
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  call Call @relation(fields: [callId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([callId, userId])
+  @@map("call_diagnostics")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Chat phase (docs/07-chat-and-disappearing-messages.md, docs/13-database-design.md §3.8–3.10).
+// Messages are hard-deleted; nothing here is soft-deleted.
+// ---------------------------------------------------------------------------------------------
+
+model Conversation {
+  id           String    @id @default(uuid()) @db.Uuid
+  connectionId String    @unique @map("connection_id") @db.Uuid
+  /// Last allocated message sequence number.
+  lastSeq      BigInt    @default(0) @map("last_seq")
+  /// Incremented whenever messages are deleted (exit or backstop); sends from an older epoch are refused.
+  clearEpoch   BigInt    @default(0) @map("clear_epoch")
+  clearedAt    DateTime? @map("cleared_at") @db.Timestamptz(3)
+
+  connection   Connection                @relation(fields: [connectionId], references: [id], onDelete: Restrict)
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@map("conversations")
+}
+
+model ConversationParticipant {
+  conversationId String    @map("conversation_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  /// Highest sequence number this user has displayed (monotonic).
+  lastReadSeq    BigInt    @default(0) @map("last_read_seq")
+  leaseId        String?   @map("lease_id") @db.Uuid
+  leaseExpiresAt DateTime? @map("lease_expires_at") @db.Timestamptz(3)
+  lastLeaveId    String?   @map("last_leave_id") @db.Uuid
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([conversationId, userId])
+  @@map("conversation_participants")
+}
+
+model Message {
+  id              String   @id @default(uuid()) @db.Uuid
+  conversationId  String   @map("conversation_id") @db.Uuid
+  seq             BigInt
+  epoch           BigInt
+  senderUserId    String   @map("sender_user_id") @db.Uuid
+  clientMessageId String   @map("client_message_id") @db.Uuid
+  /// Sensitive: never logged, excluded from backups.
+  body            String
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderUserId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, seq])
+  @@unique([conversationId, senderUserId, clientMessageId])
+  @@index([createdAt])
+  @@map("messages")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Admin-editable settings (docs/05-admin-console.md §5). Allow-listed keys, validated in code.
+// ---------------------------------------------------------------------------------------------
+
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(3)
+  /// Admin who last changed it (no FK: the admin can be reset).
+  updatedBy String?  @map("updated_by") @db.Uuid
+
+  @@map("app_settings")
+}

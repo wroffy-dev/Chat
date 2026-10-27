@@ -1,0 +1,56 @@
+# Vault Chat Android app
+
+Kotlin + Jetpack Compose. Design: `../docs/15-android-ui-ux.md`, status: `../docs/IMPLEMENTATION_PLAN.md`.
+
+Status: compiled, unit-tested and linted in CI on every change (`.github/workflows/ci.yml`); **not yet
+run on a phone**. First phone test: `../docs/PHONE_TEST_GUIDE.md`.
+
+## Build
+
+Requirements: JDK 17+, Android SDK (API 35). Then:
+
+```bash
+cd android
+./gradlew :app:testDebugUnitTest :app:assembleDebug
+```
+
+## Backend URL
+
+- Debug: `http://10.0.2.2:3000/` (the development machine as seen from the emulator). For a physical
+  phone, pass `-Pvaultchat.apiBaseUrl.debug=http://<lan-ip>:3000/`. The debug network security config is
+  generated from that URL: plain HTTP is allowed only to its host (and the emulator host).
+- Release: must be `https://` (the build fails otherwise). Set `vaultchat.apiBaseUrl.release` in
+  `~/.gradle/gradle.properties` on the release machine.
+
+## Signing
+
+Release signing material is never committed. On the release machine only, add to
+`~/.gradle/gradle.properties`: `vaultchat.signing.storeFile`, `vaultchat.signing.storePassword`,
+`vaultchat.signing.keyAlias`, `vaultchat.signing.keyPassword`. Without them, release builds are unsigned.
+
+## Push notifications (optional)
+
+Incoming calls ring on a closed app only with Firebase Cloud Messaging. Nothing Firebase-related is
+committed. To enable it on the release/build machine:
+
+1. Create a Firebase project (console.firebase.google.com) and add an Android app with the package name
+   (`app.vaultchat`, or `app.vaultchat.dev` for debug builds).
+2. From the app's settings, copy these values into `~/.gradle/gradle.properties`:
+   ```
+   vaultchat.fcm.projectId=<project id>
+   vaultchat.fcm.appId=<mobilesdk app id, 1:…:android:…>
+   vaultchat.fcm.apiKey=<current api key>
+   vaultchat.fcm.senderId=<project number>
+   ```
+3. On the server, create a service-account key with permission to send FCM messages, mount it as a file,
+   and set `FCM_CREDENTIALS_FILE` (backend/.env.example).
+
+Without these, the app works but incoming calls ring only while it is open. FCM needs Google Play
+services on the phone (open decision D-08).
+
+## System call integration (experimental, off by default)
+
+`vaultchat.systemCalls=true` in `gradle.properties` (or `-Pvaultchat.systemCalls=true`) adds calls to
+Android's call framework with androidx core-telecom: headset, car and watch buttons can answer and end
+calls, and the system routes call audio. It compiles but has **not been tested on a phone**; try it on
+both phones before relying on it. Details and limits: docs/08-calling.md §10.2.

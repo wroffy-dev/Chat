@@ -1,0 +1,19 @@
+# Local development LiveKit config (no secrets: keys come from LIVEKIT_KEYS).
+port: 7880
+rtc:
+  tcp_port: 7881
+  udp_port: 7882
+  use_external_ip: false
+room:
+  auto_create: false
+  max_participants: 2
+  empty_timeout: 60
+  departure_timeout: 20
+webhook:
+  api_key: devkey
+  urls:
+    # The backend running on the host machine (Docker Desktop name; on Linux add
+    # `extra_hosts: ["host.docker.internal:host-gateway"]` to the service).
+    - http://host.docker.internal:3000/internal/livekit/webhook
+logging:
+  level: info

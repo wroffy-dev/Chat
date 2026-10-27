@@ -1,7 +1,6 @@
 # 10 — Notifications (Firebase Cloud Messaging)
 
-Status: **Proposed**. Firebase facts are **to be verified against current Firebase documentation
-before implementation** (`firebase.google.com` was not reachable from the documentation environment).
+Status: **Implemented for calls and new messages** (see docs/IMPLEMENTATION_PLAN.md, calling slice 2 and chat slice 1); not yet exercised against a real Firebase project. Firebase facts remain **to be verified** against current Firebase documentation (`firebase.google.com` was not reachable from the build environment).
 
 ## 1. Why FCM
 
@@ -26,7 +25,7 @@ nothing sensitive is rendered by the system.
 |---|---|---|---|
 | Incoming call | high | `{"t":"call","id":"<callId>"}` | Full-screen / heads-up call UI after fetching call state from the backend |
 | Call cancelled / missed | high | `{"t":"call_end","id":"<callId>"}` | Stops ringing; "Missed call" |
-| New message | normal (high only if D-01 allows offline delivery) | `{"t":"msg"}` | "New message" — no sender text, no preview |
+| New message | normal; only when the recipient is not in the chat; at most one per minute | `{"t":"msg"}` | "New message" — no sender text, no preview |
 | Connection request | normal | `{"t":"conn_req"}` | "New connection request" |
 | Session revoked | normal | `{"t":"logout"}` | App clears tokens on next start |
 
