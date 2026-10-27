@@ -54,26 +54,27 @@ Everything else closed — in particular 5432 (PostgreSQL), 3001 (Admin Console)
 | Secret | How | Goes to |
 |---|---|---|
 | `ADMIN_TOTP_ENC_KEY` | `openssl rand -base64 32` | backend env |
-| LiveKit key | `openssl rand -hex 8` → e.g. `APIxxxxxxxxxxxxxxxx` style name | backend env + `LIVEKIT_KEYS` + `livekit.yaml` webhook key |
+| LiveKit key | `API` + `openssl rand -hex 8` | `LIVEKIT_API_KEY` + `LIVEKIT_KEYS` |
 | LiveKit secret | `openssl rand -base64 36` (must be 32+ characters) | backend env + `LIVEKIT_KEYS` only |
 | `age` public key | from step 0 | backup env |
 | FCM service-account file (optional) | Google Cloud console → service account with FCM send permission → JSON key | mounted read-only file |
 
 ## 5. LiveKit configuration
 
-Copy `deploy/livekit/livekit.yaml.example` to `deploy/livekit/livekit.yaml` **on the server only** (it is
-git-ignored), set `webhook.api_key` to the LiveKit key, keep `use_external_ip: true`. The key/secret pair
-itself goes in `LIVEKIT_KEYS` (`"<key>: <secret>"`), not in the file.
+Nothing to do on the server: LiveKit's whole config is in `deploy/docker-compose.prod.yml`
+(`LIVEKIT_CONFIG`; `use_external_ip: true`, webhook to `backend`). The key/secret pair goes in
+`LIVEKIT_KEYS` (`"<key>: <secret>"`) and the key name in `LIVEKIT_API_KEY`.
 
 ## 6. Application resource
 
 1. In Coolify, create a **Docker Compose** resource from this Git repository using
-   `deploy/docker-compose.prod.yml` (**Verify** how Coolify selects a compose file and whether it honours
-   profiles; `migrate` and `backup` are profile services meant to run on demand).
+   `deploy/docker-compose.prod.yml` (**Verify** how Coolify selects a compose file). `migrate` runs once on
+   every deployment before the backend; `backup` and `audit-retention` are profile services run on demand.
 2. Set the environment variables (Coolify marks them secret): those required by the compose file —
    `TRUST_PROXY`, `DATABASE_URL` (vc_app), `MIGRATE_DATABASE_URL` (vc_migrate), `ADMIN_TOTP_ENC_KEY`,
    `LIVEKIT_PUBLIC_URL=wss://rtc.<domain>`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_KEYS`,
    `BACKUP_PG*` and `MAINT_DATABASE_URL` (both vc_maint), `AGE_RECIPIENT`; optionally `FCM_CREDENTIALS_FILE` with the mounted JSON.
+   Compose checks every variable in the file, including those of the on-demand services, so set them all.
    Variable reference: docs/16 §4 and `backend/.env.example`.
 3. Domains / routing (**Verify** in Coolify): `api.<domain>` → `backend:3000`, `rtc.<domain>` →
    `livekit:7880`, both HTTPS with Let's Encrypt and WebSocket upgrade allowed. **Do not route
@@ -82,17 +83,13 @@ itself goes in `LIVEKIT_KEYS` (`"<key>: <secret>"`), not in the file.
 
 ## 7. First start
 
-Order matters: schema, then privileges, then the app.
+Deploy the resource in Coolify (or `docker compose -f deploy/docker-compose.prod.yml up -d`). Order is
+built in: `migrate` applies the migrations and then the role grants (`backend/prisma/grants.sql`, as
+`vc_migrate`), and the backend starts only if that succeeded. Every later deployment does the same.
+Take a backup before a deployment that brings a migration (§9).
 
-```sh
-docker compose -f deploy/docker-compose.prod.yml --profile migrate run --rm migrate
-psql "<superuser connection>" -v ON_ERROR_STOP=1 -d vaultchat -f deploy/postgres/grants.sql
-docker compose -f deploy/docker-compose.prod.yml up -d backend livekit
-```
-
-Re-run the `migrate` + `grants.sql` pair before every later deployment that brings a migration.
 Check: `https://api.<domain>/healthz` → 200 and `/readyz` → 200 (`/readyz` 503 means the database or a
-pending migration — see the backend log).
+pending migration — read the `migrate` and backend logs in Coolify).
 
 ## 8. Administrator and the two users
 

@@ -1,6 +1,6 @@
 # Backend image (docs/16-deployment-and-operations.md §5). Built from the backend/ directory.
 #   docker build -t vaultchat-backend .                  → runtime image (default)
-#   docker build --target migrate -t vaultchat-migrate . → one-shot `prisma migrate deploy`
+#   docker build --target migrate -t vaultchat-migrate . → one-shot `prisma migrate deploy` + grants
 # No secrets are baked in: configuration comes from the environment at run time.
 
 FROM node:22.22.0-bookworm-slim AS build
@@ -13,10 +13,11 @@ COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
 RUN npm run build
 
-# Migrations need the Prisma CLI (a dev dependency); run with MIGRATE_DATABASE_URL set.
+# Migrations need the Prisma CLI (a dev dependency); run with MIGRATE_DATABASE_URL set. The role
+# privileges (prisma/grants.sql) are re-applied after every migration so new tables get them too.
 FROM build AS migrate
 USER node
-CMD ["npx", "--no-install", "prisma", "migrate", "deploy"]
+CMD ["sh", "-c", "npx --no-install prisma migrate deploy && node dist/db/apply-grants.js"]
 
 FROM build AS prune
 RUN npm prune --omit=dev --ignore-scripts

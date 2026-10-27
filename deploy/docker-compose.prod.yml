@@ -3,8 +3,10 @@
 # the environment; nothing secret is in this file. Traefik routing (api.<domain> → backend:3000,
 # rtc.<domain> → livekit:7880, /internal/* not routed) is configured in Coolify.
 #
-#   docker compose -f deploy/docker-compose.prod.yml --profile migrate run --rm migrate   # before each deploy
 #   docker compose -f deploy/docker-compose.prod.yml up -d
+#
+# `up` runs `migrate` first (migrations, then role grants as vc_migrate) and starts the backend only
+# if it succeeded. LiveKit's whole config is in this file (LIVEKIT_CONFIG): no file on the server.
 #
 # PostgreSQL is a Coolify database resource on the same Docker network, never published.
 
@@ -26,6 +28,9 @@ services:
     image: vaultchat-backend
     restart: unless-stopped
     <<: *hardening
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0
@@ -52,9 +57,10 @@ services:
     logging: *logging
 
   migrate:
-    profiles: ["migrate"]
+    # One-shot on every `up`: `prisma migrate deploy`, then prisma/grants.sql (idempotent).
     build: { context: ../backend, target: migrate }
     image: vaultchat-migrate
+    restart: "no"
     <<: *hardening
     environment:
       # Schema-owning role (docs/13 §1); never the app role.
@@ -77,12 +83,28 @@ services:
     image: livekit/livekit-server:v1.13.7   # pinned; read release notes before changing
     restart: unless-stopped
     <<: *hardening
-    command: ["--config", "/etc/livekit.yaml"]
     environment:
       LIVEKIT_KEYS: ${LIVEKIT_KEYS:?format is key colon space secret}
-    volumes:
-      # Copy of livekit/livekit.yaml.example with real values (git-ignored as livekit.yaml).
-      - ./livekit/livekit.yaml:/etc/livekit.yaml:ro
+      # The whole server config (read by livekit-server from LIVEKIT_CONFIG; flag `config-body`,
+      # cmd/server/main.go v1.13.7, checked 2026-10-27). No secrets: the key/secret pair is LIVEKIT_KEYS;
+      # the webhook names the key only. docs/08-calling.md §13, docs/16 §8.
+      LIVEKIT_CONFIG: |
+        port: 7880
+        rtc:
+          tcp_port: 7881
+          udp_port: 7882
+          use_external_ip: true
+        room:
+          auto_create: false
+          max_participants: 2
+          empty_timeout: 60
+          departure_timeout: 20
+        webhook:
+          api_key: ${LIVEKIT_API_KEY:?}
+          urls:
+            - http://backend:3000/internal/livekit/webhook
+        logging:
+          level: info
     ports:
       - "7881:7881/tcp"   # ICE over TCP
       - "7882:7882/udp"   # media (UDP mux)

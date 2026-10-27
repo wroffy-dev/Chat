@@ -1,5 +1,6 @@
--- Database role privileges (docs/13-database-design.md §1). Idempotent: run after EVERY migration,
--- as the database owner or a superuser:   psql -v ON_ERROR_STOP=1 -f deploy/postgres/grants.sql
+-- Database role privileges (docs/13-database-design.md §1). Idempotent: applied after EVERY migration
+-- by the migrate image (`node dist/db/apply-grants.js` as the owning role vc_migrate), or by hand:
+--   psql -v ON_ERROR_STOP=1 -f backend/prisma/grants.sql
 --
 -- The three login roles are created once by the operator, with passwords typed interactively
 -- (\password), never stored in a file:
