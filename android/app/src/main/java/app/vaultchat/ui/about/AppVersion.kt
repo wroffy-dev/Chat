@@ -23,6 +23,11 @@ import app.vaultchat.R
 import app.vaultchat.data.app.AppVersionApi
 import app.vaultchat.data.app.AppVersionInfo
 import app.vaultchat.platform.ApkHash
+import app.vaultchat.platform.update.AppUpdater
+import app.vaultchat.platform.update.UpdateState
+import app.vaultchat.ui.components.BannerKind
+import app.vaultchat.ui.components.StatusBanner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 /** This APK's SHA-256, computed once off the main thread; null while computing or if unreadable. */
 @Composable
@@ -73,5 +78,46 @@ fun UpgradeRequiredScreen(api: AppVersionApi) {
                 }
             }
         }
+    }
+}
+
+/** "New version available → Update", then download progress and Android's install dialog. */
+@Composable
+fun UpdateBanner(updater: AppUpdater, modifier: Modifier = Modifier) {
+    val state by updater.state.collectAsStateWithLifecycle()
+    when (val s = state) {
+        UpdateState.None -> Unit
+        is UpdateState.Available -> StatusBanner(
+            kind = BannerKind.INFO,
+            title = stringResource(R.string.update_available, s.versionCode),
+            actionLabel = stringResource(R.string.update_action),
+            onAction = updater::start,
+            modifier = modifier,
+        )
+        is UpdateState.NeedsPermission -> StatusBanner(
+            kind = BannerKind.INFO,
+            title = stringResource(R.string.update_available, s.versionCode),
+            body = stringResource(R.string.update_needs_permission),
+            actionLabel = stringResource(R.string.update_allow),
+            onAction = updater::start,
+            modifier = modifier,
+        )
+        is UpdateState.Downloading -> StatusBanner(
+            kind = BannerKind.INFO,
+            title = stringResource(R.string.update_downloading, (s.progress * 100).toInt()),
+            modifier = modifier,
+        )
+        is UpdateState.Installing -> StatusBanner(
+            kind = BannerKind.INFO,
+            title = stringResource(R.string.update_installing),
+            modifier = modifier,
+        )
+        is UpdateState.Failed -> StatusBanner(
+            kind = BannerKind.ERROR,
+            title = stringResource(R.string.update_failed),
+            actionLabel = stringResource(R.string.action_retry),
+            onAction = updater::start,
+            modifier = modifier,
+        )
     }
 }

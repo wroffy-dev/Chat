@@ -141,7 +141,7 @@ describe.skipIf(!TEST_DB_URL)("admin settings (PostgreSQL)", () => {
 
     // An outdated app can still learn what to install.
     const v = await app.inject({ method: "GET", url: "/api/v1/app/version", headers: { "x-app-version": "1" } });
-    expect(v.json()).toEqual({ minSupportedVersionCode: 5, latestVersionCode: 7, latestApkSha256: "ab".repeat(32) });
+    expect(v.json()).toEqual({ minSupportedVersionCode: 5, latestVersionCode: 7, latestApkSha256: "ab".repeat(32), downloadAvailable: false });
     await expect(settings.set("app.latest_apk_sha256", "not-hex", admin)).rejects.toMatchObject({ statusCode: 400 });
     await app.close();
   });

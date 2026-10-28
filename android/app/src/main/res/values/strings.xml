@@ -155,4 +155,11 @@
     <string name="upgrade_installed">Installed: version %1$d, APK SHA-256 %2$s</string>
     <string name="upgrade_latest">Latest: version %1$d, APK SHA-256 %2$s</string>
     <string name="upgrade_no_hash">not published</string>
+    <string name="update_available">A new version (%1$d) is available.</string>
+    <string name="update_action">Update</string>
+    <string name="update_needs_permission">Allow Vault Chat to install updates, then come back and tap Update.</string>
+    <string name="update_allow">Allow</string>
+    <string name="update_downloading">Downloading update… %1$d%%</string>
+    <string name="update_installing">Confirm the installation in Android\'s dialog.</string>
+    <string name="update_failed">The update could not be installed.</string>
 </resources>

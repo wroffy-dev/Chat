@@ -191,6 +191,7 @@ the webhook key name comes from `LIVEKIT_API_KEY`. Keys via `LIVEKIT_KEYS`. Neve
 | Verification | `apksigner verify --print-certs app-release.apk`; record the signing-cert SHA-256 once; compute the APK SHA-256 |
 | Publishing | Set `app.latest_version_code` and `app.latest_apk_sha256` in Admin settings; deliver the APK privately (direct transfer or a short-lived private link). No public download page |
 | Install | User temporarily allows "Install unknown apps" for the file manager/browser, installs, then turns it off again; Settings → About shows the APK hash to compare |
+| In-app update (test builds) | The **Build phone APK** workflow signs with one fixed test key (GitHub Actions secrets only, never in Git) and uploads each build to `PUT /api/v1/app/apk`; signed-in apps then show **Update** on Home, download it, check its SHA-256 and open Android's install dialog. Whoever holds that key and the upload token can ship an update, so both stay in secret stores (D-20) |
 | Forced upgrade | Raise `app.min_supported_version_code` → old builds receive `403 UPGRADE_REQUIRED` with instructions |
 
 ## 10. Secrets management

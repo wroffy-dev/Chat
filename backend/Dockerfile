@@ -37,6 +37,8 @@ COPY --from=prune /app/node_modules ./node_modules
 COPY --from=prune /app/dist ./dist
 # Migrations are read at run time by /readyz to detect pending migrations.
 COPY --from=prune /app/prisma/migrations ./prisma/migrations
+# In-app updates: the latest uploaded APK (a volume in production; the root filesystem is read-only).
+RUN mkdir /app-updates && chown node:node /app-updates
 USER node
 EXPOSE 3000 3001
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

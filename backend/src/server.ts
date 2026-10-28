@@ -14,6 +14,8 @@ import { LiveKitGateway } from "./calls/media.js";
 import { createFcmTransport, PushService } from "./push/service.js";
 import { ConfigError, loadConfig, requireAdminKey } from "./config/env.js";
 import { PrismaDatabase } from "./db/database.js";
+import { audit } from "./auth/audit.js";
+import { AppUpdateStore } from "./updates/store.js";
 
 async function main() {
   let config;
@@ -46,7 +48,15 @@ async function main() {
   const connections = new ConnectionService(database.prisma, undefined, hub);
   const calls = new CallService(database.prisma, media, config.CALL_RING_TIMEOUT_SECONDS, undefined, push, hub, settings);
   const chat = new ChatService(database.prisma, undefined, push, hub, settings);
-  const app = buildApp({ config, database, auth, connections, calls, chat, media, push, realtime: { hub }, settings });
+  const updates = config.APP_UPDATES_DIR
+    ? {
+        store: new AppUpdateStore(config.APP_UPDATES_DIR),
+        ...(config.APP_UPLOAD_TOKEN ? { uploadToken: config.APP_UPLOAD_TOKEN } : {}),
+        onPublished: (meta: { versionCode: number; sha256: string; size: number }) =>
+          audit(database.prisma, { actorType: "system", action: "app.apk_published", metadata: { ...meta } }),
+      }
+    : undefined;
+  const app = buildApp({ config, database, auth, connections, calls, chat, media, push, realtime: { hub }, settings, ...(updates ? { updates } : {}) });
   logPush = (msg, extra) => app.log.warn(extra ?? {}, msg);
   // The database is owned (and closed) by the public app; the admin app shares it.
   const adminApp = buildAdminApp({ config, prisma: database.prisma, database, auth, admin, media, pushEnabled: push.enabled, realtime: hub, settings });
