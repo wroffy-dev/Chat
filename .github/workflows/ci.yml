@@ -96,6 +96,7 @@ jobs:
         run: |
           docker run -d --name backend -p 127.0.0.1:3000:3000 \
             -e NODE_ENV=production \
+            -e FCM_CREDENTIALS_FILE= \
             -e DATABASE_URL=postgresql://ci:ci-only-password@127.0.0.1:1/none \
             -e ADMIN_TOTP_ENC_KEY="$(openssl rand -base64 32)" \
             vaultchat-backend

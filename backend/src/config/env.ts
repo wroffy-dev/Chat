@@ -86,7 +86,9 @@ export function requireAdminKey(config: Config): string {
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
-  const result = envSchema.safeParse(env);
+  // An empty variable means "not set": compose passes optional ones through as "" (`${VAR:-}`).
+  const set = Object.fromEntries(Object.entries(env).filter(([, v]) => v !== ""));
+  const result = envSchema.safeParse(set);
   if (!result.success) {
     throw new ConfigError(
       result.error.issues.map((issue) => `${issue.path.join(".") || "(root)"}: ${issue.message}`),
