@@ -6,7 +6,7 @@ Status: **Proposed contracts. None of these endpoints are implemented.**
 
 | Item | Rule |
 |---|---|
-| Base URL | `https://api.<domain>/api/v1` (public listener, port 3000 behind Traefik) |
+| Base URL | `https://<domain>/api/v1` (D-18; public listener, port 3000 behind Traefik; `/rtc` goes to LiveKit) |
 | Admin base | `http://localhost:3001/admin` (localhost listener via SSH tunnel; HTML pages + form posts) |
 | Format | JSON, UTF-8. Field names `camelCase`. Timestamps ISO-8601 UTC (`2026-10-24T10:15:00Z`) |
 | Auth header | `Authorization: Bearer <access token>` |

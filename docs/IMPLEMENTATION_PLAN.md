@@ -260,7 +260,7 @@ Deviations from the original design, recorded in docs/07 and docs/14:
 | Startup catch-up: lapsed chat leases, 24 h backstop and stale calls handled at boot, not 5–15 s later | Done (verified) | Manual run: a lease expired during downtime was cleared 3 s after restart |
 | `deploy/backup/backup.sh`: `pg_dump` without `messages` rows, streamed into `age` (no plaintext on disk), status file | Done (verified locally) | A sentinel message in the live DB was absent from the decrypted dump |
 | `deploy/backup/restore-test.sh`: restore into a new scratch DB, check migrations and that `messages` is empty, drop it | Done (verified locally) | Passed; wrong key fails and leaves no scratch DB |
-| `backend/Dockerfile` (non-root runtime, pruned, health check; `migrate` target), backup image, `deploy/docker-compose.prod.yml` template (no secrets; admin port on the VPS loopback only) | Done (verified in CI, run 40176585222) | CI `images` job: build, non-root and content checks, starts without DB (`/healthz` 200, `/readyz` 503), compose validation. Not yet run on the VPS |
+| `backend/Dockerfile` (non-root runtime, pruned, health check; `migrate` target), backup image, `docker-compose.prod.yml` template (no secrets; admin port on the VPS loopback only) | Done (verified in CI, run 40176585222) | CI `images` job: build, non-root and content checks, starts without DB (`/healthz` 200, `/readyz` 503), compose validation. Not yet run on the VPS |
 | `scripts/check-secrets.sh` in CI | Done (verified) | Passes on the repo; caught a planted key and connection string |
 | Unsigned release APK built in CI (R8 shrinking) | Done (verified in CI, run 40176585222) | Builds; not yet run on a device |
 | Android: backups/device transfer exclude all app data; only the launcher activity is exported; release is HTTPS-only with system CAs | Done (reviewed) | Manifest and XML rules; `adb backup` check needs a device |
@@ -314,7 +314,7 @@ the deployed system.
    results.
 3. **Phase 7 — deployment to the VPS: authorised by the owner on 2026-10-27** ("now you can do it"),
    so the two-phone test can run against the VPS instead of a local setup. Domains (D-18):
-   `api.` / `rtc.` / `coolify.fluteconsulatancy.com`. Still open: D-10 (staging; proposed: production
+   everything on `fluteconsulatancy.com` (LiveKit under `/rtc`; changed 2026-10-28). Still open: D-10 (staging; proposed: production
    only, two users). Access: Coolify's HTTPS API, with `coolify.fluteconsulatancy.com` allowed in the
    environment's network settings and a Coolify API token in the environment variable
    `COOLIFY_API_TOKEN` (never in chat or git). SSH from the agent environment is blocked.

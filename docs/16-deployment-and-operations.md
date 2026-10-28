@@ -23,7 +23,7 @@ to reach it by its internal hostname (**Verify** the Coolify option name in the 
 
 ```
 backend/Dockerfile                  # multi-stage: build TS → slim Node runtime, non-root user (+ migrate target)
-deploy/docker-compose.prod.yml      # backend, migrate, livekit (config inline), backup (no secrets inside)
+docker-compose.prod.yml             # (repo root) backend, migrate, livekit (config inline), backup (no secrets inside)
 backend/prisma/grants.sql           # database role privileges, applied by `migrate` after every migration
 deploy/postgres/verify-roles.sh     # CI check of the grants
 deploy/backup/                      # backup.sh, restore-test.sh, backup image
@@ -38,8 +38,7 @@ filesystem where possible, `restart: unless-stopped`, health checks, log rotatio
 
 | Hostname (placeholder) | Points to | Purpose | TLS |
 |---|---|---|---|
-| `api.<domain>` | VPS public IP (A/AAAA) | REST + WebSocket | Let's Encrypt via Traefik |
-| `rtc.<domain>` | VPS public IP | LiveKit signalling (WSS) | Let's Encrypt via Traefik |
+| `<domain>` (D-18: `fluteconsulatancy.com`) | VPS public IP (A/AAAA) | REST + WebSocket → backend; `/rtc` → LiveKit signalling (WSS) | Let's Encrypt via Traefik |
 | `turn.<domain>` | VPS public IP | TURN/TLS (only if enabled, §8.3) | Certificate must be available to LiveKit or a TCP TLS terminator |
 | `coolify.<domain>` (optional) | VPS public IP | Coolify dashboard over HTTPS so ports 8000/6001/6002 can be closed | Let's Encrypt |
 
@@ -99,7 +98,9 @@ skip staging LiveKit and test calls against production LiveKit with staging back
    right privileges). The backend starts only if it succeeded (`depends_on: service_completed_successfully`).
    Take a backup first when a deployment brings a migration (§11).
 3. Container starts as non-root; `/readyz` must pass before Traefik routes traffic.
-4. Traefik routes `api.<domain>` → `backend:3000`, with `/internal/*` **not** routed (path rule excludes it).
+4. Traefik routes `<domain>/rtc` → `livekit:7880` (path kept) and every other path → `backend:3000`
+   (D-18, one domain). `/internal/livekit/webhook` is therefore reachable from outside; it accepts only
+   requests signed with the LiveKit secret.
 5. Admin listener: compose `ports: ["127.0.0.1:3001:3001"]` — reachable only from the VPS itself (SSH tunnel).
 6. On startup the backend runs reconciliation: expire stale presence leases (clear chats), close stale
    `ringing/accepted` calls, check `active` calls against LiveKit.
@@ -155,7 +156,7 @@ Signalling: Traefik router `rtc.<domain>` → `livekit:7880` (WebSocket upgrade 
 ### 8.2 Configuration
 
 Use the config in [08 §13](08-calling.md#13-livekit-server-configuration-proposed-values). It lives in
-`deploy/docker-compose.prod.yml` as the `LIVEKIT_CONFIG` environment variable (no file on the server);
+`docker-compose.prod.yml` as the `LIVEKIT_CONFIG` environment variable (no file on the server);
 the webhook key name comes from `LIVEKIT_API_KEY`. Keys via `LIVEKIT_KEYS`. Never run `--dev` in production. Pin the image version; read release notes before upgrading.
 
 ### 8.3 TURN
@@ -222,7 +223,7 @@ the webhook key name comes from `LIVEKIT_API_KEY`. Keys via `LIVEKIT_KEYS`. Neve
 
 Implemented as scripts (not yet run on the VPS): `deploy/backup/backup.sh` (dump without message rows,
 streamed into `age`) and `deploy/backup/restore-test.sh` (the monthly drill: restore into a new scratch
-database, check, drop), packaged as the `backup` service in `deploy/docker-compose.prod.yml`. The
+database, check, drop), packaged as the `backup` service in `docker-compose.prod.yml`. The
 backup directory keeps only the last 24 hours (D-12). Consequence: a problem noticed more than a day
 later cannot be restored from backup.
 
@@ -237,7 +238,7 @@ from the Admin Console if the incident involved credential exposure.
 | Backend logs | Pino JSON to stdout with redaction; Docker log rotation (~14 days at expected volume) |
 | LiveKit logs | `logging.level: info`; Docker log rotation |
 | Error summaries | `error_events` table → Admin Console |
-| Uptime | A free external HTTP check on `https://api.<domain>/healthz` (a monitor on the same VPS cannot detect the VPS being down) |
+| Uptime | A free external HTTP check on `https://<domain>/healthz` (a monitor on the same VPS cannot detect the VPS being down) |
 | Disk | Alert at 80 % (Coolify server metrics/notifications — **Verify** — or a cron script) |
 | Bandwidth | `vnstat` on the host; monthly-total check script alerts at 60 % and 80 % of the plan allowance |
 | Certificates | Traefik renews automatically; external monitor alerts on TLS expiry < 14 days |

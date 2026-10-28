@@ -28,7 +28,7 @@ recommendation is given, it is labelled as such and still needs sign-off.
 | Q-1 | Build QR connection before calling | 2026-10-24 | Owner ("Go" to the recommendation) |
 | D-01 | **Option D.** On any exit, delete messages the recipient has already seen. Unseen messages wait for the recipient, and are deleted on the next exit after they are seen. | 2026-10-24 | Owner |
 | D-12 | **Retention.** Call records and call diagnostics: 24 h. Audit log: 365 days. Backups: only the last 24 h are kept. (Error records: no table exists yet.) | 2026-10-25 | Owner ("Just 24", then chose the scope) |
-| D-18 | **Domains:** subdomains of the owner's existing domain `fluteconsulatancy.com` (spelling as given by the owner; to be confirmed against the registrar): `api.fluteconsulatancy.com` (backend), `rtc.fluteconsulatancy.com` (LiveKit), `coolify.fluteconsulatancy.com` (Coolify dashboard, for API access). | 2026-10-27 | Owner ("use this domain") |
+| D-18 | **Domain:** everything on the owner's main domain `fluteconsulatancy.com`: backend at `https://fluteconsulatancy.com`, LiveKit under `https://fluteconsulatancy.com/rtc` (path routing; `LIVEKIT_PUBLIC_URL=wss://fluteconsulatancy.com`). Replaced the 2026-10-27 choice of `api.`/`rtc.` subdomains. Optional `coolify.fluteconsulatancy.com` for the dashboard. | 2026-10-28 | Owner ("main domain se sab kuchh") |
 | D-02 | **Exit after about a minute.** The chat holds a 60 s presence lease renewed every 20 s; when it lapses (background, crash, power or network loss) the server applies the exit rule. **Backstop: every message is deleted at most 24 h after it was sent**, seen or not. | 2026-10-24 | Owner |
 
 ## How to record a decision
