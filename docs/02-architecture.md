@@ -138,6 +138,7 @@ Documentation only — none of these directories except `docs/` exist yet.
 │       ├── data/                 # API client, WebSocket client, token store
 │       ├── call/                 # LiveKit + core-telecom integration, call service
 │       └── push/                 # FirebaseMessagingService
+├── docker-compose.prod.yml       # production services, incl. LiveKit's config (no secrets)
 ├── backend/
 │   ├── src/
 │   │   ├── app/                  # public API (routes, schemas, plugins)
@@ -149,6 +150,5 @@ Documentation only — none of these directories except `docs/` exist yet.
 │   └── Dockerfile
 └── deploy/
     ├── docker-compose.dev.yml    # local dev stack
-    ├── docker-compose.prod.yml   # incl. LiveKit's config (no secrets)
     └── coolify/README.md         # resource-by-resource setup notes
 ```

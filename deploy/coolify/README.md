@@ -12,7 +12,7 @@ Never paste a secret into this file, an issue, a chat or a screenshot. Placehold
 | Need | Where it is decided |
 |---|---|
 | The VPS region is acceptable for latency | D-07 (decide after test T-RTT) |
-| Domain names | D-18 (`api.<domain>`, `rtc.<domain>`; optional `coolify.<domain>`) |
+| Domain names | D-18: one domain, `<domain>` (LiveKit under `<domain>/rtc`); optional `coolify.<domain>` |
 | Admin Console access by SSH tunnel | D-05 (proposed; this runbook assumes it) |
 | Staging or not | D-10 (this runbook covers production only) |
 | TURN/TLS on 443 | D-15 (not in MVP; UDP 3478 + ICE/TCP 7881 only) |
@@ -24,7 +24,7 @@ your own computer (`age-keygen -o vaultchat-backup.key`). Only the public key (`
 
 ## 1. DNS
 
-Create A (and AAAA if the VPS has IPv6) records pointing at the VPS: `api.<domain>`, `rtc.<domain>`.
+Create an A (and AAAA if the VPS has IPv6) record for `<domain>` (`@`) pointing at the VPS.
 DNS-only, **no CDN proxy** (a CDN would break WebRTC and can interfere with WebSockets).
 
 ## 2. Firewall
@@ -61,40 +61,44 @@ Everything else closed — in particular 5432 (PostgreSQL), 3001 (Admin Console)
 
 ## 5. LiveKit configuration
 
-Nothing to do on the server: LiveKit's whole config is in `deploy/docker-compose.prod.yml`
+Nothing to do on the server: LiveKit's whole config is in `docker-compose.prod.yml`
 (`LIVEKIT_CONFIG`; `use_external_ip: true`, webhook to `backend`). The key/secret pair goes in
 `LIVEKIT_KEYS` (`"<key>: <secret>"`) and the key name in `LIVEKIT_API_KEY`.
 
 ## 6. Application resource
 
 1. In Coolify, create a **Docker Compose** resource from this Git repository using
-   `deploy/docker-compose.prod.yml` (**Verify** how Coolify selects a compose file). `migrate` runs once on
+   `docker-compose.prod.yml` at the repository root (Base Directory `/`, compose location
+   `/docker-compose.prod.yml`) (**Verify** how Coolify selects a compose file). `migrate` runs once on
    every deployment before the backend; `backup` and `audit-retention` are profile services run on demand.
 2. Set the environment variables (Coolify marks them secret): those required by the compose file —
    `TRUST_PROXY`, `DATABASE_URL` (vc_app), `MIGRATE_DATABASE_URL` (vc_migrate), `ADMIN_TOTP_ENC_KEY`,
-   `LIVEKIT_PUBLIC_URL=wss://rtc.<domain>`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_KEYS`,
+   `LIVEKIT_PUBLIC_URL=wss://<domain>`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_KEYS`,
    `BACKUP_PG*` and `MAINT_DATABASE_URL` (both vc_maint), `AGE_RECIPIENT`; optionally `FCM_CREDENTIALS_FILE` with the mounted JSON.
    Compose checks every variable in the file, including those of the on-demand services, so set them all.
    Variable reference: docs/16 §4 and `backend/.env.example`.
-3. Domains / routing (**Verify** in Coolify): `api.<domain>` → `backend:3000`, `rtc.<domain>` →
-   `livekit:7880`, both HTTPS with Let's Encrypt and WebSocket upgrade allowed. **Do not route
-   `/internal/*`** on `api.<domain>` (the LiveKit webhook reaches the backend over the Docker network).
-   The Admin Console port stays on `127.0.0.1:3001` (compose file) and gets no domain.
+3. Domains / routing (D-18, one domain; **Verify** in Coolify): service `backend` →
+   `https://<domain>:3000`, service `livekit` → `https://<domain>/rtc:7880` with the `/rtc` path **kept**
+   (no strip-prefix: the LiveKit SDK connects to `<url>/rtc`). Check `https://<domain>/rtc/validate`
+   answers from LiveKit (plain text), not the backend's JSON `NOT_FOUND`. With one domain,
+   `/internal/livekit/webhook` is reachable from outside too; it accepts only requests signed with the
+   LiveKit secret (tested: forged and tampered requests get 401). The Admin Console port stays on
+   `127.0.0.1:3001` (compose file) and gets no domain.
 
 ## 7. First start
 
-Deploy the resource in Coolify (or `docker compose -f deploy/docker-compose.prod.yml up -d`). Order is
+Deploy the resource in Coolify (or `docker compose -f docker-compose.prod.yml up -d`). Order is
 built in: `migrate` applies the migrations and then the role grants (`backend/prisma/grants.sql`, as
 `vc_migrate`), and the backend starts only if that succeeded. Every later deployment does the same.
 Take a backup before a deployment that brings a migration (§9).
 
-Check: `https://api.<domain>/healthz` → 200 and `/readyz` → 200 (`/readyz` 503 means the database or a
+Check: `https://<domain>/healthz` → 200 and `/readyz` → 200 (`/readyz` 503 means the database or a
 pending migration — read the `migrate` and backend logs in Coolify).
 
 ## 8. Administrator and the two users
 
 ```sh
-docker compose -f deploy/docker-compose.prod.yml exec backend node dist/cli.js admin:create --username <admin-name>
+docker compose -f docker-compose.prod.yml exec backend node dist/cli.js admin:create --username <admin-name>
 ```
 It asks for a password (16+ characters) and shows a TOTP secret for your authenticator app once.
 Then open the Admin Console through the tunnel — `ssh -L 3001:127.0.0.1:3001 <you>@<vps>` → open
@@ -105,8 +109,8 @@ temporary password over in person; each user must change it at first login.
 
 | Job | Command | When |
 |---|---|---|
-| Backup (keeps the last 24 h, D-12) | `docker compose -f deploy/docker-compose.prod.yml --profile backup run --rm backup` | Daily, quiet hour |
-| Audit-log retention (365 d, D-12) | `docker compose -f deploy/docker-compose.prod.yml --profile maint run --rm audit-retention` (vc_maint only; needs `MAINT_DATABASE_URL`) | Daily |
+| Backup (keeps the last 24 h, D-12) | `docker compose -f docker-compose.prod.yml --profile backup run --rm backup` | Daily, quiet hour |
+| Audit-log retention (365 d, D-12) | `docker compose -f docker-compose.prod.yml --profile maint run --rm audit-retention` (vc_maint only; needs `MAINT_DATABASE_URL`) | Daily |
 | Restore drill | `deploy/backup/restore-test.sh <newest .age file> <age private key>` on a machine that has the private key | Monthly |
 
 Use Coolify's scheduled tasks or cron (**Verify**). The Admin Console health page shows the last backup
@@ -116,7 +120,7 @@ time once `BACKUP_STATUS_FILE` is mounted (the compose file does this).
 
 On your own trusted machine (never in CI, never committed):
 1. Create the signing key once: `keytool -genkeypair -v -keystore vaultchat-release.jks -keyalg RSA -keysize 4096 -validity 10000 -alias vaultchat`. Keep two encrypted offline copies.
-2. In `~/.gradle/gradle.properties`: `vaultchat.apiBaseUrl.release=https://api.<domain>/`, the
+2. In `~/.gradle/gradle.properties`: `vaultchat.apiBaseUrl.release=https://<domain>/`, the
    `vaultchat.signing.*` values (android/README.md), and the `vaultchat.fcm.*` values if push is used.
 3. `./gradlew :app:assembleRelease`, then `apksigner verify --print-certs` and `sha256sum` the APK; record both.
 4. Deliver the APK privately; install with "unknown apps" allowed only for the moment of install.

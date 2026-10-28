@@ -1,9 +1,11 @@
-# Production service layout (docs/16-deployment-and-operations.md §2, §5–§8, §11). TEMPLATE:
-# not deployed by this repository. Coolify (or `docker compose`) supplies every secret through
-# the environment; nothing secret is in this file. Traefik routing (api.<domain> → backend:3000,
-# rtc.<domain> → livekit:7880, /internal/* not routed) is configured in Coolify.
+# Production service layout (docs/16-deployment-and-operations.md §2, §5–§8, §11). It lives at the
+# repository root because Coolify runs compose with the repo root as the project directory, and
+# build paths are resolved from there. Coolify (or `docker compose`) supplies every secret through
+# the environment; nothing secret is in this file. Routing (D-18, one domain) is configured in
+# Coolify: <domain>/rtc → livekit:7880 (path kept: the LiveKit SDK connects to <url>/rtc), every
+# other path → backend:3000.
 #
-#   docker compose -f deploy/docker-compose.prod.yml up -d
+#   docker compose -f docker-compose.prod.yml up -d
 #
 # `up` runs `migrate` first (migrations, then role grants as vc_migrate) and starts the backend only
 # if it succeeded. LiveKit's whole config is in this file (LIVEKIT_CONFIG): no file on the server.
@@ -24,7 +26,7 @@ x-hardening: &hardening
 
 services:
   backend:
-    build: { context: ../backend, target: runtime }
+    build: { context: ./backend, target: runtime }
     image: vaultchat-backend
     restart: unless-stopped
     <<: *hardening
@@ -58,7 +60,7 @@ services:
 
   migrate:
     # One-shot on every `up`: `prisma migrate deploy`, then prisma/grants.sql (idempotent).
-    build: { context: ../backend, target: migrate }
+    build: { context: ./backend, target: migrate }
     image: vaultchat-migrate
     restart: "no"
     <<: *hardening
@@ -114,7 +116,7 @@ services:
   backup:
     # Run by a scheduled task (e.g. Coolify): `docker compose ... run --rm backup`.
     profiles: ["backup"]
-    build: { context: ./backup }
+    build: { context: ./deploy/backup }
     image: vaultchat-backup
     <<: *hardening
     environment:
