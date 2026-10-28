@@ -117,6 +117,22 @@ services:
       - "7881:7881/tcp"   # ICE over TCP
       - "7882:7882/udp"   # media (UDP mux)
       - "3478:3478/udp"   # embedded TURN/UDP (only if enabled, docs/16 §8.3)
+    # Routing for <domain>/rtc → LiveKit signalling (port 7880), path kept: the LiveKit SDK connects to
+    # <url>/rtc. Written here because Coolify's domain field cannot express a path plus a port (it read
+    # "/rtc:7880" as the path, stripped it, and picked port 7881). Leave the livekit domain EMPTY in
+    # Coolify. Names (entrypoint "https", resolver "letsencrypt", proxy on the "coolify" network) match
+    # the labels Coolify generates for the backend. The longer rule outranks the backend's catch-all.
+    networks: [default, coolify]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=coolify
+      - traefik.http.routers.vaultchat-rtc.rule=Host(`${PUBLIC_DOMAIN:-fluteconsulatancy.com}`) && PathPrefix(`/rtc`)
+      - traefik.http.routers.vaultchat-rtc.entrypoints=https
+      - traefik.http.routers.vaultchat-rtc.tls=true
+      - traefik.http.routers.vaultchat-rtc.tls.certresolver=letsencrypt
+      - traefik.http.routers.vaultchat-rtc.priority=1000
+      - traefik.http.routers.vaultchat-rtc.service=vaultchat-rtc
+      - traefik.http.services.vaultchat-rtc.loadbalancer.server.port=7880
     logging: *logging
 
   backup:

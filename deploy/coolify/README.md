@@ -77,9 +77,11 @@ Nothing to do on the server: LiveKit's whole config is in `docker-compose.prod.y
    `BACKUP_PG*` and `MAINT_DATABASE_URL` (both vc_maint), `AGE_RECIPIENT`; optionally `FCM_CREDENTIALS_FILE` with the mounted JSON.
    Compose checks every variable in the file, including those of the on-demand services, so set them all.
    Variable reference: docs/16 §4 and `backend/.env.example`.
-3. Domains / routing (D-18, one domain; **Verify** in Coolify): service `backend` →
-   `https://<domain>:3000`, service `livekit` → `https://<domain>/rtc:7880` with the `/rtc` path **kept**
-   (no strip-prefix: the LiveKit SDK connects to `<url>/rtc`). Check `https://<domain>/rtc/validate`
+3. Domains / routing (D-18, one domain): service `backend` → `https://<domain>:3000` in Coolify;
+   service `livekit` → **leave its domain empty**. Its route (`<domain>/rtc` → port 7880, path kept: the
+   LiveKit SDK connects to `<url>/rtc`) is written as Traefik labels in the compose file, because
+   Coolify's domain field read `/rtc:7880` as a path, stripped it and picked port 7881. Set
+   `PUBLIC_DOMAIN` if the domain is not `fluteconsulatancy.com`. Check `https://<domain>/rtc/validate`
    answers from LiveKit (plain text), not the backend's JSON `NOT_FOUND`. With one domain,
    `/internal/livekit/webhook` is reachable from outside too; it accepts only requests signed with the
    LiveKit secret (tested: forged and tampered requests get 401). The Admin Console port stays on
