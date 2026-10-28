@@ -4,6 +4,13 @@
 # No secrets are baked in: configuration comes from the environment at run time.
 
 FROM node:22.22.0-bookworm-slim AS build
+# OpenSSL before `npm ci`: Prisma picks its migration engine by the OpenSSL it finds. Without it the
+# install fetches the wrong engine, and the read-only migrate container then fails trying to fetch
+# another ("Can't write to /app/node_modules/@prisma/engines"). The runtime image does not need it:
+# the app uses the pg driver adapter, no engine.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl \
+ && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 # Schema first: `npm ci` runs `prisma generate` (postinstall).
 COPY package.json package-lock.json prisma.config.ts ./
