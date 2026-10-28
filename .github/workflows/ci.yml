@@ -104,17 +104,32 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/readyz)" = 503
           docker logs backend 2>&1 | tail -20
           docker rm -f backend
-      - name: Migrate image applies migrations and grants against PostgreSQL 16 (hardened like compose)
+      - name: Migrate (via the compose file) reaches PostgreSQL on the coolify network, applies migrations and grants
+        # Mirrors Coolify: the database is a separate resource on the external `coolify` network.
+        env:
+          TRUST_PROXY: 10.0.0.0/8
+          DATABASE_URL: postgresql://vc_app:ci-only-password@db:5432/vaultchat
+          MIGRATE_DATABASE_URL: postgresql://vc_migrate:ci-only-password@db:5432/vaultchat
+          MAINT_DATABASE_URL: postgresql://vc_maint:ci-only-password@db:5432/vaultchat
+          ADMIN_TOTP_ENC_KEY: placeholder
+          LIVEKIT_PUBLIC_URL: wss://example.test
+          LIVEKIT_API_KEY: placeholder
+          LIVEKIT_API_SECRET: placeholder
+          LIVEKIT_KEYS: "placeholder: placeholder"
+          BACKUP_PGHOST: db
+          BACKUP_PGDATABASE: vaultchat
+          BACKUP_PGUSER: vc_maint
+          BACKUP_PGPASSWORD: placeholder
+          AGE_RECIPIENT: placeholder
         run: |
-          docker network create vcnet
-          docker run -d --name db --network vcnet -e POSTGRES_PASSWORD=ci-only-password postgres:16-alpine
+          docker network create coolify
+          docker run -d --name db --network coolify -e POSTGRES_PASSWORD=ci-only-password postgres:16-alpine
           for i in $(seq 1 30); do docker exec db pg_isready -U postgres && break; sleep 1; done
           docker exec db psql -U postgres -v ON_ERROR_STOP=1 -c "CREATE ROLE vc_migrate LOGIN PASSWORD 'ci-only-password'" \
             -c "CREATE ROLE vc_app LOGIN" -c "CREATE ROLE vc_maint LOGIN" -c "CREATE DATABASE vaultchat OWNER vc_migrate"
+          docker tag vaultchat-migrate vaultchat-migrate:latest
           for run in 1 2; do
-            docker run --rm --network vcnet --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true \
-              -e MIGRATE_DATABASE_URL=postgresql://vc_migrate:ci-only-password@db:5432/vaultchat \
-              vaultchat-migrate > migrate.log 2>&1 || { cat migrate.log; exit 1; }
+            docker compose -f docker-compose.prod.yml run --rm --no-deps migrate > migrate.log 2>&1 || { cat migrate.log; exit 1; }
             cat migrate.log
             grep -q "grants applied" migrate.log
             ! grep -q "failed to detect the libssl" migrate.log

@@ -56,6 +56,8 @@ services:
       - vaultchat-backups:/backups:ro
     ports:
       - "127.0.0.1:3001:3001"
+    # The database is a separate Coolify resource on the `coolify` network.
+    networks: [default, coolify]
     logging: *logging
 
   migrate:
@@ -67,6 +69,8 @@ services:
     environment:
       # Schema-owning role (docs/13 §1); never the app role.
       MIGRATE_DATABASE_URL: ${MIGRATE_DATABASE_URL:?migration role connection string}
+    # The database is a separate Coolify resource on the `coolify` network.
+    networks: [default, coolify]
     logging: *logging
 
   audit-retention:
@@ -79,6 +83,8 @@ services:
     environment:
       NODE_ENV: production
       DATABASE_URL: ${MAINT_DATABASE_URL:?maintenance role connection string}
+    # The database is a separate Coolify resource on the `coolify` network.
+    networks: [default, coolify]
     logging: *logging
 
   livekit:
@@ -129,7 +135,15 @@ services:
       BACKUP_DIR: /backups
     volumes:
       - vaultchat-backups:/backups
+    # The database is a separate Coolify resource on the `coolify` network.
+    networks: [default, coolify]
     logging: *logging
 
 volumes:
   vaultchat-backups:
+
+networks:
+  # Coolify's shared network, where its PostgreSQL resource lives (created by Coolify; `docker
+  # network create coolify` to run this file elsewhere). Services that use the database join it.
+  coolify:
+    external: true
