@@ -104,6 +104,22 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/readyz)" = 503
           docker logs backend 2>&1 | tail -20
           docker rm -f backend
+      - name: Migrate image applies migrations and grants against PostgreSQL 16 (hardened like compose)
+        run: |
+          docker network create vcnet
+          docker run -d --name db --network vcnet -e POSTGRES_PASSWORD=ci-only-password postgres:16-alpine
+          for i in $(seq 1 30); do docker exec db pg_isready -U postgres && break; sleep 1; done
+          docker exec db psql -U postgres -v ON_ERROR_STOP=1 -c "CREATE ROLE vc_migrate LOGIN PASSWORD 'ci-only-password'" \
+            -c "CREATE ROLE vc_app LOGIN" -c "CREATE ROLE vc_maint LOGIN" -c "CREATE DATABASE vaultchat OWNER vc_migrate"
+          for run in 1 2; do
+            docker run --rm --network vcnet --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true \
+              -e MIGRATE_DATABASE_URL=postgresql://vc_migrate:ci-only-password@db:5432/vaultchat \
+              vaultchat-migrate > migrate.log 2>&1 || { cat migrate.log; exit 1; }
+            cat migrate.log
+            grep -q "grants applied" migrate.log
+            ! grep -q "failed to detect the libssl" migrate.log
+          done
+          docker rm -f db
       - name: Production compose template is valid
         env:
           TRUST_PROXY: 10.0.0.0/8

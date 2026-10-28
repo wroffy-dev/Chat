@@ -16,6 +16,11 @@ RUN npm run build
 # Migrations need the Prisma CLI (a dev dependency); run with MIGRATE_DATABASE_URL set. The role
 # privileges (prisma/grants.sql) are re-applied after every migration so new tables get them too.
 FROM build AS migrate
+# Prisma's migration engine needs OpenSSL, which the slim image lacks ("failed to detect the
+# libssl/openssl version"). The runtime image does not need it: the app uses the pg driver adapter.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl \
+ && rm -rf /var/lib/apt/lists/*
 USER node
 CMD ["sh", "-c", "npx --no-install prisma migrate deploy && node dist/db/apply-grants.js"]
 
