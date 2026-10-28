@@ -124,7 +124,12 @@ jobs:
         run: |
           docker network create coolify
           docker run -d --name db --network coolify -e POSTGRES_PASSWORD=ci-only-password postgres:16-alpine
-          for i in $(seq 1 30); do docker exec db pg_isready -U postgres && break; sleep 1; done
+          # The image starts a temporary server for its init scripts, then restarts: wait for the real one.
+          for i in $(seq 1 60); do
+            docker logs db 2>&1 | grep -q "PostgreSQL init process complete" \
+              && docker exec db psql -U postgres -tAc "SELECT 1" >/dev/null 2>&1 && break
+            sleep 1
+          done
           docker exec db psql -U postgres -v ON_ERROR_STOP=1 -c "CREATE ROLE vc_migrate LOGIN PASSWORD 'ci-only-password'" \
             -c "CREATE ROLE vc_app LOGIN" -c "CREATE ROLE vc_maint LOGIN" -c "CREATE DATABASE vaultchat OWNER vc_migrate"
           docker tag vaultchat-migrate vaultchat-migrate:latest
