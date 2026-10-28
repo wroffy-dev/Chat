@@ -164,6 +164,8 @@ jobs:
           grep -q 'PathPrefix(`/rtc`)' prod.yml
           grep -q 'vaultchat-rtc.loadbalancer.server.port: "7880"' prod.yml
           ! grep -qi stripprefix prod.yml
+          # Coolify does not substitute variables in labels, so they must hold none.
+          ! sed -n '/^  livekit:/,/^  [a-z]/p' docker-compose.prod.yml | grep -A12 'labels:' | grep -q '\${'
       - name: Dev compose is valid, LiveKit on loopback by default and on the LAN address when set
         env:
           POSTGRES_PASSWORD: placeholder

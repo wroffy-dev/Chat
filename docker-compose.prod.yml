@@ -126,7 +126,9 @@ services:
     labels:
       - traefik.enable=true
       - traefik.docker.network=coolify
-      - traefik.http.routers.vaultchat-rtc.rule=Host(`${PUBLIC_DOMAIN:-fluteconsulatancy.com}`) && PathPrefix(`/rtc`)
+      # The domain is written out: Coolify passes labels through without substituting variables
+      # (a variable here reached Traefik as literal text). Change it here if the domain changes (D-18).
+      - traefik.http.routers.vaultchat-rtc.rule=Host(`fluteconsulatancy.com`) && PathPrefix(`/rtc`)
       - traefik.http.routers.vaultchat-rtc.entrypoints=https
       - traefik.http.routers.vaultchat-rtc.tls=true
       - traefik.http.routers.vaultchat-rtc.tls.certresolver=letsencrypt
