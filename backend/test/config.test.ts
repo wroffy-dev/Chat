@@ -15,6 +15,15 @@ describe("loadConfig", () => {
     expect(config.BODY_LIMIT_BYTES).toBe(65_536);
   });
 
+  it("treats empty variables as unset, as compose passes optional ones", () => {
+    const config = loadConfig({ ...base, FCM_CREDENTIALS_FILE: "", BACKUP_STATUS_FILE: "", TRUST_PROXY: "", PORT: "" });
+    expect(config.FCM_CREDENTIALS_FILE).toBeUndefined();
+    expect(config.BACKUP_STATUS_FILE).toBeUndefined();
+    expect(config.TRUST_PROXY).toEqual([]);
+    expect(config.PORT).toBe(3000);
+    expect(() => loadConfig({ ...base, DATABASE_URL: "" })).toThrow(/DATABASE_URL/);
+  });
+
   it("parses numbers and the trusted proxy list", () => {
     const config = loadConfig({ ...base, PORT: "8080", TRUST_PROXY: "10.0.1.0/24, 127.0.0.1" });
     expect(config.PORT).toBe(8080);
