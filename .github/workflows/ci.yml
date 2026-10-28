@@ -157,7 +157,13 @@ jobs:
           BACKUP_PGPASSWORD: placeholder
           AGE_RECIPIENT: placeholder
           MAINT_DATABASE_URL: postgresql://maint:ci-only-password@db:5432/vc
-        run: docker compose -f docker-compose.prod.yml --profile migrate --profile backup --profile maint config -q
+        run: |
+          docker compose -f docker-compose.prod.yml --profile migrate --profile backup --profile maint config -q
+          # <domain>/rtc must reach LiveKit's signalling port with the path kept (no strip-prefix).
+          docker compose -f docker-compose.prod.yml config > prod.yml
+          grep -q 'PathPrefix(`/rtc`)' prod.yml
+          grep -q 'vaultchat-rtc.loadbalancer.server.port: "7880"' prod.yml
+          ! grep -qi stripprefix prod.yml
       - name: Dev compose is valid, LiveKit on loopback by default and on the LAN address when set
         env:
           POSTGRES_PASSWORD: placeholder
