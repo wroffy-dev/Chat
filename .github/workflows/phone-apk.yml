@@ -22,6 +22,12 @@ jobs:
         working-directory: android
     env:
       API_URL: ${{ inputs.api_url }}
+      # Firebase client identifiers (not secrets) from the repository's Actions variables; when they
+      # are unset the app is built without push, and calls ring only while it is open.
+      FCM_PROJECT_ID: ${{ vars.VAULTCHAT_FCM_PROJECT_ID }}
+      FCM_APP_ID: ${{ vars.VAULTCHAT_FCM_APP_ID }}
+      FCM_API_KEY: ${{ vars.VAULTCHAT_FCM_API_KEY }}
+      FCM_SENDER_ID: ${{ vars.VAULTCHAT_FCM_SENDER_ID }}
     steps:
       - uses: actions/checkout@v4
       - name: URL is https
@@ -32,7 +38,15 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew --no-daemon :app:assembleDebug -Pvaultchat.apiBaseUrl.debug="$API_URL"
+      - run: |
+          ./gradlew --no-daemon :app:assembleDebug -Pvaultchat.apiBaseUrl.debug="$API_URL" \
+            -Pvaultchat.fcm.projectId="$FCM_PROJECT_ID" -Pvaultchat.fcm.appId="$FCM_APP_ID" \
+            -Pvaultchat.fcm.apiKey="$FCM_API_KEY" -Pvaultchat.fcm.senderId="$FCM_SENDER_ID"
+          if [ -n "$FCM_PROJECT_ID" ] && [ -n "$FCM_APP_ID" ] && [ -n "$FCM_API_KEY" ] && [ -n "$FCM_SENDER_ID" ]; then
+            echo "Push: on (Firebase project $FCM_PROJECT_ID)"
+          else
+            echo "Push: off (set the VAULTCHAT_FCM_* repository variables to turn it on)"
+          fi
       - name: Name the APK and print its checksum
         run: |
           mkdir -p out

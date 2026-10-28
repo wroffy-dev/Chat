@@ -48,12 +48,16 @@ services:
       LIVEKIT_API_URL: http://livekit:7880
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:?}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?}
-      # Optional: path of the mounted Firebase service-account file (read-only secret mount).
+      # Optional: path of the mounted Firebase service-account file, e.g.
+      # /run/secrets/vaultchat/fcm-service-account.json (from the host directory mounted below).
       FCM_CREDENTIALS_FILE: ${FCM_CREDENTIALS_FILE:-}
       # The backup job's status file, shown on the Admin Console health page.
       BACKUP_STATUS_FILE: /backups/last-success
     volumes:
       - vaultchat-backups:/backups:ro
+      # Secret files placed on the VPS by hand (never in git), readable by the container's user
+      # (uid 1000): chown 1000 <file> && chmod 400 <file>. Empty directory = push disabled.
+      - /opt/vaultchat/secrets:/run/secrets/vaultchat:ro
     ports:
       - "127.0.0.1:3001:3001"
     # The database is a separate Coolify resource on the `coolify` network.

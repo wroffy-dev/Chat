@@ -57,7 +57,7 @@ Everything else closed — in particular 5432 (PostgreSQL), 3001 (Admin Console)
 | LiveKit key | `API` + `openssl rand -hex 8` | `LIVEKIT_API_KEY` + `LIVEKIT_KEYS` |
 | LiveKit secret | `openssl rand -base64 36` (must be 32+ characters) | backend env + `LIVEKIT_KEYS` only |
 | `age` public key | from step 0 | backup env |
-| FCM service-account file (optional) | Google Cloud console → service account with FCM send permission → JSON key | mounted read-only file |
+| FCM service-account file (optional) | Firebase console → Project settings → Service accounts → Generate new private key | `/opt/vaultchat/secrets/fcm-service-account.json` on the VPS (`chown 1000`, `chmod 400`), mounted read-only |
 
 ## 5. LiveKit configuration
 
@@ -74,7 +74,9 @@ Nothing to do on the server: LiveKit's whole config is in `docker-compose.prod.y
 2. Set the environment variables (Coolify marks them secret): those required by the compose file —
    `TRUST_PROXY`, `DATABASE_URL` (vc_app), `MIGRATE_DATABASE_URL` (vc_migrate), `ADMIN_TOTP_ENC_KEY`,
    `LIVEKIT_PUBLIC_URL=wss://<domain>`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_KEYS`,
-   `BACKUP_PG*` and `MAINT_DATABASE_URL` (both vc_maint), `AGE_RECIPIENT`; optionally `FCM_CREDENTIALS_FILE` with the mounted JSON.
+   `BACKUP_PG*` and `MAINT_DATABASE_URL` (both vc_maint), `AGE_RECIPIENT`; optionally `FCM_CREDENTIALS_FILE=/run/secrets/vaultchat/fcm-service-account.json` once that file is in place.
+   The phone APK workflow reads the Firebase client identifiers from the repository's Actions variables
+   `VAULTCHAT_FCM_PROJECT_ID`, `VAULTCHAT_FCM_APP_ID`, `VAULTCHAT_FCM_API_KEY`, `VAULTCHAT_FCM_SENDER_ID`.
    Compose checks every variable in the file, including those of the on-demand services, so set them all.
    Variable reference: docs/16 §4 and `backend/.env.example`.
 3. Domains / routing (D-18, one domain): service `backend` → `https://<domain>:3000` in Coolify;
