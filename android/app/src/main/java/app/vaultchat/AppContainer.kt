@@ -17,6 +17,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import app.vaultchat.data.push.PushTokenApi
 import app.vaultchat.data.app.AppVersionApi
+import app.vaultchat.data.app.ApkDownloader
+import app.vaultchat.platform.update.AppUpdater
 import kotlinx.coroutines.flow.MutableStateFlow
 import app.vaultchat.data.connection.ConnectionApi
 import app.vaultchat.domain.call.CallRepository
@@ -71,6 +73,9 @@ class AppContainer(context: Context) {
 
     /** For work that must finish after a screen closes (e.g. the chat exit request). */
     val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** In-app updates (Home shows the Update button after sign-in). */
+    val appUpdater = AppUpdater(appContext, appVersionApi, ApkDownloader(BuildConfig.API_BASE_URL, http, caller), applicationScope)
 
     /** Set when the user taps an incoming-call notification; the navigation host consumes it. */
     val pendingIncomingCallId = MutableStateFlow<String?>(null)

@@ -75,6 +75,8 @@ Nothing to do on the server: LiveKit's whole config is in `docker-compose.prod.y
    `TRUST_PROXY`, `DATABASE_URL` (vc_app), `MIGRATE_DATABASE_URL` (vc_migrate), `ADMIN_TOTP_ENC_KEY`,
    `LIVEKIT_PUBLIC_URL=wss://<domain>`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_KEYS`,
    `BACKUP_PG*` and `MAINT_DATABASE_URL` (both vc_maint), `AGE_RECIPIENT`; optionally `FCM_CREDENTIALS_FILE=/run/secrets/vaultchat/fcm-service-account.json` once that file is in place.
+   For in-app updates set `APP_UPLOAD_TOKEN` (`openssl rand -hex 32`; the same value goes in the GitHub
+   secret `VAULTCHAT_APP_UPLOAD_TOKEN`).
    The phone APK workflow reads the Firebase client identifiers from the repository's Actions variables
    `VAULTCHAT_FCM_PROJECT_ID`, `VAULTCHAT_FCM_APP_ID`, `VAULTCHAT_FCM_API_KEY`, `VAULTCHAT_FCM_SENDER_ID`.
    Compose checks every variable in the file, including those of the on-demand services, so set them all.

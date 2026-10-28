@@ -53,6 +53,11 @@ const envSchema = z.object({
   // Status file written by deploy/backup/backup.sh after each successful backup (read-only mount);
   // shown on the Admin Console health page.
   BACKUP_STATUS_FILE: z.string().min(1).optional(),
+
+  // In-app updates (docs/16 §9): a writable directory for the latest APK, and the token the APK
+  // build workflow uploads with. Without both, the app offers no download.
+  APP_UPDATES_DIR: z.string().min(1).optional(),
+  APP_UPLOAD_TOKEN: z.string().min(32, "must be at least 32 characters").optional(),
 }).superRefine((env, ctx) => {
   const livekit = [env.LIVEKIT_PUBLIC_URL, env.LIVEKIT_API_URL, env.LIVEKIT_API_KEY, env.LIVEKIT_API_SECRET];
   if (livekit.some(Boolean) && !livekit.every(Boolean)) {

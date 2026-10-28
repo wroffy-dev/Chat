@@ -86,7 +86,7 @@ Common to every authenticated route: `401` if token missing/expired/revoked; `40
 
 ### GET /app/version
 - **Auth:** none. **Rate limit:** 30/min per IP.
-- **Response:** `{ "minSupportedVersionCode", "latestVersionCode", "latestApkSha256" }`.
+- **Response:** `{ "minSupportedVersionCode", "latestVersionCode", "latestApkSha256", "downloadAvailable" }` (§5a).
 
 ## 4. Connection (QR)
 
@@ -162,7 +162,24 @@ Request bodies of these routes are never logged. In slice 1 the app polls instea
 
 ### GET /app/version
 - **Auth:** none (an outdated app must still be able to read it). Rate-limited.
-- **Response 200:** `{ "minSupportedVersionCode", "latestVersionCode", "latestApkSha256": hex | null }` from the Admin Console settings.
+- **Response 200:** `{ "minSupportedVersionCode", "latestVersionCode", "latestApkSha256": hex | null, "downloadAvailable": bool }`
+  from the Admin Console settings, unless an uploaded build (below) is at least as new: then its
+  version and hash, with `downloadAvailable: true`.
+
+### PUT /app/apk?versionCode={int}
+- **Auth:** `Authorization: Bearer <APP_UPLOAD_TOKEN>` (the APK build workflow's token, not a user
+  session; refused with `401` when the server has none). **Rate limit:** 10/h per IP.
+- **Request:** `Content-Type: application/vnd.android.package-archive`, the APK as the body (≤ 150 MB,
+  streamed to disk). **Response 200:** `{ "versionCode", "sha256", "size" }`.
+- **Errors:** `415` other content type; `400 VALIDATION_FAILED` not a zip/APK; `409 CONFLICT` version not
+  newer than the published one; `413 PAYLOAD_TOO_LARGE`.
+- **Side effects:** replaces the published build. **Audit:** `app.apk_published` (version, hash, size).
+
+### GET /app/apk
+- **Auth:** user (not restricted). **Rate limit:** 20/h per IP.
+- **Response 200:** the APK, `Content-Type: application/vnd.android.package-archive`, headers
+  `X-Apk-Sha256`, `X-Apk-Version-Code`. `404` before the first upload. The app checks the hash before
+  handing the file to Android's installer, which accepts it only if it is signed with the installed app's key.
 
 Every request may carry `X-App-Version: <versionCode>`. If it is below `app.min_supported_version_code`,
 every API route except this one answers `426 UPGRADE_REQUIRED`. This nudges updates; it is **not** a

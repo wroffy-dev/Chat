@@ -1,8 +1,14 @@
 name: Build phone APK
 
-# Manual button (Actions → Build phone APK → Run workflow): builds the debug-signed test app pointed at
-# the deployed server and offers it for download. No signing keys or secrets go into it; each run signs
-# with a fresh debug key, so uninstall the previous copy before installing a new one.
+# Manual button (Actions → Build phone APK → Run workflow): builds the test app pointed at the deployed
+# server, offers it for download, and (when the secrets below are set) uploads it to the server so the
+# phones show an Update button. No secrets go into the APK.
+#
+# Repository secrets (Settings → Secrets and variables → Actions → Secrets), all optional:
+#   VAULTCHAT_TEST_KEYSTORE_B64, VAULTCHAT_TEST_KEYSTORE_PASSWORD, VAULTCHAT_TEST_KEY_ALIAS,
+#   VAULTCHAT_TEST_KEY_PASSWORD  - one fixed signing key, so each build installs over the last.
+#                                  Without them every run signs with a new key (uninstall first).
+#   VAULTCHAT_APP_UPLOAD_TOKEN   - same value as APP_UPLOAD_TOKEN on the server.
 on:
   workflow_dispatch:
     inputs:
@@ -10,6 +16,10 @@ on:
         description: Backend URL the app talks to (https only)
         default: https://fluteconsulatancy.com/
         required: true
+      publish:
+        description: Send this build to the phones as an in-app update
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -30,6 +40,8 @@ jobs:
       FCM_SENDER_ID: ${{ vars.VAULTCHAT_FCM_SENDER_ID }}
     steps:
       - uses: actions/checkout@v4
+      # Each run gets a higher version number than the last; the first test builds were version 1.
+      - run: echo "VERSION_CODE=$((100 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
       - name: URL is https
         run: |
           case "$API_URL" in https://*/) ;; *) echo "api_url must start with https:// and end with /"; exit 1 ;; esac
@@ -38,8 +50,30 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
+      - name: Fixed test signing key (from secrets)
+        env:
+          KEYSTORE_B64: ${{ secrets.VAULTCHAT_TEST_KEYSTORE_B64 }}
+          STORE_PASSWORD: ${{ secrets.VAULTCHAT_TEST_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.VAULTCHAT_TEST_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.VAULTCHAT_TEST_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "Signing: a new debug key for this run (set the VAULTCHAT_TEST_* secrets for in-app updates)"
+            exit 0
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/test.jks"
+          # Passwords go in Gradle's user properties, not on a command line.
+          mkdir -p ~/.gradle
+          {
+            echo "vaultchat.testSigning.storeFile=$RUNNER_TEMP/test.jks"
+            echo "vaultchat.testSigning.storePassword=$STORE_PASSWORD"
+            echo "vaultchat.testSigning.keyAlias=$KEY_ALIAS"
+            echo "vaultchat.testSigning.keyPassword=${KEY_PASSWORD:-$STORE_PASSWORD}"
+          } >> ~/.gradle/gradle.properties
+          echo "SIGNED_WITH_TEST_KEY=1" >> "$GITHUB_ENV"
+          echo "Signing: the fixed test key"
       - run: |
-          ./gradlew --no-daemon :app:assembleDebug -Pvaultchat.apiBaseUrl.debug="$API_URL" \
+          ./gradlew --no-daemon :app:assembleDebug -Pvaultchat.apiBaseUrl.debug="$API_URL" -Pvaultchat.versionCode="$VERSION_CODE" \
             -Pvaultchat.fcm.projectId="$FCM_PROJECT_ID" -Pvaultchat.fcm.appId="$FCM_APP_ID" \
             -Pvaultchat.fcm.apiKey="$FCM_API_KEY" -Pvaultchat.fcm.senderId="$FCM_SENDER_ID"
           if [ -n "$FCM_PROJECT_ID" ] && [ -n "$FCM_APP_ID" ] && [ -n "$FCM_API_KEY" ] && [ -n "$FCM_SENDER_ID" ]; then
@@ -52,7 +86,23 @@ jobs:
           mkdir -p out
           cp app/build/outputs/apk/debug/app-debug.apk out/vaultchat-debug.apk
           sha256sum out/vaultchat-debug.apk | tee out/SHA256.txt
-          echo "Built for $API_URL" >> out/SHA256.txt
+          echo "Version $VERSION_CODE, built for $API_URL" >> out/SHA256.txt
+      - name: Send to the phones (in-app update)
+        if: ${{ inputs.publish }}
+        env:
+          UPLOAD_TOKEN: ${{ secrets.VAULTCHAT_APP_UPLOAD_TOKEN }}
+        run: |
+          if [ -z "$UPLOAD_TOKEN" ] || [ -z "${SIGNED_WITH_TEST_KEY:-}" ]; then
+            echo "Not sent to the phones: needs VAULTCHAT_APP_UPLOAD_TOKEN and the fixed test key"
+            exit 0
+          fi
+          curl -sS --fail-with-body -X PUT \
+            -H "Authorization: Bearer $UPLOAD_TOKEN" \
+            -H "Content-Type: application/vnd.android.package-archive" \
+            --data-binary @out/vaultchat-debug.apk \
+            "${API_URL}api/v1/app/apk?versionCode=$VERSION_CODE"
+          echo
+          echo "Sent: the phones will offer version $VERSION_CODE"
       - uses: actions/upload-artifact@v4
         with:
           name: vaultchat-debug-apk

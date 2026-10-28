@@ -53,8 +53,13 @@ services:
       FCM_CREDENTIALS_FILE: ${FCM_CREDENTIALS_FILE:-}
       # The backup job's status file, shown on the Admin Console health page.
       BACKUP_STATUS_FILE: /backups/last-success
+      # In-app updates: the APK build workflow uploads with this token (same value in its GitHub
+      # secret VAULTCHAT_APP_UPLOAD_TOKEN); unset = uploads refused.
+      APP_UPDATES_DIR: /app-updates
+      APP_UPLOAD_TOKEN: ${APP_UPLOAD_TOKEN:-}
     volumes:
       - vaultchat-backups:/backups:ro
+      - vaultchat-app-updates:/app-updates
       # Secret files placed on the VPS by hand (never in git), readable by the container's user
       # (uid 1000): chown 1000 <file> && chmod 400 <file>. Empty directory = push disabled.
       - /opt/vaultchat/secrets:/run/secrets/vaultchat:ro
@@ -163,6 +168,7 @@ services:
 
 volumes:
   vaultchat-backups:
+  vaultchat-app-updates:
 
 networks:
   # Coolify's shared network, where its PostgreSQL resource lives (created by Coolify; `docker

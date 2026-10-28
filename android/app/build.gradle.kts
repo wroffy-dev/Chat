@@ -74,7 +74,8 @@ android {
         // Proposed floor; final value depends on the two users' phones (open decision D-09).
         minSdk = 29
         targetSdk = 35
-        versionCode = 1
+        // The phone APK workflow numbers each build (in-app updates install only a higher number).
+        versionCode = findProperty("vaultchat.versionCode")?.toString()?.toInt() ?: 1
         versionName = "0.1.0"
     }
 
@@ -90,11 +91,23 @@ android {
                 keyPassword = findProperty("vaultchat.signing.keyPassword")?.toString()
             }
         }
+        // Test builds: one fixed key, kept only as GitHub Actions secrets, so each new test build
+        // installs over the last as an in-app update. Without it, Android's per-machine debug key.
+        val testStorePath = findProperty("vaultchat.testSigning.storeFile")?.toString()
+        if (testStorePath != null) {
+            create("test") {
+                storeFile = file(testStorePath)
+                storePassword = findProperty("vaultchat.testSigning.storePassword")?.toString()
+                keyAlias = findProperty("vaultchat.testSigning.keyAlias")?.toString()
+                keyPassword = findProperty("vaultchat.testSigning.keyPassword")?.toString()
+            }
+        }
     }
 
     buildTypes {
         debug {
             applicationIdSuffix = ".dev"
+            signingConfigs.findByName("test")?.let { signingConfig = it }
             buildConfigField("String", "API_BASE_URL", "\"${apiBaseUrl("debug")}\"")
         }
         release {

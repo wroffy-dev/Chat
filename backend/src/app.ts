@@ -21,6 +21,7 @@ import { realtimeRoutes } from "./routes/realtime.js";
 import type { RealtimeHub } from "./realtime/hub.js";
 import type { SettingsService } from "./settings/service.js";
 import { healthRoutes } from "./routes/health.js";
+import { appUpdateRoutes, type AppUpdateRouteOptions } from "./routes/app-updates.js";
 import { AppError, appError } from "./errors.js";
 
 export interface AppDeps {
@@ -38,11 +39,13 @@ export interface AppDeps {
   realtime?: { hub: RealtimeHub; recheckMs?: number; pingMs?: number };
   /** Admin settings; enables the app-version check and GET /api/v1/app/version. */
   settings?: SettingsService;
+  /** In-app updates: upload by the build workflow, download by signed-in users. */
+  updates?: Omit<AppUpdateRouteOptions, "auth">;
   /** Overrides the logger (tests pass `false` or a capturing stream). */
   logger?: FastifyServerOptions["logger"];
 }
 
-export function buildApp({ config, database, auth, connections, calls, chat, media, push, realtime, settings, logger }: AppDeps): FastifyInstance {
+export function buildApp({ config, database, auth, connections, calls, chat, media, push, realtime, settings, updates, logger }: AppDeps): FastifyInstance {
   const app = Fastify({
     logger: logger ?? buildLoggerOptions(config),
     // Client-supplied request IDs are not trusted; every request gets a fresh one.
@@ -96,18 +99,34 @@ export function buildApp({ config, database, auth, connections, calls, chat, med
                 200: {
                   type: "object",
                   additionalProperties: false,
-                  required: ["minSupportedVersionCode", "latestVersionCode", "latestApkSha256"],
-                  properties: { minSupportedVersionCode: { type: "integer" }, latestVersionCode: { type: "integer" }, latestApkSha256: { type: ["string", "null"] } },
+                  required: ["minSupportedVersionCode", "latestVersionCode", "latestApkSha256", "downloadAvailable"],
+                  properties: {
+                    minSupportedVersionCode: { type: "integer" },
+                    latestVersionCode: { type: "integer" },
+                    latestApkSha256: { type: ["string", "null"] },
+                    downloadAvailable: { type: "boolean" },
+                  },
                 },
               },
             },
           },
           async () => {
             const s = await settings.all();
+            // An uploaded build newer than the admin's announcement wins, and can be downloaded in the app.
+            const uploaded = await updates?.store.latest();
+            if (uploaded && uploaded.versionCode >= s["app.latest_version_code"]) {
+              return {
+                minSupportedVersionCode: s["app.min_supported_version_code"],
+                latestVersionCode: uploaded.versionCode,
+                latestApkSha256: uploaded.sha256,
+                downloadAvailable: true,
+              };
+            }
             return {
               minSupportedVersionCode: s["app.min_supported_version_code"],
               latestVersionCode: s["app.latest_version_code"],
               latestApkSha256: s["app.latest_apk_sha256"] || null,
+              downloadAvailable: false,
             };
           },
         );
@@ -117,6 +136,7 @@ export function buildApp({ config, database, auth, connections, calls, chat, med
       if (calls) await api.register(callRoutes, { auth, calls });
       if (chat) await api.register(chatRoutes, { auth, chat });
       if (push) await api.register(deviceRoutes, { auth, push });
+      if (updates) await api.register(appUpdateRoutes, { auth, ...updates });
       if (realtime) {
         // 16 KB frames at most; the app sends nothing but pongs anyway.
         await api.register(websocket, { options: { maxPayload: 16_384 } });

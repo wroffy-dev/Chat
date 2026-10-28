@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { tmpdir } from "node:os";
+import { AppUpdateStore } from "../src/updates/store.js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
@@ -33,6 +35,8 @@ const pushTransport: PushTransport = { send: async () => {} };
 /** Routes reachable without a session. Everything else under /api/v1 must refuse anonymous callers. */
 const PUBLIC = new Set(["POST /api/v1/auth/login", "POST /api/v1/auth/refresh", "GET /api/v1/app/version"]);
 /** Routes a session that must still change its password may use (docs/04 §5). */
+/** Authorised by the build workflow's upload token, not a user session. */
+const UPLOAD_ONLY = new Set(["PUT /api/v1/app/apk"]);
 const RESTRICTED_OK = new Set([
   "POST /api/v1/auth/logout",
   "POST /api/v1/auth/change-password",
@@ -74,6 +78,7 @@ describe.skipIf(!TEST_DB_URL)("security (PostgreSQL)", () => {
       push,
       realtime: { hub: new RealtimeHub() },
       settings: new SettingsService(database.prisma, defaultSettings(45)),
+      updates: { store: new AppUpdateStore(tmpdir()), uploadToken: "test-only-upload-token-0123456789abcdef" },
       logger: captured.logger,
     });
     routes = [];
@@ -115,6 +120,10 @@ describe.skipIf(!TEST_DB_URL)("security (PostgreSQL)", () => {
       const name = `${method} ${url}`;
       if (PUBLIC.has(name) || RESTRICTED_OK.has(name)) continue;
       const r = await send(method, url, { authorization: `Bearer ${token}` });
+      if (UPLOAD_ONLY.has(name)) {
+        expect({ route: name, status: r.statusCode }).toEqual({ route: name, status: 401 });
+        continue;
+      }
       expect({ route: name, status: r.statusCode, code: r.json().error?.code }).toEqual({ route: name, status: 403, code: "PASSWORD_CHANGE_REQUIRED" });
     }
   });

@@ -23,6 +23,7 @@ import app.vaultchat.ui.permissions.openAppSettings
 import app.vaultchat.ui.permissions.rememberPermissionRequest
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import app.vaultchat.ui.about.AboutApp
+import app.vaultchat.ui.about.UpdateBanner
 import app.vaultchat.ui.components.PrimaryButton
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -54,8 +55,11 @@ fun HomeScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     // Re-check on return from pairing screens so a new connection shows immediately.
+    val updater = (LocalContext.current.applicationContext as VaultChatApplication).container.appUpdater
     LifecycleResumeEffect(viewModel) {
         viewModel.refresh()
+        // Also on return from Android's "install unknown apps" setting.
+        updater.check()
         onPauseOrDispose { }
     }
     LaunchedEffect(state.navigation) {
@@ -90,6 +94,7 @@ fun HomeScreen(
                 TextButton(onClick = onChangePassword) { Text(stringResource(R.string.home_change_password)) }
                 TextButton(onClick = viewModel::logout) { Text(stringResource(R.string.action_log_out)) }
             }
+            UpdateBanner(updater, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             // Incoming calls can only ring when the app is closed if notifications are allowed.
             val context = LocalContext.current
             if (Push.configured && Build.VERSION.SDK_INT >= 33) {
