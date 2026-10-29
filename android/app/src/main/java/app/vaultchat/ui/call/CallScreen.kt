@@ -8,7 +8,20 @@ import androidx.compose.animation.fadeOut
 import androidx.activity.compose.BackHandler
 import app.vaultchat.platform.call.CallForegroundService
 import app.vaultchat.platform.push.Push
+import android.os.SystemClock
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.stateDescription
+import app.vaultchat.ui.components.InitialsAvatar
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -79,6 +92,8 @@ fun CallScreen(
     incoming: Boolean,
     onStart: () -> Unit,
     onClose: () -> Unit,
+    /** Starts a new call to the same person from the ended screen; null when that is not possible. */
+    onCallAgain: (() -> Unit)? = null,
 ) {
     val state by viewModel.controller.state.collectAsStateWithLifecycle()
     val peerMuted = state.remotePresent && !state.remoteMicOn && state.phase != CallPhase.ENDED
@@ -138,6 +153,20 @@ fun CallScreen(
         }
     }
 
+    // Time since the call first connected, for "Connected · 3:12"; frozen when it ends.
+    var connectedAt by remember { mutableStateOf<Long?>(null) }
+    var clock by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
+    LaunchedEffect(state.phase) {
+        if (state.phase == CallPhase.ACTIVE && connectedAt == null) connectedAt = SystemClock.elapsedRealtime()
+        clock = SystemClock.elapsedRealtime()
+        while (state.phase == CallPhase.ACTIVE || state.phase == CallPhase.RECONNECTING) {
+            delay(1_000)
+            clock = SystemClock.elapsedRealtime()
+        }
+    }
+    val elapsed = connectedAt?.let { formatDuration((clock - it) / 1000) }
+    val showVideo = kind == CallKind.VIDEO && remoteVideo != null && state.phase in setOf(CallPhase.ACTIVE, CallPhase.RECONNECTING)
+
     Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF0E1013), contentColor = Color.White) {
         Box(
             modifier = Modifier.fillMaxSize().pointerInput(Unit) {
@@ -151,7 +180,7 @@ fun CallScreen(
                 }
             },
         ) {
-            if (kind == CallKind.VIDEO && remoteVideo != null && state.phase in setOf(CallPhase.ACTIVE, CallPhase.RECONNECTING)) {
+            if (showVideo) {
                 VideoView(viewModel.media.room, remoteVideo, mirror = false, modifier = Modifier.fillMaxSize())
             }
             if (kind == CallKind.VIDEO && localVideo != null && state.cameraOn && state.phase != CallPhase.ENDED) {
@@ -215,21 +244,32 @@ fun CallScreen(
                 modifier = Modifier.fillMaxSize().safeDrawingPadding().padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Spacer(Modifier.height(48.dp))
+                Spacer(Modifier.height(40.dp))
                 Text(state.peerUsername.ifEmpty { "…" }, style = MaterialTheme.typography.headlineMedium)
+                val phase = phaseText(state.phase, state.endReason, incoming)
                 Text(
-                    phaseText(state.phase, state.endReason, incoming),
+                    when {
+                        elapsed == null -> phase
+                        state.phase == CallPhase.ACTIVE || state.phase == CallPhase.ENDED -> "$phase · $elapsed"
+                        else -> phase
+                    },
                     style = MaterialTheme.typography.bodyLarge,
                     color = Color.White.copy(alpha = 0.8f),
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    // Announces phase changes only, not every tick of the timer.
+                    modifier = Modifier.clearAndSetSemantics {
+                        contentDescription = phase
+                        liveRegion = LiveRegionMode.Polite
+                    },
                 )
                 if (peerMuted) {
                     Spacer(Modifier.height(8.dp))
                     MutedPill(stringResource(R.string.call_peer_muted, state.peerUsername))
                 }
 
-                Spacer(Modifier.weight(1f))
+                Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    if (!showVideo) InitialsAvatar(state.peerUsername.ifEmpty { "?" }, size = 128.dp)
+                }
 
                 when {
                     !incoming && !permissionsReady && state.phase == CallPhase.STARTING -> PermissionPrompt(
@@ -240,20 +280,43 @@ fun CallScreen(
                         onOpenSettings = { openAppSettings(context) },
                         onCancel = onClose,
                     )
-                    state.phase == CallPhase.RINGING_IN -> Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                        Button(
+                    state.phase == CallPhase.RINGING_IN -> Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+                        horizontalArrangement = Arrangement.SpaceAround,
+                    ) {
+                        RoundAction(
+                            label = stringResource(R.string.call_decline),
+                            icon = AppIcons.CallEnd,
+                            container = EndRed,
                             onClick = viewModel.controller::decline,
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB3261E)),
-                        ) { Text(stringResource(R.string.call_decline)) }
-                        Button(
+                        )
+                        RoundAction(
+                            label = stringResource(if (permissionsReady) R.string.call_accept else R.string.call_allow_and_accept),
+                            icon = Icons.Filled.Call,
+                            container = AcceptGreen,
                             onClick = {
                                 if (permissionsReady) viewModel.controller.accept()
                                 else if (mic.status != PermissionStatus.Granted) mic.request() else camera.request()
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
-                        ) { Text(stringResource(if (permissionsReady) R.string.call_accept else R.string.call_allow_and_accept)) }
+                        )
                     }
-                    state.phase == CallPhase.ENDED -> PrimaryButton(stringResource(R.string.call_close), onClose)
+                    state.phase == CallPhase.ENDED -> Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        if (onCallAgain != null) {
+                            Button(
+                                onClick = onCallAgain,
+                                colors = ButtonDefaults.buttonColors(containerColor = Tonal, contentColor = Color.White),
+                                modifier = Modifier.fillMaxWidth().height(52.dp),
+                            ) { Text(stringResource(R.string.call_again), style = MaterialTheme.typography.labelLarge) }
+                        }
+                        Button(
+                            onClick = onClose,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFF111111)),
+                            modifier = Modifier.fillMaxWidth().height(52.dp),
+                        ) { Text(stringResource(R.string.call_close), style = MaterialTheme.typography.labelLarge) }
+                    }
                     else -> Controls(
                         kind = kind,
                         micOn = state.micOn,
@@ -265,6 +328,9 @@ fun CallScreen(
                         onSpeaker = viewModel.controller::toggleSpeaker,
                         noiseFilter = if (viewModel.controller.noiseReductionAvailable) state.noiseReduction else null,
                         onNoiseFilter = viewModel.controller::toggleNoiseReduction,
+                        endLabel = stringResource(
+                            if (state.phase == CallPhase.STARTING || state.phase == CallPhase.RINGING_OUT) R.string.action_cancel else R.string.call_end,
+                        ),
                         onEnd = viewModel.controller::hangup,
                     )
                 }
@@ -292,6 +358,60 @@ private fun MutedPill(text: String, modifier: Modifier = Modifier) {
     }
 }
 
+private val EndRed = Color(0xFFB3261E)
+private val AcceptGreen = Color(0xFF2E7D32)
+private val Tonal = Color.White.copy(alpha = 0.14f)
+
+/** "3:12", or "1:02:03" past an hour. */
+private fun formatDuration(seconds: Long): String {
+    val s = seconds.coerceAtLeast(0)
+    return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, s / 60 % 60, s % 60) else "%d:%02d".format(s / 60, s % 60)
+}
+
+/** A round button with its label underneath. [on] fills it white, so an active toggle stands out. */
+@Composable
+private fun RoundToggle(
+    label: String,
+    icon: ImageVector,
+    on: Boolean,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    state: String? = null,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier
+            .width(64.dp)
+            .alpha(if (enabled) 1f else 0.4f)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .semantics(mergeDescendants = true) { if (state != null) stateDescription = state },
+    ) {
+        Box(
+            modifier = Modifier.size(64.dp).background(if (on) Color.White else Tonal, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = null, tint = if (on) Color.Black else Color.White, modifier = Modifier.size(26.dp))
+        }
+        Text(label, style = MaterialTheme.typography.labelMedium, color = Color.White.copy(alpha = 0.85f), textAlign = TextAlign.Center)
+    }
+}
+
+/** Incoming call's Decline and Accept: large coloured circles with a label. */
+@Composable
+private fun RoundAction(label: String, icon: ImageVector, container: Color, onClick: () -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.clickable(role = Role.Button, onClick = onClick).semantics(mergeDescendants = true) {},
+    ) {
+        Box(modifier = Modifier.size(72.dp).background(container, CircleShape), contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(30.dp))
+        }
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = Color.White)
+    }
+}
+
 @Composable
 private fun Controls(
     kind: CallKind,
@@ -305,41 +425,64 @@ private fun Controls(
     /** Null when the phone cannot run the noise filter. */
     noiseFilter: Boolean?,
     onNoiseFilter: () -> Unit,
+    endLabel: String,
     onEnd: () -> Unit,
 ) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(28.dp),
+    ) {
+        // Four buttons in a video call spread evenly, so they still fit a narrow (360 dp) phone.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = if (kind == CallKind.VIDEO) Arrangement.SpaceEvenly else Arrangement.spacedBy(20.dp, Alignment.CenterHorizontally),
+        ) {
             // Muted is shown loudly (white button, crossed-out mic) so it is never mistaken for live.
-            FilledTonalButton(
+            RoundToggle(
+                label = stringResource(if (micOn) R.string.call_mute else R.string.call_unmute),
+                icon = if (micOn) AppIcons.Mic else AppIcons.MicOff,
+                on = !micOn,
                 onClick = onMic,
-                colors = if (micOn) ButtonDefaults.filledTonalButtonColors() else ButtonDefaults.filledTonalButtonColors(
-                    containerColor = Color.White,
-                    contentColor = Color.Black,
-                ),
-            ) {
-                Icon(if (micOn) AppIcons.Mic else AppIcons.MicOff, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(stringResource(if (micOn) R.string.call_mute else R.string.call_unmute))
+            )
+            if (kind == CallKind.VIDEO) {
+                RoundToggle(
+                    label = stringResource(if (cameraOn) R.string.call_camera_off else R.string.call_camera_on),
+                    icon = if (cameraOn) AppIcons.Videocam else AppIcons.VideocamOff,
+                    on = !cameraOn,
+                    onClick = onCamera,
+                )
+                RoundToggle(
+                    label = stringResource(R.string.call_switch),
+                    icon = AppIcons.FlipCamera,
+                    on = false,
+                    onClick = onSwitch,
+                    enabled = cameraOn,
+                )
             }
-            FilledTonalButton(onClick = onSpeaker) { Text(stringResource(if (speakerOn) R.string.call_earpiece else R.string.call_speaker)) }
+            RoundToggle(
+                label = stringResource(R.string.call_speaker),
+                icon = AppIcons.VolumeUp,
+                on = speakerOn,
+                onClick = onSpeaker,
+                state = stringResource(if (speakerOn) R.string.state_on else R.string.state_off),
+            )
         }
         if (noiseFilter != null) {
             FilledTonalButton(onClick = onNoiseFilter) {
                 Text(stringResource(if (noiseFilter) R.string.call_noise_filter_on else R.string.call_noise_filter_off))
             }
         }
-        if (kind == CallKind.VIDEO) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilledTonalButton(onClick = onCamera) { Text(stringResource(if (cameraOn) R.string.call_camera_off else R.string.call_camera_on)) }
-                FilledTonalButton(onClick = onSwitch, enabled = cameraOn) { Text(stringResource(R.string.call_switch_camera)) }
-            }
-        }
         // End call is set apart and coloured so it is hard to hit by accident (docs/15 §4).
         Button(
             onClick = onEnd,
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB3261E)),
+            colors = ButtonDefaults.buttonColors(containerColor = EndRed, contentColor = Color.White),
             modifier = Modifier.fillMaxWidth().height(56.dp),
-        ) { Text(stringResource(R.string.call_end)) }
+        ) {
+            Icon(AppIcons.CallEnd, contentDescription = null, modifier = Modifier.size(24.dp))
+            Spacer(Modifier.width(10.dp))
+            Text(endLabel, style = MaterialTheme.typography.labelLarge)
+        }
     }
 }
 

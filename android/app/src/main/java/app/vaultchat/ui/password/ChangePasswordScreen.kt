@@ -24,8 +24,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -36,6 +34,7 @@ import app.vaultchat.ui.components.BannerKind
 import app.vaultchat.ui.components.PasswordField
 import app.vaultchat.ui.components.PrimaryButton
 import app.vaultchat.ui.components.StatusBanner
+import app.vaultchat.ui.components.TopBar
 
 /**
  * Change password. When [forced] (after an admin reset or first login), the user cannot go back to
@@ -63,88 +62,83 @@ fun ChangePasswordScreen(
     BackHandler(enabled = forced) {}
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Box(
-            modifier = Modifier.fillMaxSize().safeDrawingPadding().imePadding().verticalScroll(rememberScrollState()),
-            contentAlignment = Alignment.TopCenter,
-        ) {
-            Column(
-                modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth().padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+        Column(modifier = Modifier.fillMaxSize().safeDrawingPadding().imePadding()) {
+            TopBar(stringResource(R.string.password_title), onBack = if (forced) null else onBack)
+            Box(
+                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                contentAlignment = Alignment.TopCenter,
             ) {
-                Text(
-                    stringResource(R.string.password_title),
-                    style = MaterialTheme.typography.headlineMedium,
-                    modifier = Modifier.semantics { heading() },
-                )
-                if (forced) {
-                    StatusBanner(BannerKind.INFO, stringResource(R.string.password_forced_explanation))
-                }
-
-                val inputError = state.inputError
-                PasswordField(
-                    value = state.current,
-                    onValueChange = viewModel::onCurrentChange,
-                    label = stringResource(if (forced) R.string.password_current_temporary else R.string.password_current),
-                    visible = state.visible,
-                    onToggleVisibility = viewModel::toggleVisible,
-                    error = if (inputError == NewPasswordError.CURRENT_REQUIRED) stringResource(R.string.password_error_current_required) else null,
-                    enabled = !state.submitting,
-                    imeAction = ImeAction.Next,
-                    onImeAction = { focus.moveFocus(FocusDirection.Down) },
-                )
-                PasswordField(
-                    value = state.new,
-                    onValueChange = viewModel::onNewChange,
-                    label = stringResource(R.string.password_new),
-                    visible = state.visible,
-                    onToggleVisibility = viewModel::toggleVisible,
-                    error = when (inputError) {
-                        NewPasswordError.TOO_SHORT -> stringResource(R.string.password_error_too_short)
-                        NewPasswordError.TOO_LONG -> stringResource(R.string.password_error_too_long)
-                        NewPasswordError.SAME_AS_CURRENT -> stringResource(R.string.password_error_same)
-                        else -> null
-                    },
-                    enabled = !state.submitting,
-                    imeAction = ImeAction.Next,
-                    onImeAction = { focus.moveFocus(FocusDirection.Down) },
-                )
-                PasswordField(
-                    value = state.confirm,
-                    onValueChange = viewModel::onConfirmChange,
-                    label = stringResource(R.string.password_confirm),
-                    visible = state.visible,
-                    onToggleVisibility = viewModel::toggleVisible,
-                    error = if (inputError == NewPasswordError.MISMATCH) stringResource(R.string.password_error_mismatch) else null,
-                    enabled = !state.submitting,
-                    imeAction = ImeAction.Done,
-                    onImeAction = {
-                        focus.clearFocus()
-                        viewModel.submit()
-                    },
-                )
-                Text(
-                    stringResource(R.string.password_rules),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-
-                state.failure?.let { StatusBanner(BannerKind.ERROR, failureText(it)) }
-
-                PrimaryButton(
-                    text = stringResource(R.string.password_submit),
-                    onClick = {
-                        focus.clearFocus()
-                        viewModel.submit()
-                    },
-                    loading = state.submitting,
-                )
-                if (forced) {
-                    TextButton(onClick = viewModel::logout, enabled = !state.submitting) {
-                        Text(stringResource(R.string.action_log_out))
+                Column(
+                    modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(20.dp),
+                ) {
+                    if (forced) {
+                        StatusBanner(BannerKind.INFO, stringResource(R.string.password_forced_explanation))
                     }
-                } else {
-                    TextButton(onClick = onBack, enabled = !state.submitting) {
-                        Text(stringResource(R.string.action_cancel))
+
+                    val inputError = state.inputError
+                    PasswordField(
+                        value = state.current,
+                        onValueChange = viewModel::onCurrentChange,
+                        label = stringResource(if (forced) R.string.password_current_temporary else R.string.password_current),
+                        visible = state.visible,
+                        onToggleVisibility = viewModel::toggleVisible,
+                        error = if (inputError == NewPasswordError.CURRENT_REQUIRED) stringResource(R.string.password_error_current_required) else null,
+                        enabled = !state.submitting,
+                        imeAction = ImeAction.Next,
+                        onImeAction = { focus.moveFocus(FocusDirection.Down) },
+                    )
+                    PasswordField(
+                        value = state.new,
+                        onValueChange = viewModel::onNewChange,
+                        label = stringResource(R.string.password_new),
+                        visible = state.visible,
+                        onToggleVisibility = viewModel::toggleVisible,
+                        error = when (inputError) {
+                            NewPasswordError.TOO_SHORT -> stringResource(R.string.password_error_too_short)
+                            NewPasswordError.TOO_LONG -> stringResource(R.string.password_error_too_long)
+                            NewPasswordError.SAME_AS_CURRENT -> stringResource(R.string.password_error_same)
+                            else -> null
+                        },
+                        enabled = !state.submitting,
+                        imeAction = ImeAction.Next,
+                        onImeAction = { focus.moveFocus(FocusDirection.Down) },
+                    )
+                    PasswordField(
+                        value = state.confirm,
+                        onValueChange = viewModel::onConfirmChange,
+                        label = stringResource(R.string.password_confirm),
+                        visible = state.visible,
+                        onToggleVisibility = viewModel::toggleVisible,
+                        error = if (inputError == NewPasswordError.MISMATCH) stringResource(R.string.password_error_mismatch) else null,
+                        enabled = !state.submitting,
+                        imeAction = ImeAction.Done,
+                        onImeAction = {
+                            focus.clearFocus()
+                            viewModel.submit()
+                        },
+                    )
+                    Text(
+                        stringResource(R.string.password_rules),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+
+                    state.failure?.let { StatusBanner(BannerKind.ERROR, failureText(it)) }
+
+                    PrimaryButton(
+                        text = stringResource(R.string.password_submit),
+                        onClick = {
+                            focus.clearFocus()
+                            viewModel.submit()
+                        },
+                        loading = state.submitting,
+                    )
+                    // A forced change has no Back arrow, so logging out is the only other way off this screen.
+                    if (forced) {
+                        TextButton(onClick = viewModel::logout, enabled = !state.submitting) {
+                            Text(stringResource(R.string.action_log_out))
+                        }
                     }
                 }
             }

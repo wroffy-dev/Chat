@@ -1,6 +1,8 @@
 # 15 — Android UI and UX
 
-Status: **Proposed design.** No screens exist.
+Status: **Proposed design**, partly **Implemented**. The screens built so far and their current look
+(matched to the owner's interactive prototype on 2026-10-29) are listed in `docs/IMPLEMENTATION_PLAN.md`;
+where this document and the built screens differ, the plan records what exists.
 
 ## 1. Design principles
 

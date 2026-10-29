@@ -1,6 +1,11 @@
 package app.vaultchat.ui.home
 
-import android.os.Build
+import android.annotation.SuppressLint
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
+import android.os.PowerManager
+import android.provider.Settings
 import android.text.format.DateUtils
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -59,9 +64,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.vaultchat.R
 import app.vaultchat.VaultChatApplication
 import app.vaultchat.domain.connection.Connection
-import app.vaultchat.domain.permissions.AppPermission
-import app.vaultchat.domain.permissions.PermissionStatus
-import app.vaultchat.platform.push.Push
 import app.vaultchat.ui.about.AboutApp
 import app.vaultchat.ui.about.UpdateBanner
 import app.vaultchat.ui.components.BannerKind
@@ -69,8 +71,6 @@ import app.vaultchat.ui.components.EmptyState
 import app.vaultchat.ui.components.InitialsAvatar
 import app.vaultchat.ui.components.PrimaryButton
 import app.vaultchat.ui.components.StatusBanner
-import app.vaultchat.ui.permissions.openAppSettings
-import app.vaultchat.ui.permissions.rememberPermissionRequest
 
 /**
  * Home: the chat list (D-21: one row per connected person). Calls start from a chat's header.
@@ -113,7 +113,7 @@ fun HomeScreen(
                 onLogout = viewModel::logout,
             )
             UpdateBanner(updater, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-            NotificationsBanner()
+            AskBatteryExemptionOnce()
             if (state.offline) {
                 StatusBanner(
                     kind = BannerKind.WARNING,
@@ -189,25 +189,28 @@ fun RoundIconButton(onClick: () -> Unit, modifier: Modifier = Modifier, content:
     }
 }
 
-/** Incoming calls can only ring when the app is closed if notifications are allowed. */
+/**
+ * Battery optimisation (Doze, App Standby) can hold back call wake-ups and stop the app in the
+ * background. Android's own "let this app run in the background" dialog is shown once, the first
+ * time Home opens while the app is optimised; the app itself shows no banner for it (owner choice).
+ */
+// BatteryLife: Play's policy on this dialog does not apply; the app is sideloaded (docs/10 §6).
+@SuppressLint("BatteryLife")
 @Composable
-private fun NotificationsBanner() {
+private fun AskBatteryExemptionOnce() {
     val context = LocalContext.current
-    if (!Push.configured || Build.VERSION.SDK_INT < 33) return
-    val prefs = (context.applicationContext as VaultChatApplication).container.permissionPreferences
-    val notifications = rememberPermissionRequest(AppPermission.NOTIFICATIONS, prefs)
-    if (notifications.status == PermissionStatus.Granted) return
-    StatusBanner(
-        kind = BannerKind.WARNING,
-        title = stringResource(R.string.home_notifications_off),
-        actionLabel = stringResource(
-            if (notifications.status == PermissionStatus.PermanentlyDenied) R.string.action_open_settings else R.string.home_enable,
-        ),
-        onAction = {
-            if (notifications.status == PermissionStatus.PermanentlyDenied) openAppSettings(context) else notifications.request()
-        },
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-    )
+    LaunchedEffect(Unit) {
+        val prefs = (context.applicationContext as VaultChatApplication).container.permissionPreferences
+        val power = context.getSystemService(PowerManager::class.java) ?: return@LaunchedEffect
+        if (prefs.batteryExemptionAsked() || power.isIgnoringBatteryOptimizations(context.packageName)) return@LaunchedEffect
+        prefs.markBatteryExemptionAsked()
+        val ask = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}"))
+        // Phones without the dialog are left alone: the setting stays reachable in Android's battery settings.
+        try {
+            context.startActivity(ask)
+        } catch (_: ActivityNotFoundException) {
+        }
+    }
 }
 
 @Composable

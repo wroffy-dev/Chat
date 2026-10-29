@@ -37,6 +37,17 @@ class PermissionPreferences(context: Context) {
     fun markRequested(permission: AppPermission) {
         prefs.edit().putBoolean(permission.name, true).apply()
     }
+
+    /** Whether Android's "run in the background" dialog was already shown once. */
+    fun batteryExemptionAsked(): Boolean = prefs.getBoolean(BATTERY_EXEMPTION, false)
+
+    fun markBatteryExemptionAsked() {
+        prefs.edit().putBoolean(BATTERY_EXEMPTION, true).apply()
+    }
+
+    private companion object {
+        const val BATTERY_EXEMPTION = "battery_exemption"
+    }
 }
 
 @Stable

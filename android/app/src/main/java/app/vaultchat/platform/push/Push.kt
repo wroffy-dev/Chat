@@ -31,9 +31,19 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
 object Push {
+    /**
+     * D-24 (owner, 2026-10-29): the app shows no notifications. No message or incoming-call
+     * notifications are posted and no push token is registered, so calls ring only while the app
+     * is open. The FCM code stays for a later change of mind.
+     */
+    const val NOTIFICATIONS_ENABLED = false
+
     const val CHANNEL_CALLS = "calls"
-    const val CHANNEL_ONGOING = "ongoing_call"
+    /** Android requires a notification for the call's foreground service; this channel keeps it minimised. */
+    const val CHANNEL_ONGOING = "ongoing_call_quiet"
     const val CHANNEL_MESSAGES = "messages"
+    /** Channels from earlier builds; removed so nothing is left in the phone's notification settings. */
+    private val OLD_CHANNELS = listOf("ongoing_call")
     const val EXTRA_INCOMING_CALL_ID = "app.vaultchat.INCOMING_CALL_ID"
     private const val INCOMING_NOTIFICATION_ID = 1001
     private const val MESSAGE_NOTIFICATION_ID = 1002
@@ -61,6 +71,11 @@ object Push {
     /** After sign-in: enable FCM (auto-init is off until then) and register the token. */
     suspend fun registerAfterLogin(api: PushTokenApi) {
         if (!configured) return
+        if (!NOTIFICATIONS_ENABLED) {
+            // A token from an earlier build is deleted, so the server's pushes go nowhere.
+            forgetOnDevice()
+            return
+        }
         val messaging = FirebaseMessaging.getInstance()
         messaging.isAutoInitEnabled = true
         val token = suspendCancellableCoroutine<String?> { cont ->
@@ -79,19 +94,27 @@ object Push {
 
     private fun createChannels(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java)
+        OLD_CHANNELS.forEach(manager::deleteNotificationChannel)
+        if (!NOTIFICATIONS_ENABLED) {
+            manager.deleteNotificationChannel(CHANNEL_CALLS)
+            manager.deleteNotificationChannel(CHANNEL_MESSAGES)
+        } else {
+            manager.createNotificationChannel(
+                NotificationChannel(CHANNEL_CALLS, context.getString(R.string.channel_calls), NotificationManager.IMPORTANCE_HIGH),
+            )
+            manager.createNotificationChannel(
+                NotificationChannel(CHANNEL_MESSAGES, context.getString(R.string.channel_messages), NotificationManager.IMPORTANCE_DEFAULT),
+            )
+        }
+        // Minimised: no sound, no status-bar icon, folded at the bottom of the shade.
         manager.createNotificationChannel(
-            NotificationChannel(CHANNEL_CALLS, context.getString(R.string.channel_calls), NotificationManager.IMPORTANCE_HIGH),
-        )
-        manager.createNotificationChannel(
-            NotificationChannel(CHANNEL_ONGOING, context.getString(R.string.channel_ongoing_call), NotificationManager.IMPORTANCE_LOW),
-        )
-        manager.createNotificationChannel(
-            NotificationChannel(CHANNEL_MESSAGES, context.getString(R.string.channel_messages), NotificationManager.IMPORTANCE_DEFAULT),
+            NotificationChannel(CHANNEL_ONGOING, context.getString(R.string.channel_ongoing_call), NotificationManager.IMPORTANCE_MIN),
         )
     }
 
     /** "New message" only: no sender, no text, no preview (docs/07 §4, docs/10 §2). */
     fun showNewMessage(context: Context) {
+        if (!NOTIFICATIONS_ENABLED) return
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
@@ -120,6 +143,7 @@ object Push {
      * nothing sensitive appears on the lock screen.
      */
     fun showIncomingCall(context: Context, callId: String) {
+        if (!NOTIFICATIONS_ENABLED) return
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {

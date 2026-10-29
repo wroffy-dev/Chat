@@ -64,6 +64,8 @@
     <string name="inbox_no_requests">No pending requests.</string>
     <string name="inbox_incoming">%1$s wants to connect</string>
     <string name="inbox_outgoing">Waiting for %1$s to accept</string>
+    <string name="inbox_incoming_expires">Expires in %1$d min</string>
+    <string name="inbox_outgoing_expires">Sent · expires in %1$d min</string>
 
     <string name="show_qr_title">My QR code</string>
     <string name="show_qr_instructions">Ask the other person to scan this code. It changes every minute and works only once.</string>
@@ -92,8 +94,6 @@
     <string name="channel_calls">Incoming calls</string>
     <string name="channel_ongoing_call">Ongoing call</string>
     <string name="call_ongoing">Call in progress</string>
-    <string name="home_notifications_off">Notifications are off, so calls can\'t ring when the app is closed.</string>
-    <string name="home_enable">Enable</string>
     <string name="call_starting">Starting call…</string>
     <string name="call_ringing">Ringing…</string>
     <string name="call_incoming">Incoming call</string>
@@ -120,10 +120,12 @@
     <string name="call_speaker">Speaker</string>
     <string name="call_noise_filter_on">Noise filter: on</string>
     <string name="call_noise_filter_off">Noise filter: off</string>
-    <string name="call_earpiece">Earpiece</string>
     <string name="call_camera_off">Camera off</string>
     <string name="call_camera_on">Camera on</string>
-    <string name="call_switch_camera">Switch camera</string>
+    <string name="call_switch">Switch</string>
+    <string name="call_again">Call again</string>
+    <string name="state_on">On</string>
+    <string name="state_off">Off</string>
     <string name="call_permission_needed">Calls need the microphone (and the camera for video). Nothing is recorded.</string>
     <string name="call_permission_blocked">Microphone or camera access is turned off for this app. Turn it on in Settings to make calls.</string>
     <string name="call_allow_microphone">Allow microphone</string>
@@ -136,6 +138,7 @@
     <string name="channel_messages">Messages</string>
     <string name="chat_new_message">New message</string>
     <string name="chat_deletion_rule">Messages you have both seen are deleted when either of you leaves the chat, including about a minute after you leave the app. Unseen messages wait, for up to 24 hours. Screenshots and screen recording of this screen are blocked; a photo from another camera is still possible.</string>
+    <string name="chat_deletion_short">Seen messages are deleted when either of you leaves</string>
     <string name="chat_input_hint">Message</string>
     <string name="chat_send">Send</string>
     <string name="chat_sending">Sending…</string>
