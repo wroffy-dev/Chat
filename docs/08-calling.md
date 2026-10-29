@@ -308,6 +308,13 @@ Permissions are requested at the moment they are needed, with a one-line explana
 
 Controls: mute/unmute mic, camera on/off, switch front/back, speaker/earpiece/Bluetooth picker, end call.
 Camera switch uses the SDK's camera switching on the local video track (CameraX module optional).
+
+The **Switch** button opens a menu with two choices: switch this phone's own camera, or flip **the other** person's camera during a video call ("Switch their camera";
+owner request 2026-10-29, **Implemented**). It only flips an already-shared camera front/back — it
+cannot turn a camera on — and it is not covert: the other phone shows "<name> switched your camera".
+It is sent over a LiveKit reliable data message on the `vaultchat.switch_camera` topic; the receiving
+phone flips its own camera and the sender sees "Switched <name>'s camera".
+
 When the other person is muted the screen says "<name> is muted" (**Implemented** 2026-10-29). It follows
 the LiveKit server's view of their microphone (published and not muted), so it also confirms a mute
 reached the server.

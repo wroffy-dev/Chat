@@ -37,6 +37,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -167,6 +169,15 @@ fun CallScreen(
     val elapsed = connectedAt?.let { formatDuration((clock - it) / 1000) }
     val showVideo = kind == CallKind.VIDEO && remoteVideo != null && state.phase in setOf(CallPhase.ACTIVE, CallPhase.RECONNECTING)
 
+    // A brief, non-covert notice when either side flips the other's camera (owner request).
+    val peerName = state.peerUsername.ifEmpty { "…" }
+    val sentText = stringResource(R.string.call_switched_their_camera, peerName)
+    val receivedText = stringResource(R.string.call_peer_switched_your_camera, peerName)
+    var sentFlips by remember { mutableIntStateOf(0) }
+    var flipNotice by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(sentFlips) { if (sentFlips > 0) { flipNotice = sentText; delay(2_500); flipNotice = null } }
+    LaunchedEffect(state.cameraFlippedByPeer) { if (state.cameraFlippedByPeer > 0) { flipNotice = receivedText; delay(3_000); flipNotice = null } }
+
     Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF0E1013), contentColor = Color.White) {
         Box(
             modifier = Modifier.fillMaxSize().pointerInput(Unit) {
@@ -211,6 +222,14 @@ fun CallScreen(
                         .background(Color.Black.copy(alpha = 0.55f))
                         .padding(6.dp)
                         .align(Alignment.TopStart),
+                )
+            }
+
+            // A brief, non-covert notice when either side flips the other's camera.
+            flipNotice?.let { text ->
+                MutedPill(
+                    text,
+                    Modifier.align(Alignment.TopCenter).safeDrawingPadding().padding(top = 72.dp),
                 )
             }
 
@@ -319,6 +338,8 @@ fun CallScreen(
                     }
                     else -> Controls(
                         kind = kind,
+                        peerVideoPresent = showVideo,
+                        onSwitchPeerCamera = { viewModel.controller.switchPeerCamera(); sentFlips++ },
                         micOn = state.micOn,
                         cameraOn = state.cameraOn,
                         speakerOn = state.speakerOn,
@@ -397,6 +418,42 @@ private fun RoundToggle(
     }
 }
 
+/**
+ * The "Switch" camera button. Tapping it opens a small menu with two choices: flip this phone's own
+ * camera, or flip the other person's camera (owner request 2026-10-29). Only shown in video calls.
+ */
+@Composable
+private fun SwitchCameraControl(
+    myCameraOn: Boolean,
+    peerVideoPresent: Boolean,
+    onSwitchMine: () -> Unit,
+    onSwitchTheirs: () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        RoundToggle(
+            label = stringResource(R.string.call_switch),
+            icon = AppIcons.FlipCamera,
+            on = false,
+            onClick = { expanded = true },
+            // At least one of the two choices is usable.
+            enabled = myCameraOn || peerVideoPresent,
+        )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.call_switch_my_camera)) },
+                enabled = myCameraOn,
+                onClick = { expanded = false; onSwitchMine() },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.call_switch_their_camera)) },
+                enabled = peerVideoPresent,
+                onClick = { expanded = false; onSwitchTheirs() },
+            )
+        }
+    }
+}
+
 /** Incoming call's Decline and Accept: large coloured circles with a label. */
 @Composable
 private fun RoundAction(label: String, icon: ImageVector, container: Color, onClick: () -> Unit) {
@@ -415,6 +472,8 @@ private fun RoundAction(label: String, icon: ImageVector, container: Color, onCl
 @Composable
 private fun Controls(
     kind: CallKind,
+    peerVideoPresent: Boolean,
+    onSwitchPeerCamera: () -> Unit,
     micOn: Boolean,
     cameraOn: Boolean,
     speakerOn: Boolean,
@@ -452,12 +511,11 @@ private fun Controls(
                     on = !cameraOn,
                     onClick = onCamera,
                 )
-                RoundToggle(
-                    label = stringResource(R.string.call_switch),
-                    icon = AppIcons.FlipCamera,
-                    on = false,
-                    onClick = onSwitch,
-                    enabled = cameraOn,
+                SwitchCameraControl(
+                    myCameraOn = cameraOn,
+                    peerVideoPresent = peerVideoPresent,
+                    onSwitchMine = onSwitch,
+                    onSwitchTheirs = onSwitchPeerCamera,
                 )
             }
             RoundToggle(

@@ -66,6 +66,8 @@ class FakeMedia : MediaSession {
     override suspend fun setVideoQuality(quality: CaptureQuality, forced: Boolean) { log += "quality:$quality" + if (forced) ":forced" else "" }
     override fun setNoiseReduction(enabled: Boolean) { log += "noise:$enabled" }
     override fun switchCamera() { log += "switch" }
+    var peerSwitchRequests = 0
+    override suspend fun requestPeerSwitchCamera() { peerSwitchRequests++; log += "switch-peer" }
     override fun setSpeakerphone(enabled: Boolean) { log += "speaker:$enabled" }
     override fun disconnect() {
         connected = false
@@ -98,6 +100,33 @@ class CallControllerTest {
         media.events.emit(MediaEvent.RemoteJoined)
         runCurrent()
         assertEquals(CallPhase.ACTIVE, c.state.value.phase)
+    }
+
+    @Test
+    fun `switching the peer camera asks the media layer, and a peer request is surfaced`() = runTest {
+        val c = controller()
+        c.startOutgoing("conn", CallKind.VIDEO, "bob")
+        runCurrent()
+
+        c.switchPeerCamera()
+        runCurrent()
+        assertEquals(1, media.peerSwitchRequests)
+
+        // The other side flipped our camera: the UI gets a bumped counter to show a notice.
+        assertEquals(0, c.state.value.cameraFlippedByPeer)
+        media.events.emit(MediaEvent.CameraSwitchedByPeer)
+        runCurrent()
+        assertEquals(1, c.state.value.cameraFlippedByPeer)
+    }
+
+    @Test
+    fun `switching the peer camera does nothing on a voice call`() = runTest {
+        val c = controller()
+        c.startOutgoing("conn", CallKind.VOICE, "bob")
+        runCurrent()
+        c.switchPeerCamera()
+        runCurrent()
+        assertEquals(0, media.peerSwitchRequests)
     }
 
     @Test

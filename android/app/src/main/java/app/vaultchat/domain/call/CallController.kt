@@ -51,6 +51,8 @@ data class CallState(
     val noiseReduction: Boolean = true,
     /** The other person's microphone as the server sees it; shown as "<name> is muted" when off. */
     val remoteMicOn: Boolean = true,
+    /** Bumped each time the other person flips this phone's camera, so the UI can show a brief notice. */
+    val cameraFlippedByPeer: Int = 0,
 )
 
 /**
@@ -239,6 +241,18 @@ class CallController(
 
     fun switchCamera() = media.switchCamera()
 
+    /** Asks the other person's phone to flip its camera (front/back). Both sides can do this. */
+    fun switchPeerCamera() {
+        if (_state.value.kind != CallKind.VIDEO) return
+        scope.launch {
+            try {
+                media.requestPeerSwitchCamera()
+            } catch (_: Exception) {
+                // Nothing reaches the peer if the connection is down; the button simply does nothing.
+            }
+        }
+    }
+
     fun toggleSpeaker() {
         val on = !_state.value.speakerOn
         _state.update { it.copy(speakerOn = on) }
@@ -285,6 +299,7 @@ class CallController(
                         _state.update { it.copy(phase = if (it.remotePresent) CallPhase.ACTIVE else CallPhase.CONNECTING) }
                     }
                     is MediaEvent.RemoteMicrophone -> _state.update { it.copy(remoteMicOn = e.on) }
+                    MediaEvent.CameraSwitchedByPeer -> _state.update { it.copy(cameraFlippedByPeer = it.cameraFlippedByPeer + 1) }
                     MediaEvent.Disconnected -> if (_state.value.phase != CallPhase.ENDED) {
                         finish(CallEndReason.NETWORK_LOST, notifyServer = true, serverReason = "network_lost")
                     }

@@ -7,6 +7,7 @@ import android.os.PowerManager
 import android.util.Size
 import app.vaultchat.domain.call.CaptureQuality
 import app.vaultchat.domain.call.VideoQualityPolicy
+import io.livekit.android.room.track.DataPublishReliability
 import io.livekit.android.room.participant.VideoTrackPublishDefaults
 import io.livekit.android.room.participant.VideoTrackPublishOptions
 import livekit.org.webrtc.RtpParameters
@@ -54,6 +55,9 @@ import kotlinx.coroutines.launch
  * LiveKit-backed media for one call. The server issues a room-scoped token; this class never sees
  * any LiveKit secret. Camera and microphone are only captured between [connect] and [disconnect].
  */
+private const val TOPIC_SWITCH_CAMERA = "vaultchat.switch_camera"
+private val SWITCH_CAMERA_PAYLOAD = ByteArray(0)
+
 class LiveKitMediaSession(appContext: Context) : MediaSession {
     // Adaptive stream: receive only the resolution actually shown. Dynacast: stop encoding layers
     // nobody watches. Both are off by default in the SDK (docs/08-calling.md §8).
@@ -116,6 +120,14 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
                     }
                     is RoomEvent.TrackSubscribed -> (e.track as? VideoTrack)?.let { _remoteVideo.value = it }
                     is RoomEvent.TrackUnsubscribed -> if (e.track == _remoteVideo.value) _remoteVideo.value = null
+                    is RoomEvent.DataReceived -> if (e.topic == TOPIC_SWITCH_CAMERA) {
+                        // The other person asked to flip our camera; flip the already-on camera only.
+                        val camera = room.localParticipant.getTrackPublication(Track.Source.CAMERA)?.track as? LocalVideoTrack
+                        if (camera != null) {
+                            camera.switchCamera()
+                            _events.emit(MediaEvent.CameraSwitchedByPeer)
+                        }
+                    }
                     is RoomEvent.Reconnecting -> _events.emit(MediaEvent.Reconnecting)
                     is RoomEvent.Reconnected -> _events.emit(MediaEvent.Reconnected)
                     is RoomEvent.Disconnected -> if (!released) _events.emit(MediaEvent.Disconnected)
@@ -164,6 +176,12 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
 
     override fun switchCamera() {
         (room.localParticipant.getTrackPublication(Track.Source.CAMERA)?.track as? LocalVideoTrack)?.switchCamera()
+    }
+
+    override suspend fun requestPeerSwitchCamera() {
+        if (!joined) return
+        // Tiny reliable message on our own topic; the payload is unused, the topic carries the meaning.
+        room.localParticipant.publishData(SWITCH_CAMERA_PAYLOAD, DataPublishReliability.RELIABLE, topic = TOPIC_SWITCH_CAMERA)
     }
 
     /** The other person's microphone: on only while it is published and not muted. */
@@ -348,4 +366,5 @@ private class HandoverAudioHandler(val own: AudioSwitchHandler) : AudioHandler {
         handedOver = true
         if (started) own.stop()
     }
+
 }
