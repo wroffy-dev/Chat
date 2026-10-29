@@ -99,7 +99,7 @@ Home ─► Settings ─► Change password · Call quality · Notifications & b
 ### 3.10 Active call
 - Video: remote video full screen; local preview in a draggable corner tile; tap to hide/show controls.
 - Voice: peer username, call timer, large controls; proximity sensor turns screen off at the ear.
-- Controls bar: **Mic**, **Camera**, **Switch camera** (own front/back), **Flip their camera** (the other person’s front/back, with a notice on their phone), **Audio output** (earpiece/speaker/Bluetooth picker),
+- Controls bar: **Mic**, **Camera**, **Switch camera** (a menu: switch my camera or the other person’s front/back, with a notice on their phone), **Audio output** (earpiece/speaker/Bluetooth picker),
   **End** (red). All 48 dp+ touch targets with content descriptions.
 - Connection state chip: "Connecting…", "Connected", "Reconnecting…", "Poor connection", "Video paused —
   poor connection". Remote mute/camera-off indicators.
