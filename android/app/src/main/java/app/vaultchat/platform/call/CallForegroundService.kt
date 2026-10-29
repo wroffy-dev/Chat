@@ -38,7 +38,7 @@ class CallForegroundService : Service() {
             PendingIntent.FLAG_IMMUTABLE,
         )
         return NotificationCompat.Builder(this, Push.CHANNEL_ONGOING)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(getString(R.string.app_name))
             .setContentText(getString(R.string.call_ongoing))
             .setCategory(NotificationCompat.CATEGORY_CALL)
