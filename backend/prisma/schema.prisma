@@ -22,7 +22,7 @@ datasource db {
 
 model User {
   id                 String    @id @default(uuid()) @db.Uuid
-  /// 1 or 2 (CHECK in SQL); unique, so at most two app users can ever exist.
+  /// 1..10 (CHECK in SQL); unique, so at most ten app users can exist (D-21).
   slot               Int       @unique @db.SmallInt
   username           String    @unique
   passwordHash       String    @map("password_hash")

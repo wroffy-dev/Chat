@@ -85,8 +85,20 @@ describe.skipIf(!TEST_DB_URL)("QR connection (PostgreSQL)", () => {
     expect(me.connection.peer.username).toBe("alice");
     expect((await call(alice, "GET", "/connections")).json().items).toHaveLength(1);
 
-    // Once connected, no more codes.
-    expect((await call(alice, "POST", "/connection-qr")).json().error.code).toBe("ALREADY_CONNECTED");
+    // The same pair cannot connect twice, but each may connect with others (D-21).
+    const again = await qr(alice);
+    expect((await call(bob, "POST", "/connection-requests", { token: again.token })).json().error.code).toBe("ALREADY_CONNECTED");
+    const carol = await userToken("carol");
+    const third = await qr(alice);
+    expect((await call(carol, "POST", "/connection-requests", { token: third.token })).statusCode).toBe(201);
+    const fromCarol = (await call(alice, "GET", "/connection-requests?direction=incoming&status=pending")).json().items;
+    const toCarol = await call(alice, "POST", `/connection-requests/${fromCarol[0].id}/accept`);
+    expect(toCarol.json().peer.username).toBe("carol");
+    const list = (await call(alice, "GET", "/connections")).json().items;
+    expect(list.map((c: { peer: { username: string } }) => c.peer.username)).toEqual(["bob", "carol"]);
+    expect(list[0]).toMatchObject({ unreadCount: 0, lastMessageAt: null });
+    // Apps from before D-21 read one connection from /me: the oldest.
+    expect((await call(alice, "GET", "/me")).json().connection.peer.username).toBe("bob");
   });
 
   it("uses one generic error for unknown, expired, used, superseded and own tokens", async () => {

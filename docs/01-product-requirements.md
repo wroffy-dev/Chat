@@ -34,7 +34,7 @@ may hold the admin credential and one app account, but they are separate credent
 
 | Area | Requirement | Detail doc |
 |---|---|---|
-| Accounts | Username + password login, admin-provisioned, exactly two users | [04](04-accounts-and-authentication.md) |
+| Accounts | Username + password login, admin-provisioned, at most ten users (D-21) | [04](04-accounts-and-authentication.md) |
 | Admin Console | Minimal, private, audited | [05](05-admin-console.md) |
 | Connection | One-time QR-based pairing, accept/reject, permanent once accepted | [06](06-qr-connection.md) |
 | Chat | Text only; messages disappear for both users when a user exits the chat | [07](07-chat-and-disappearing-messages.md) |

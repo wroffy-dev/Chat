@@ -1,6 +1,15 @@
 package app.vaultchat.domain.connection
 
-data class Connection(val id: String, val peerId: String, val peerUsername: String, val conversationId: String, val sinceEpochMs: Long)
+/** A person this user is paired with (D-21: up to nine of them), with chat-list details. */
+data class Connection(
+    val id: String,
+    val peerId: String,
+    val peerUsername: String,
+    val conversationId: String,
+    val sinceEpochMs: Long,
+    val unreadCount: Int = 0,
+    val lastMessageAtEpochMs: Long? = null,
+)
 
 enum class RequestDirection { INCOMING, OUTGOING }
 
@@ -35,7 +44,8 @@ sealed interface ConnResult<out T> {
 }
 
 interface ConnectionRepository {
-    suspend fun connection(): ConnResult<Connection?>
+    /** Every connection, oldest first: the chat list. */
+    suspend fun connections(): ConnResult<List<Connection>>
     suspend fun generateQr(): ConnResult<QrCode>
     suspend fun redeem(token: String): ConnResult<ConnectionRequest>
     suspend fun requests(direction: RequestDirection? = null, status: RequestStatus? = null): ConnResult<List<ConnectionRequest>>

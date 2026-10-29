@@ -16,8 +16,8 @@ class RemoteConnectionRepository(
     private val caller: AuthorizedCaller,
 ) : ConnectionRepository {
 
-    override suspend fun connection(): ConnResult<Connection?> =
-        caller.call { api.connections(it) }.map { list -> list.items.firstOrNull()?.toDomain() }
+    override suspend fun connections(): ConnResult<List<Connection>> =
+        caller.call { api.connections(it) }.map { list -> list.items.map { c -> c.toDomain() } }
 
     override suspend fun generateQr(): ConnResult<QrCode> = caller.call { api.generateQr(it) }.map { it.toDomain() }
 

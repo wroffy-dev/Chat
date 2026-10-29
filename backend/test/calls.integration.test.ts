@@ -166,6 +166,25 @@ describe.skipIf(!TEST_DB_URL)("calls (PostgreSQL)", () => {
     expect(media.deleted.length).toBe(media.created.length - 1);
   });
 
+  it("with several contacts (D-21), a person in a call is busy for everyone else", async () => {
+    const { alice, bob, connectionId } = await connectedPair();
+    const carol = await userToken("carol");
+    const pair = async (owner: string, scanner: string) => {
+      const qr = (await call(owner, "POST", "/connection-qr")).json();
+      const req = (await call(scanner, "POST", "/connection-requests", { token: qr.token })).json();
+      return (await call(owner, "POST", `/connection-requests/${req.id}/accept`)).json().id as string;
+    };
+    const bobCarol = await pair(bob.token, carol.token);
+    const aliceCarol = await pair(alice.token, carol.token);
+
+    expect((await call(alice.token, "POST", "/calls", { connectionId, kind: "voice" })).statusCode).toBe(201);
+    const busy = await call(carol.token, "POST", "/calls", { connectionId: bobCarol, kind: "voice" });
+    expect([busy.statusCode, busy.json().error.code]).toEqual([409, "PEER_BUSY"]);
+    const self = await call(alice.token, "POST", "/calls", { connectionId: aliceCarol, kind: "voice" });
+    expect([self.statusCode, self.json().error.code]).toEqual([409, "CALL_IN_PROGRESS"]);
+    expect(await database.prisma.call.count()).toBe(1);
+  });
+
   it("only the callee answers or declines; only the caller cancels", async () => {
     const { alice, bob, connectionId } = await connectedPair();
     const s = (await call(alice.token, "POST", "/calls", { connectionId, kind: "voice" })).json();

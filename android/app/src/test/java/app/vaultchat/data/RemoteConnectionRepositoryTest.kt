@@ -64,13 +64,31 @@ class RemoteConnectionRepositoryTest {
     @Test
     fun `no connection yet is an empty result, not an error`() = runBlocking {
         backend.on("/api/v1/connections", 200, """{"items":[]}""")
-        assertNull((repo.connection() as ConnResult.Ok).value)
+        assertEquals(emptyList<Any>(), (repo.connections() as ConnResult.Ok).value)
+    }
+
+    @Test
+    fun `the chat list carries every connection with its unread count`() = runBlocking {
+        backend.on(
+            "/api/v1/connections",
+            200,
+            """{"items":[
+               {"id":"c1","peer":{"id":"u2","username":"bob"},"conversationId":"v1","createdAt":"2030-01-01T00:00:00Z",
+                "unreadCount":0,"lastMessageAt":null},
+               {"id":"c2","peer":{"id":"u3","username":"carol"},"conversationId":"v2","createdAt":"2030-01-02T00:00:00Z",
+                "unreadCount":3,"lastMessageAt":"2030-01-03T00:00:00Z"}]}""",
+        )
+        val list = (repo.connections() as ConnResult.Ok).value
+        assertEquals(listOf("bob", "carol"), list.map { it.peerUsername })
+        assertEquals(3, list[1].unreadCount)
+        assertNull(list[0].lastMessageAtEpochMs)
+        assertEquals(java.time.Instant.parse("2030-01-03T00:00:00Z").toEpochMilli(), list[1].lastMessageAtEpochMs)
     }
 
     @Test
     fun `a revoked session ends the local session`() = runBlocking {
         backend.on("/api/v1/connections", 401, error("SESSION_REVOKED"))
-        assertEquals(ConnResult.Failure(ConnectionFailure.SESSION_ENDED), repo.connection())
+        assertEquals(ConnResult.Failure(ConnectionFailure.SESSION_ENDED), repo.connections())
         assertNull(store.session)
     }
 }

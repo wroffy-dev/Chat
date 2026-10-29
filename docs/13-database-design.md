@@ -71,7 +71,7 @@ admin_accounts 1─* admin_sessions
 | Column | Type | Null | Notes |
 |---|---|---|---|
 | `id` | uuid PK | no | |
-| `slot` | smallint | no | `CHECK (slot IN (1,2))`, **UNIQUE** → at most two users ever exist |
+| `slot` | smallint | no | `CHECK (slot BETWEEN 1 AND 10)`, **UNIQUE** → at most ten users exist (D-21; was 1–2) |
 | `username` | text | no | UNIQUE; `CHECK (username = lower(username) AND username ~ '^[a-z0-9._-]{3,32}$')` |
 | `password_hash` | text | no | Argon2id encoded string. **Sensitive** |
 | `password_changed_at` | timestamptz | no | |

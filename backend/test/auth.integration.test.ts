@@ -58,13 +58,17 @@ describe.skipIf(!TEST_DB_URL)("app-user authentication (PostgreSQL)", () => {
     return changed.json() as { accessToken: string; refreshToken: string; user: { id: string } };
   }
 
-  it("allows at most two users", async () => {
+  it("allows at most ten users (D-21), with unique usernames", async () => {
     await auth.createUser("alice", system);
     await auth.createUser("Bob", system);
-    await expect(auth.createUser("carol", system)).rejects.toMatchObject({ statusCode: 409 });
     await expect(auth.createUser("ALICE", system)).rejects.toMatchObject({ statusCode: 409 });
+    for (let i = 3; i <= 10; i++) await auth.createUser(`user${i}`, system);
+    await expect(auth.createUser("eleven", system)).rejects.toMatchObject({ statusCode: 409 });
     const users = await database.prisma.user.findMany({ orderBy: { slot: "asc" } });
-    expect(users.map((u) => [u.slot, u.username])).toEqual([[1, "alice"], [2, "bob"]]);
+    expect(users.map((u) => u.slot)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(users.slice(0, 2).map((u) => u.username)).toEqual(["alice", "bob"]);
+    // The database agrees with MAX_USERS.
+    await expect(database.prisma.$executeRaw`UPDATE users SET slot = 11 WHERE username = 'alice'`).rejects.toThrow();
   });
 
   it("returns the same error for unknown users and wrong passwords", async () => {

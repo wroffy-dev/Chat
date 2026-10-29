@@ -65,7 +65,7 @@ data object ShowQrRoute
 data object ScanQrRoute
 
 @Serializable
-data class ChatRoute(val conversationId: String, val peerUsername: String)
+data class ChatRoute(val conversationId: String, val peerUsername: String, val connectionId: String)
 
 /** Outgoing: [connectionId] set, [callId] null. Incoming: [callId] set. */
 @Serializable
@@ -168,7 +168,7 @@ fun VaultChatNavHost(container: AppContainer) {
         }
         composable<HomeRoute> {
             val viewModel: HomeViewModel = viewModel(
-                factory = viewModelFactory { initializer { HomeViewModel(container.authRepository) } },
+                factory = viewModelFactory { initializer { HomeViewModel(container.authRepository, container.connectionRepository, container.realtime) } },
             )
             HomeScreen(
                 viewModel = viewModel,
@@ -176,10 +176,7 @@ fun VaultChatNavHost(container: AppContainer) {
                 onSignedOut = { navController.replaceAll(LoginRoute) },
                 onPasswordChangeRequired = { navController.replaceAll(ChangePasswordRoute(forced = true)) },
                 onOpenInbox = { navController.navigate(InboxRoute) },
-                onCall = { connectionId, peer, video ->
-                    navController.navigate(CallRoute(video = video, peerUsername = peer, connectionId = connectionId))
-                },
-                onChat = { conversationId, peer -> navController.navigate(ChatRoute(conversationId, peer)) },
+                onChat = { c -> navController.navigate(ChatRoute(c.conversationId, c.peerUsername, c.id)) },
             )
         }
         composable<ChatRoute> { entry ->
@@ -202,6 +199,7 @@ fun VaultChatNavHost(container: AppContainer) {
                 peerUsername = route.peerUsername,
                 onBack = { navController.popBackStack() },
                 onSessionEnded = { navController.replaceAll(LoginRoute) },
+                onCall = { video -> navController.navigate(CallRoute(video = video, peerUsername = route.peerUsername, connectionId = route.connectionId)) },
             )
         }
         composable<CallRoute> { entry ->

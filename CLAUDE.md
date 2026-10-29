@@ -26,7 +26,9 @@ decisions there are either recorded as decided or still open; never decide an op
 - Never put backend secrets or LiveKit API secrets in the Android app.
 - No public signup, no user search, no profiles, no profile photos, no media uploads, no file
   attachments, no voice notes. Text chat only.
-- Exactly two app users. The administrator is a separate operational identity, not a third app user.
+- At most ten app users (owner decision D-21, 2026-10-29; previously exactly two), each chatting and
+  calling 1-to-1 with the people they paired with by QR. No group chats or group calls. The administrator
+  is a separate operational identity, not an app user.
 - Chat deletion follows decisions D-01 (option D) and D-02 (60 s lease, 24 h backstop) in docs/17 — do not change them without the owner.
 - Location sharing is a **proposal requiring approval**; do not implement it without sign-off.
 - Do not claim end-to-end encryption, screenshot prevention, or guaranteed deletion.

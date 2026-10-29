@@ -122,6 +122,17 @@ describe.skipIf(!TEST_DB_URL)("chat (PostgreSQL)", () => {
     expect(tooLong.json().error.code).toBe("MESSAGE_TOO_LONG");
   });
 
+  it("the chat list counts unread messages from the peer until they are read (D-21)", async () => {
+    const { alice, bob, conv } = await pair();
+    await send(alice, conv, "one");
+    await send(alice, conv, "two");
+    const bobList = (await req(bob, "GET", "/connections")).json().items;
+    expect(bobList).toEqual([expect.objectContaining({ conversationId: conv, unreadCount: 2, lastMessageAt: expect.any(String) })]);
+    expect((await req(alice, "GET", "/connections")).json().items[0].unreadCount).toBe(0);
+    expect((await req(bob, "POST", `/conversations/${conv}/read`, { seq: 2 })).statusCode).toBe(204);
+    expect((await req(bob, "GET", "/connections")).json().items[0].unreadCount).toBe(0);
+  });
+
   it("concurrent sends get distinct, gapless sequence numbers", async () => {
     const { alice, bob, conv } = await pair();
     const results = await Promise.all(Array.from({ length: 10 }, (_, i) => send(i % 2 ? alice : bob, conv, `m${i}`)));

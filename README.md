@@ -1,6 +1,6 @@
 # Vault Chat (working name)
 
-A private, Android-only app for **exactly two pre-approved people**: high-quality 1:1 video and voice
+A private, Android-only app for **up to ten pre-approved people** (D-21; it began as two): high-quality 1:1 video and voice
 calls, plus text-only chat whose messages disappear for both users when either leaves the chat.
 Distributed as a privately signed APK, not on Google Play.
 
