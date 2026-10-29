@@ -165,7 +165,10 @@ Every end path runs the same cleanup on the device:
 
 ## 8. Adaptive quality policy
 
-**User choice during a call (Implemented, 2026-10-29, owner request).** In a video call the "Quality"
+**Removed from the screen (2026-10-29, owner request): the sent video is always Auto.** The picker
+described next is no longer shown; its code (`setVideoQuality`, `QualityAdvisor`) remains unused.
+
+**User choice during a call (was Implemented, 2026-10-29).** In a video call the "Quality"
 button lets the user pick the size they send: Auto (the phone's own pick above), 1080p, 720p, 540p or
 360p (data saver). The app recommends one from this call's measured connection (`QualityAdvisor`): the
 median WebRTC `availableOutgoingBitrate` of the last five stats samples (≥ 2.5 Mbps → 1080p,
