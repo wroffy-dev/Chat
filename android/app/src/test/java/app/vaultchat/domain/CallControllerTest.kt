@@ -64,6 +64,7 @@ class FakeMedia : MediaSession {
     override suspend fun setCameraEnabled(enabled: Boolean) { log += "cam:$enabled" }
     override val autoQuality = CaptureQuality.P1080
     override suspend fun setVideoQuality(quality: CaptureQuality, forced: Boolean) { log += "quality:$quality" + if (forced) ":forced" else "" }
+    override fun setNoiseReduction(enabled: Boolean) { log += "noise:$enabled" }
     override fun switchCamera() { log += "switch" }
     override fun setSpeakerphone(enabled: Boolean) { log += "speaker:$enabled" }
     override fun disconnect() {
@@ -256,6 +257,19 @@ class CallControllerTest {
         runCurrent()
         assertFalse(c.state.value.micOn)
         assertEquals("mic:false", media.log.last { it.startsWith("mic:") })
+    }
+
+    @Test
+    fun `the noise filter starts on and can be turned off and on again`() = runTest {
+        val c = controller()
+        c.startOutgoing("conn", CallKind.VOICE, "bob")
+        runCurrent()
+        assertTrue(c.state.value.noiseReduction)
+        c.toggleNoiseReduction()
+        assertFalse(c.state.value.noiseReduction)
+        c.toggleNoiseReduction()
+        assertTrue(c.state.value.noiseReduction)
+        assertEquals(listOf("noise:false", "noise:true"), media.log.filter { it.startsWith("noise:") })
     }
 
     @Test

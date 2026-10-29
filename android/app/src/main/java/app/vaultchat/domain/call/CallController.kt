@@ -47,6 +47,8 @@ data class CallState(
     val videoQuality: VideoQualityChoice = VideoQualityChoice.AUTO,
     /** What this call's measured connection supports; null until measured. */
     val recommendedQuality: CaptureQuality? = null,
+    /** On-device background-noise filter for the sent voice (docs/08 §8); on by default. */
+    val noiseReduction: Boolean = true,
 )
 
 /**
@@ -182,10 +184,14 @@ class CallController(
         applyDevice(microphone = false)
     }
 
-    /**
-     * Brings the microphone and camera in line with the screen. One change at a time, always to the
-     * latest wish: quick repeated taps cannot finish out of order and leave the mic in the wrong state.
-     */
+    /** Whether this phone can run the noise filter (its native library loaded). */
+    val noiseReductionAvailable: Boolean get() = media.noiseReductionAvailable
+
+    fun toggleNoiseReduction() {
+        _state.update { it.copy(noiseReduction = !it.noiseReduction) }
+        media.setNoiseReduction(_state.value.noiseReduction)
+    }
+
     /** Switches the sent video size mid-call; AUTO goes back to the size the phone chose itself. */
     fun setVideoQuality(choice: VideoQualityChoice) {
         if (_state.value.kind != CallKind.VIDEO || _state.value.videoQuality == choice) return
@@ -203,6 +209,10 @@ class CallController(
         }
     }
 
+    /**
+     * Brings the microphone and camera in line with the screen. One change at a time, always to the
+     * latest wish: quick repeated taps cannot finish out of order and leave the mic in the wrong state.
+     */
     private fun applyDevice(microphone: Boolean) {
         scope.launch {
             deviceLock.withLock {

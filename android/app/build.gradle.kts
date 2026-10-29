@@ -130,6 +130,13 @@ android {
         compose = true
         buildConfig = true
     }
+    // RNNoise noise filter for the sent voice (src/main/cpp, docs/08-calling.md §8).
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }

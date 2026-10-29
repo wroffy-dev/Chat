@@ -202,6 +202,20 @@ When bandwidth is insufficient the order of degradation is: lower video layer �
 video paused (UI shows "Video paused — poor connection") → audio continues. Audio is never deliberately
 dropped to keep video.
 
+### Noise filter (RNNoise)
+
+**Implemented (2026-10-29, owner request); not yet heard on a real call.** On top of WebRTC's own
+echo cancellation and noise suppression, the sent voice goes through RNNoise
+([xiph/rnnoise](https://github.com/xiph/rnnoise) v0.1, BSD-3-Clause, vendored in
+`android/app/src/main/cpp/rnnoise/`), a small neural network trained to remove steady background noise
+(fan, traffic, TV). It runs on the phone as LiveKit's capture post-processor
+(`AudioProcessorOptions.capturePostProcessor`, livekit-android 2.29.1 sources, checked 2026-10-29), on each
+10 ms frame of 48 kHz audio; nothing extra leaves the device. It is on by default; the call screen has a
+"Noise filter" button to turn it off for that call (e.g. if a voice sounds robotic). If the native library
+cannot load, or the audio is not 48 kHz / 480 samples per frame, audio passes through unchanged. Measured
+locally on a synthetic white-noise signal: about 8–10 dB less noise; real-call effect **requires
+verification** on the phones.
+
 ### Device capability check (1080p eligibility)
 
 1080p capture is allowed only if: the camera reports a 1920×1080 output at ≥ 30 fps; a hardware encoder
