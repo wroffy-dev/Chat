@@ -120,7 +120,7 @@ fun HomeScreen(
             )
             UpdateBanner(updater, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             NotificationsBanner()
-            BatteryBanner()
+            AskBatteryExemptionOnce()
             if (state.offline) {
                 StatusBanner(
                     kind = BannerKind.WARNING,
@@ -219,36 +219,26 @@ private fun NotificationsBanner() {
 
 /**
  * Battery optimisation (Doze, App Standby) can hold back call wake-ups and stop the app in the
- * background. The button opens Android's own "let this app run in the background" dialog; the
- * banner is re-checked whenever Home comes back to the front.
+ * background. Android's own "let this app run in the background" dialog is shown once, the first
+ * time Home opens while the app is optimised; the app itself shows no banner for it (owner choice).
  */
 // BatteryLife: Play's policy on this dialog does not apply; the app is sideloaded (docs/10 §6).
 @SuppressLint("BatteryLife")
 @Composable
-private fun BatteryBanner() {
+private fun AskBatteryExemptionOnce() {
     val context = LocalContext.current
-    val power = remember(context) { context.getSystemService(PowerManager::class.java) }
-    var restricted by remember { mutableStateOf(false) }
-    LifecycleResumeEffect(power) {
-        restricted = power?.isIgnoringBatteryOptimizations(context.packageName) == false
-        onPauseOrDispose { }
+    LaunchedEffect(Unit) {
+        val prefs = (context.applicationContext as VaultChatApplication).container.permissionPreferences
+        val power = context.getSystemService(PowerManager::class.java) ?: return@LaunchedEffect
+        if (prefs.batteryExemptionAsked() || power.isIgnoringBatteryOptimizations(context.packageName)) return@LaunchedEffect
+        prefs.markBatteryExemptionAsked()
+        val ask = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}"))
+        // Phones without the dialog are left alone: the setting stays reachable in Android's battery settings.
+        try {
+            context.startActivity(ask)
+        } catch (_: ActivityNotFoundException) {
+        }
     }
-    if (!restricted) return
-    StatusBanner(
-        kind = BannerKind.WARNING,
-        title = stringResource(R.string.home_battery_restricted),
-        actionLabel = stringResource(R.string.home_allow),
-        onAction = {
-            val ask = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}"))
-            try {
-                context.startActivity(ask)
-            } catch (_: ActivityNotFoundException) {
-                // Some phones lack the dialog; their battery settings list lets the user do the same.
-                runCatching { context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
-            }
-        },
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-    )
 }
 
 @Composable
