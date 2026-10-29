@@ -43,6 +43,10 @@ data class CallState(
     val remotePresent: Boolean = false,
     val endReason: CallEndReason? = null,
     val reconnects: Int = 0,
+    /** The sent video size the user picked during the call (video calls). */
+    val videoQuality: VideoQualityChoice = VideoQualityChoice.AUTO,
+    /** What this call's measured connection supports; null until measured. */
+    val recommendedQuality: CaptureQuality? = null,
 )
 
 /**
@@ -84,6 +88,8 @@ class CallController(
     private var watchdog: Job? = null
     private var statsJob: Job? = null
     private val stats = CallStatsAggregator()
+    /** The last few samples, for the quality recommendation. */
+    private val recent = ArrayDeque<StatsSample>()
     private var startedAtMs: Long? = null
 
     /** Caller side: create the call, join the room while it rings. */
@@ -180,6 +186,22 @@ class CallController(
      * Brings the microphone and camera in line with the screen. One change at a time, always to the
      * latest wish: quick repeated taps cannot finish out of order and leave the mic in the wrong state.
      */
+    /** Switches the sent video size mid-call; AUTO goes back to the size the phone chose itself. */
+    fun setVideoQuality(choice: VideoQualityChoice) {
+        if (_state.value.kind != CallKind.VIDEO || _state.value.videoQuality == choice) return
+        _state.update { it.copy(videoQuality = choice) }
+        scope.launch {
+            deviceLock.withLock {
+                val wanted = _state.value.videoQuality
+                try {
+                    media.setVideoQuality(wanted.capture ?: media.autoQuality)
+                } catch (_: Exception) {
+                    // The camera could not restart at that size; the call goes on as it was.
+                }
+            }
+        }
+    }
+
     private fun applyDevice(microphone: Boolean) {
         scope.launch {
             deviceLock.withLock {
@@ -297,6 +319,11 @@ class CallController(
                     val sample = it.copy(atMs = nowMs())
                     stats.add(sample)
                     _liveStats.value = sample
+                    recent.addLast(sample)
+                    if (recent.size > 5) recent.removeFirst()
+                    if (_state.value.kind == CallKind.VIDEO) {
+                        _state.update { s -> s.copy(recommendedQuality = QualityAdvisor.recommend(recent)) }
+                    }
                 }
                 delay(STATS_INTERVAL_MS)
             }

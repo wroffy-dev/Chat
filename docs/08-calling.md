@@ -165,6 +165,15 @@ Every end path runs the same cleanup on the device:
 
 ## 8. Adaptive quality policy
 
+**User choice during a call (Implemented, 2026-10-29, owner request).** In a video call the "Quality"
+button lets the user pick the size they send: Auto (the phone's own pick above), 1080p, 720p, 540p or
+360p (data saver). The app recommends one from this call's measured connection (`QualityAdvisor`): the
+median WebRTC `availableOutgoingBitrate` of the last five stats samples (≥ 2.5 Mbps → 1080p,
+≥ 1.2 → 720p, ≥ 0.6 → 540p, else 360p; by round-trip time alone when no estimate exists), one step lower
+with > 5 % loss or > 350 ms RTT. The thresholds are starting values to be tuned from real calls
+(docs/09). LiveKit cannot resize a live camera track, so a change replaces it: video pauses briefly.
+Congestion control still lowers the picture on its own.
+
 LiveKit Android SDK defaults (checked in source): `adaptiveStream = false`, `dynacast = false`,
 simulcast = true, video codec VP8, capture 720p, audio 48 kbps with DTX and RED.
 

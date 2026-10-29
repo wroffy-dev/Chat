@@ -9,6 +9,8 @@ import app.vaultchat.domain.call.CallPhase
 import app.vaultchat.domain.call.CallRepository
 import app.vaultchat.domain.call.CallResult
 import app.vaultchat.domain.call.CallStatus
+import app.vaultchat.domain.call.CaptureQuality
+import app.vaultchat.domain.call.VideoQualityChoice
 import app.vaultchat.domain.call.JoinInfo
 import app.vaultchat.domain.call.MediaEvent
 import app.vaultchat.domain.call.MediaSession
@@ -60,6 +62,8 @@ class FakeMedia : MediaSession {
     }
     override suspend fun setMicrophoneEnabled(enabled: Boolean) { log += "mic:$enabled" }
     override suspend fun setCameraEnabled(enabled: Boolean) { log += "cam:$enabled" }
+    override val autoQuality = CaptureQuality.P1080
+    override suspend fun setVideoQuality(quality: CaptureQuality) { log += "quality:$quality" }
     override fun switchCamera() { log += "switch" }
     override fun setSpeakerphone(enabled: Boolean) { log += "speaker:$enabled" }
     override fun disconnect() {
@@ -252,6 +256,30 @@ class CallControllerTest {
         runCurrent()
         assertFalse(c.state.value.micOn)
         assertEquals("mic:false", media.log.last { it.startsWith("mic:") })
+    }
+
+    @Test
+    fun `the sent video size can be changed during the call, and Auto returns to the phone's own pick`() = runTest {
+        val c = controller()
+        c.startOutgoing("conn", CallKind.VIDEO, "bob")
+        runCurrent()
+        c.setVideoQuality(VideoQualityChoice.P540)
+        runCurrent()
+        assertEquals(VideoQualityChoice.P540, c.state.value.videoQuality)
+        c.setVideoQuality(VideoQualityChoice.AUTO)
+        runCurrent()
+        assertEquals(listOf("quality:P540", "quality:P1080"), media.log.filter { it.startsWith("quality:") })
+    }
+
+    @Test
+    fun `voice calls have no video size to change`() = runTest {
+        val c = controller()
+        c.startOutgoing("conn", CallKind.VOICE, "bob")
+        runCurrent()
+        c.setVideoQuality(VideoQualityChoice.P360)
+        runCurrent()
+        assertEquals(VideoQualityChoice.AUTO, c.state.value.videoQuality)
+        assertFalse(media.log.any { it.startsWith("quality:") })
     }
 
     @Test

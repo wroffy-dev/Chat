@@ -115,6 +115,15 @@
     <string name="call_end">End call</string>
     <string name="call_mute">Mute</string>
     <string name="call_unmute">Unmute</string>
+    <string name="call_quality_button">Quality: %1$s</string>
+    <string name="call_quality_auto">Auto</string>
+    <string name="call_quality_auto_long">Auto (the phone decides)</string>
+    <string name="call_quality_saver">%1$s · data saver</string>
+    <string name="call_quality_title">Video you send</string>
+    <string name="call_quality_measured">Your connection in this call suits %1$s.</string>
+    <string name="call_quality_measuring">Measuring your connection…</string>
+    <string name="call_quality_recommended">recommended</string>
+    <string name="call_quality_note">Changing it restarts your camera for a moment. On a weak network the picture is still lowered automatically.</string>
     <string name="call_muted">You\'re muted</string>
     <string name="call_speaker">Speaker</string>
     <string name="call_earpiece">Earpiece</string>

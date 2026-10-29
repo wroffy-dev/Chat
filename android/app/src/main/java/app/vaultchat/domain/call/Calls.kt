@@ -53,6 +53,10 @@ interface MediaSession {
     suspend fun connect(url: String, token: String, video: Boolean, micOn: Boolean = true, cameraOn: Boolean = true)
     suspend fun setMicrophoneEnabled(enabled: Boolean)
     suspend fun setCameraEnabled(enabled: Boolean)
+    /** The size the phone picked by itself (used for "Auto"). */
+    val autoQuality: CaptureQuality get() = CaptureQuality.P720
+    /** Changes the sent video size mid-call; the camera restarts, so video pauses for a moment. */
+    suspend fun setVideoQuality(quality: CaptureQuality) = Unit
     fun switchCamera()
     fun setSpeakerphone(enabled: Boolean)
     /** Releases camera, microphone and the connection. Safe to call more than once. */

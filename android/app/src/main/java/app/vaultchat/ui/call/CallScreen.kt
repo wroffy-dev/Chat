@@ -21,10 +21,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -59,6 +64,8 @@ import app.vaultchat.BuildConfig
 import app.vaultchat.domain.call.CallEndReason
 import app.vaultchat.domain.call.CallKind
 import app.vaultchat.domain.call.CallPhase
+import app.vaultchat.domain.call.CaptureQuality
+import app.vaultchat.domain.call.VideoQualityChoice
 import app.vaultchat.domain.permissions.AppPermission
 import app.vaultchat.domain.permissions.PermissionStatus
 import app.vaultchat.ui.components.AppIcons
@@ -125,7 +132,9 @@ fun CallScreen(
     // In a connected video call the controls fade out after 4 s without a touch and come back on
     // any touch. Not with TalkBack on: its users must always be able to reach the buttons.
     val accessibility = remember(context) { context.getSystemService(AccessibilityManager::class.java) }
-    val autoHide = kind == CallKind.VIDEO && state.phase == CallPhase.ACTIVE && accessibility?.isTouchExplorationEnabled != true
+    var qualityPicker by remember { mutableStateOf(false) }
+    val autoHide = kind == CallKind.VIDEO && state.phase == CallPhase.ACTIVE && !qualityPicker &&
+        accessibility?.isTouchExplorationEnabled != true
     var controlsVisible by remember { mutableStateOf(true) }
     var lastTouch by remember { mutableIntStateOf(0) }
     LaunchedEffect(autoHide, lastTouch) {
@@ -134,6 +143,15 @@ fun CallScreen(
             delay(CONTROLS_HIDE_MS)
             controlsVisible = false
         }
+    }
+
+    if (qualityPicker) {
+        QualityPicker(
+            current = state.videoQuality,
+            recommended = state.recommendedQuality,
+            onPick = { viewModel.controller.setVideoQuality(it); qualityPicker = false },
+            onDismiss = { qualityPicker = false },
+        )
     }
 
     Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF0E1013), contentColor = Color.White) {
@@ -248,6 +266,9 @@ fun CallScreen(
                         onMic = viewModel.controller::toggleMicrophone,
                         onCamera = viewModel.controller::toggleCamera,
                         onSwitch = viewModel.controller::switchCamera,
+                        quality = state.videoQuality,
+                        recommended = state.recommendedQuality,
+                        onQuality = { qualityPicker = true },
                         onSpeaker = viewModel.controller::toggleSpeaker,
                         onEnd = viewModel.controller::hangup,
                     )
@@ -261,6 +282,73 @@ fun CallScreen(
 private const val CONTROLS_HIDE_MS = 4_000L
 
 @Composable
+private fun qualityLabel(choice: VideoQualityChoice): String = when (choice) {
+    VideoQualityChoice.AUTO -> stringResource(R.string.call_quality_auto)
+    else -> sizeLabel(choice.capture!!)
+}
+
+private fun sizeLabel(q: CaptureQuality): String = when (q) {
+    CaptureQuality.P1080 -> "1080p"
+    CaptureQuality.P720 -> "720p"
+    CaptureQuality.P540 -> "540p"
+    CaptureQuality.P360 -> "360p"
+}
+
+/**
+ * Sent video size, changeable during the call. The recommendation comes from this call's measured
+ * connection (QualityAdvisor); picking a size restarts the camera for a moment.
+ */
+@Composable
+private fun QualityPicker(
+    current: VideoQualityChoice,
+    recommended: CaptureQuality?,
+    onPick: (VideoQualityChoice) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.call_quality_title)) },
+        text = {
+            Column {
+                Text(
+                    if (recommended != null) stringResource(R.string.call_quality_measured, sizeLabel(recommended))
+                    else stringResource(R.string.call_quality_measuring),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Spacer(Modifier.height(8.dp))
+                VideoQualityChoice.entries.forEach { choice ->
+                    val isRecommended = choice.capture != null && choice.capture == recommended
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(selected = choice == current, role = Role.RadioButton, onClick = { onPick(choice) })
+                            .padding(vertical = 4.dp),
+                    ) {
+                        RadioButton(selected = choice == current, onClick = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            when (choice) {
+                                VideoQualityChoice.AUTO -> stringResource(R.string.call_quality_auto_long)
+                                VideoQualityChoice.P360 -> stringResource(R.string.call_quality_saver, sizeLabel(choice.capture!!))
+                                else -> sizeLabel(choice.capture!!)
+                            } + if (isRecommended) "  · " + stringResource(R.string.call_quality_recommended) else "",
+                        )
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    stringResource(R.string.call_quality_note),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) } },
+    )
+}
+
+@Composable
 private fun Controls(
     kind: CallKind,
     micOn: Boolean,
@@ -269,6 +357,9 @@ private fun Controls(
     onMic: () -> Unit,
     onCamera: () -> Unit,
     onSwitch: () -> Unit,
+    quality: VideoQualityChoice,
+    recommended: CaptureQuality?,
+    onQuality: () -> Unit,
     onSpeaker: () -> Unit,
     onEnd: () -> Unit,
 ) {
@@ -292,6 +383,11 @@ private fun Controls(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilledTonalButton(onClick = onCamera) { Text(stringResource(if (cameraOn) R.string.call_camera_off else R.string.call_camera_on)) }
                 FilledTonalButton(onClick = onSwitch, enabled = cameraOn) { Text(stringResource(R.string.call_switch_camera)) }
+            }
+            // A dot on the button when the network suggests a different size than the one in use.
+            val hint = recommended != null && quality.capture != null && quality.capture != recommended
+            FilledTonalButton(onClick = onQuality) {
+                Text(stringResource(R.string.call_quality_button, qualityLabel(quality)) + if (hint) "  •" else "")
             }
         }
         // End call is set apart and coloured so it is hard to hit by accident (docs/15 §4).
