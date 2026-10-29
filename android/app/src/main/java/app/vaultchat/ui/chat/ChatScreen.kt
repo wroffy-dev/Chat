@@ -14,6 +14,7 @@ import android.widget.EditText
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,9 +36,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -164,13 +167,7 @@ fun ChatScreen(
                     CallButton(Icons.Filled.Call, stringResource(R.string.home_voice_call)) { onCall(false) }
                 }
             }
-            Text(
-                stringResource(R.string.chat_deletion_rule),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
-            )
+            DeletionRule()
             noticeText(state.notice)?.let { (kind, text) ->
                 StatusBanner(
                     kind = kind,
@@ -222,6 +219,10 @@ fun ChatScreen(
                     FilledIconButton(
                         onClick = { if (controller.send(draft)) draft = "" },
                         enabled = canSend,
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ),
                         modifier = Modifier.size(48.dp),
                     ) {
                         Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.chat_send))
@@ -366,6 +367,34 @@ private fun Bubble(text: String, mine: Boolean, faded: Boolean = false) {
                 .background(colors.surface, shape)
                 .padding(horizontal = 14.dp, vertical = 10.dp),
         )
+    }
+}
+
+/** One short line about deletion under the header; tapping it shows the full rule (docs/07). */
+@Composable
+private fun DeletionRule() {
+    var expanded by remember { mutableStateOf(false) }
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { expanded = !expanded }
+            .padding(start = 24.dp, end = 24.dp, top = 10.dp, bottom = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Icon(Icons.Filled.Lock, contentDescription = null, tint = muted, modifier = Modifier.size(13.dp))
+            Text(stringResource(R.string.chat_deletion_short), style = MaterialTheme.typography.labelMedium, color = muted)
+        }
+        if (expanded) {
+            Text(
+                stringResource(R.string.chat_deletion_rule),
+                style = MaterialTheme.typography.bodySmall,
+                color = muted,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
 

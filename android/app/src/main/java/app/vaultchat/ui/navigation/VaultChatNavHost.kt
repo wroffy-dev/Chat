@@ -224,6 +224,13 @@ fun VaultChatNavHost(container: AppContainer) {
                     }
                 },
                 onClose = { navController.popBackStack() },
+                // Only outgoing calls know the connection to call again; incoming ones close instead.
+                onCallAgain = route.connectionId?.let { connectionId ->
+                    {
+                        navController.popBackStack()
+                        navController.navigate(CallRoute(video = route.video, peerUsername = route.peerUsername, connectionId = connectionId))
+                    }
+                },
             )
         }
         composable<InboxRoute> {
