@@ -1,6 +1,12 @@
 package app.vaultchat.ui.home
 
+import android.annotation.SuppressLint
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
 import android.text.format.DateUtils
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -114,6 +120,7 @@ fun HomeScreen(
             )
             UpdateBanner(updater, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             NotificationsBanner()
+            BatteryBanner()
             if (state.offline) {
                 StatusBanner(
                     kind = BannerKind.WARNING,
@@ -205,6 +212,40 @@ private fun NotificationsBanner() {
         ),
         onAction = {
             if (notifications.status == PermissionStatus.PermanentlyDenied) openAppSettings(context) else notifications.request()
+        },
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+    )
+}
+
+/**
+ * Battery optimisation (Doze, App Standby) can hold back call wake-ups and stop the app in the
+ * background. The button opens Android's own "let this app run in the background" dialog; the
+ * banner is re-checked whenever Home comes back to the front.
+ */
+// BatteryLife: Play's policy on this dialog does not apply; the app is sideloaded (docs/10 §6).
+@SuppressLint("BatteryLife")
+@Composable
+private fun BatteryBanner() {
+    val context = LocalContext.current
+    val power = remember(context) { context.getSystemService(PowerManager::class.java) }
+    var restricted by remember { mutableStateOf(false) }
+    LifecycleResumeEffect(power) {
+        restricted = power?.isIgnoringBatteryOptimizations(context.packageName) == false
+        onPauseOrDispose { }
+    }
+    if (!restricted) return
+    StatusBanner(
+        kind = BannerKind.WARNING,
+        title = stringResource(R.string.home_battery_restricted),
+        actionLabel = stringResource(R.string.home_allow),
+        onAction = {
+            val ask = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}"))
+            try {
+                context.startActivity(ask)
+            } catch (_: ActivityNotFoundException) {
+                // Some phones lack the dialog; their battery settings list lets the user do the same.
+                runCatching { context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+            }
         },
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
     )

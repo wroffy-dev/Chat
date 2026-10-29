@@ -72,7 +72,7 @@ A push notification does **not** guarantee that a call rings. Known reasons it m
 | Cause | Mitigation |
 |---|---|
 | Phone offline or in poor coverage | None; caller sees "Ringing…" then "No answer" |
-| Doze / App Standby buckets delaying pushes | High priority for calls; ask the user to exempt the app from battery optimisation (allowed for a sideloaded app; settings deep link) |
+| Doze / App Standby buckets delaying pushes | High priority for calls; ask the user to exempt the app from battery optimisation (allowed for a sideloaded app). **Implemented:** Home shows a banner while the app is optimised; "Allow" opens Android's own dialog (`ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`) |
 | Manufacturer battery managers (aggressive OEM "auto-start" or "app freezing" features) | Per-device setup guide shown in Settings ("Allow background activity", "Auto-start") |
 | User force-stopped the app | Android does not deliver pushes to force-stopped apps until opened again |
 | Notifications permission denied / channel muted | Warning in Settings screen |

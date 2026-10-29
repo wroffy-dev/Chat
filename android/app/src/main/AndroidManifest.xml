@@ -19,6 +19,9 @@
     <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
     <!-- In-app updates: hands the downloaded update to Android's installer (the user confirms). -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Asks to be left out of battery optimisation, so calls still ring with the app closed
+         (docs/10-notifications.md §6). Allowed for this sideloaded app; Android shows its own dialog. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <!-- allowBackup=false and the extraction rules keep session tokens out of cloud and
          device-transfer backups (docs/04-accounts-and-authentication.md §4). -->
