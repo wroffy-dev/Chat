@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -34,6 +35,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -134,7 +136,6 @@ fun HomeScreen(
                 FilterRow(state.filter, unread = state.chats.count { it.unreadCount > 0 }, onSelect = viewModel::setFilter)
                 ChatList(state.visibleChats, onChat, modifier = Modifier.weight(1f))
             }
-            AboutApp(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
         }
     }
 }
@@ -142,6 +143,16 @@ fun HomeScreen(
 @Composable
 private fun Header(username: String?, onConnect: () -> Unit, onChangePassword: () -> Unit, onLogout: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
+    var about by remember { mutableStateOf(false) }
+    if (about) {
+        // Version and APK hash live here rather than on the main screen.
+        AlertDialog(
+            onDismissRequest = { about = false },
+            title = { Text(stringResource(R.string.home_about)) },
+            text = { AboutApp() },
+            confirmButton = { TextButton(onClick = { about = false }) { Text(stringResource(R.string.action_close)) } },
+        )
+    }
     Row(
         modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 12.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -163,6 +174,7 @@ private fun Header(username: String?, onConnect: () -> Unit, onChangePassword: (
                     DropdownMenuItem(text = { Text(stringResource(R.string.home_signed_in_as, it)) }, onClick = {}, enabled = false)
                 }
                 DropdownMenuItem(text = { Text(stringResource(R.string.home_change_password)) }, onClick = { menu = false; onChangePassword() })
+                DropdownMenuItem(text = { Text(stringResource(R.string.home_about)) }, onClick = { menu = false; about = true })
                 DropdownMenuItem(text = { Text(stringResource(R.string.action_log_out)) }, onClick = { menu = false; onLogout() })
             }
         }

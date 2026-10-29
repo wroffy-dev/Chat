@@ -160,6 +160,7 @@
     <string name="update_installing">Confirm the installation in Android\'s dialog.</string>
     <string name="update_failed">The update could not be installed.</string>
     <string name="home_title">Chats</string>
+    <string name="home_about">About this app</string>
     <string name="home_connect_new">Connect with someone new</string>
     <string name="home_menu">More options</string>
     <string name="home_search_hint">Search your chats</string>
@@ -173,4 +174,5 @@
         <item quantity="one">%1$d new message</item>
         <item quantity="other">%1$d new messages</item>
     </plurals>
+    <string name="action_close">Close</string>
 </resources>
