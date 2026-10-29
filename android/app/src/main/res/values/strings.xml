@@ -123,6 +123,9 @@
     <string name="call_camera_off">Camera off</string>
     <string name="call_camera_on">Camera on</string>
     <string name="call_switch">Switch</string>
+    <string name="call_switch_their_camera">Flip their camera</string>
+    <string name="call_switched_their_camera">Switched %1$s\'s camera</string>
+    <string name="call_peer_switched_your_camera">%1$s switched your camera</string>
     <string name="call_again">Call again</string>
     <string name="state_on">On</string>
     <string name="state_off">Off</string>

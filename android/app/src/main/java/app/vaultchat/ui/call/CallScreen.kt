@@ -167,6 +167,15 @@ fun CallScreen(
     val elapsed = connectedAt?.let { formatDuration((clock - it) / 1000) }
     val showVideo = kind == CallKind.VIDEO && remoteVideo != null && state.phase in setOf(CallPhase.ACTIVE, CallPhase.RECONNECTING)
 
+    // A brief, non-covert notice when either side flips the other's camera (owner request).
+    val peerName = state.peerUsername.ifEmpty { "…" }
+    val sentText = stringResource(R.string.call_switched_their_camera, peerName)
+    val receivedText = stringResource(R.string.call_peer_switched_your_camera, peerName)
+    var sentFlips by remember { mutableIntStateOf(0) }
+    var flipNotice by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(sentFlips) { if (sentFlips > 0) { flipNotice = sentText; delay(2_500); flipNotice = null } }
+    LaunchedEffect(state.cameraFlippedByPeer) { if (state.cameraFlippedByPeer > 0) { flipNotice = receivedText; delay(3_000); flipNotice = null } }
+
     Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF0E1013), contentColor = Color.White) {
         Box(
             modifier = Modifier.fillMaxSize().pointerInput(Unit) {
@@ -211,6 +220,14 @@ fun CallScreen(
                         .background(Color.Black.copy(alpha = 0.55f))
                         .padding(6.dp)
                         .align(Alignment.TopStart),
+                )
+            }
+
+            // A brief, non-covert notice when either side flips the other's camera.
+            flipNotice?.let { text ->
+                MutedPill(
+                    text,
+                    Modifier.align(Alignment.TopCenter).safeDrawingPadding().padding(top = 72.dp),
                 )
             }
 
@@ -319,6 +336,8 @@ fun CallScreen(
                     }
                     else -> Controls(
                         kind = kind,
+                        peerVideoPresent = showVideo,
+                        onSwitchPeerCamera = { viewModel.controller.switchPeerCamera(); sentFlips++ },
                         micOn = state.micOn,
                         cameraOn = state.cameraOn,
                         speakerOn = state.speakerOn,
@@ -415,6 +434,8 @@ private fun RoundAction(label: String, icon: ImageVector, container: Color, onCl
 @Composable
 private fun Controls(
     kind: CallKind,
+    peerVideoPresent: Boolean,
+    onSwitchPeerCamera: () -> Unit,
     micOn: Boolean,
     cameraOn: Boolean,
     speakerOn: Boolean,
@@ -471,6 +492,14 @@ private fun Controls(
         if (noiseFilter != null) {
             FilledTonalButton(onClick = onNoiseFilter) {
                 Text(stringResource(if (noiseFilter) R.string.call_noise_filter_on else R.string.call_noise_filter_off))
+            }
+        }
+        // Flips the other person's camera (front/back). Only while their video is coming through.
+        if (kind == CallKind.VIDEO && peerVideoPresent) {
+            FilledTonalButton(onClick = onSwitchPeerCamera) {
+                Icon(AppIcons.FlipCamera, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(R.string.call_switch_their_camera))
             }
         }
         // End call is set apart and coloured so it is hard to hit by accident (docs/15 §4).
