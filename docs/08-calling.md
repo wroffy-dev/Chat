@@ -89,6 +89,15 @@ A app                 Backend                         LiveKit                 FC
 Caller pre-connection (joining the room and publishing while ringing) removes connection time from the
 callee's perceived setup time. The caller's outgoing video is not sent to anyone until B subscribes.
 
+### 4.3 Auto-answer
+
+**Implemented (2026-10-29, owner request; this is a private app of at most ten QR-paired people, D-21).**
+An incoming call that the person does not pick up is answered by the phone itself after
+`AUTO_ANSWER_MS` (10 s), with camera and microphone on. It is not silent: the phone rings (sound and the
+incoming-call screen) for those 10 s and the person can decline within them, and once answered the normal
+in-call screen is shown (mute, camera, hang-up). The ring timeout that marks a call missed is longer
+(`ringSeconds`, 45 s), so auto-answer takes effect first.
+
 ## 5. Connectivity: STUN, TURN, UDP, TCP and NAT
 
 The VPS has a public IP, so phones normally connect straight to the SFU. Candidate order, best first:
