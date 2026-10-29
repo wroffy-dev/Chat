@@ -100,7 +100,7 @@ object Push {
         val open = Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         val openPending = PendingIntent.getActivity(context, MESSAGE_NOTIFICATION_ID, open, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(context.getString(R.string.app_name))
             .setContentText(context.getString(R.string.chat_new_message))
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
@@ -134,7 +134,7 @@ object Push {
         val caller = Person.Builder().setName(context.getString(R.string.call_incoming)).setImportant(true).build()
 
         val notification = NotificationCompat.Builder(context, CHANNEL_CALLS)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(context.getString(R.string.app_name))
             .setContentText(context.getString(R.string.call_incoming))
             .setCategory(NotificationCompat.CATEGORY_CALL)

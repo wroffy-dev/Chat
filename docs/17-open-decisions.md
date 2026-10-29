@@ -15,7 +15,6 @@ recommendation is given, it is labelled as such and still needs sign-off.
 | D-10 | Staging environment | None · same VPS, backend-only staging · full staging incl. LiveKit | Backend-only staging on the same VPS | Deployment |
 | D-11 | Show "last seen" / online presence to the other user? | Show both · in-chat only · nothing | Show "in chat" only (privacy-minimal) | UI |
 | D-13 | Video codec and degradation preference for MVP | VP8 · H.264 · VP9 SVC; MAINTAIN_FRAMERATE · BALANCED | Decide from T-Q-CODEC / T-Q-DEGRADE results | Calling |
-| D-14 | App name, package name (`applicationId`) and deep-link scheme | "Vault Chat" / `vaultchat://` are working names | — | Android project setup, QR payload |
 | D-15 | TURN/TLS on port 443 | Not in MVP · add if a real network fails | Add only if T-NET-ONLY-443 matters for the users' networks | Deployment |
 | D-16 | End-to-end encryption | Not in MVP · evaluate later with key exchange during QR pairing | Evaluate after MVP; never claim before verified | Security roadmap |
 | D-17 | Offsite backup provider | Any S3-compatible provider with low/zero cost at this size | Choose by current pricing and region | Backups |
@@ -30,6 +29,7 @@ recommendation is given, it is labelled as such and still needs sign-off.
 | D-12 | **Retention.** Call records and call diagnostics: 24 h. Audit log: 365 days. Backups: only the last 24 h are kept. (Error records: no table exists yet.) | 2026-10-25 | Owner ("Just 24", then chose the scope) |
 | D-18 | **Domain:** everything on the owner's main domain `fluteconsulatancy.com`: backend at `https://fluteconsulatancy.com`, LiveKit under `https://fluteconsulatancy.com/rtc` (path routing; `LIVEKIT_PUBLIC_URL=wss://fluteconsulatancy.com`). Replaced the 2026-10-27 choice of `api.`/`rtc.` subdomains. Optional `coolify.fluteconsulatancy.com` for the dashboard. | 2026-10-28 | Owner ("main domain se sab kuchh") |
 | D-20 | **In-app updates for test builds.** After sign-in the app offers an Update button; the build is uploaded by the GitHub Actions workflow to the server and downloaded only by signed-in users. One fixed test signing key, kept as GitHub Actions secrets. | 2026-10-28 | Owner ("update pr click kre or update ho jaye … login k baad hi dikhe"; signing key in GitHub Secrets) |
+| D-14 | **App name "Vault"** with the owner's ship's-wheel icon (2026-10-29). The package name stays `app.vaultchat` (`.dev` for test builds): changing it would make Android treat it as a different app, so in-app updates would stop and both phones would need a reinstall. Deep-link scheme stays `vaultchat://`. | 2026-10-29 | Owner ("app new name is vault", icon image supplied) |
 | D-02 | **Exit after about a minute.** The chat holds a 60 s presence lease renewed every 20 s; when it lapses (background, crash, power or network loss) the server applies the exit rule. **Backstop: every message is deleted at most 24 h after it was sent**, seen or not. | 2026-10-24 | Owner |
 
 ## How to record a decision

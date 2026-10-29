@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Vault Chat</string>
+    <string name="app_name">Vault</string>
 
     <string name="login_title">Sign in</string>
     <string name="login_subtitle">Private calls and messages</string>
@@ -81,7 +81,7 @@
     <string name="scan_qr_allow_camera">Allow camera</string>
     <string name="scan_qr_camera_denied">Camera access is turned off for this app. You can turn it on in Settings.</string>
     <string name="scan_qr_waiting">Request sent. Waiting for %1$s to accept…</string>
-    <string name="scan_qr_not_our_code">This isn\'t a Vault Chat code.</string>
+    <string name="scan_qr_not_our_code">This isn\'t a Vault code.</string>
     <string name="scan_qr_rejected">The request was rejected.</string>
     <string name="scan_qr_expired">The request expired. Ask for a new code.</string>
     <string name="scan_qr_cancelled">The request was cancelled.</string>
@@ -157,7 +157,7 @@
     <string name="upgrade_no_hash">not published</string>
     <string name="update_available">A new version (%1$d) is available.</string>
     <string name="update_action">Update</string>
-    <string name="update_needs_permission">Allow Vault Chat to install updates, then come back and tap Update.</string>
+    <string name="update_needs_permission">Allow Vault to install updates, then come back and tap Update.</string>
     <string name="update_allow">Allow</string>
     <string name="update_downloading">Downloading update… %1$d%%</string>
     <string name="update_installing">Confirm the installation in Android\'s dialog.</string>
