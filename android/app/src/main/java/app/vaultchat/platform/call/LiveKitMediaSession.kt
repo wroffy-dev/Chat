@@ -7,7 +7,7 @@ import android.os.PowerManager
 import android.util.Size
 import app.vaultchat.domain.call.CaptureQuality
 import app.vaultchat.domain.call.VideoQualityPolicy
-import io.livekit.android.room.participant.DataPublishReliability
+import io.livekit.android.room.track.DataPublishReliability
 import io.livekit.android.room.participant.VideoTrackPublishDefaults
 import io.livekit.android.room.participant.VideoTrackPublishOptions
 import livekit.org.webrtc.RtpParameters
