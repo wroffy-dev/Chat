@@ -45,6 +45,9 @@ data class HomeUiState(
 private const val POLL_MS = 10_000L
 private const val SIGNALLED_POLL_MS = 60_000L
 
+/** New messages and new connections change the chat list. */
+private val listChanges: (RealtimeSignal) -> Boolean = { it is RealtimeSignal.ChatChanged || it is RealtimeSignal.ConnectionChanged }
+
 class HomeViewModel(
     private val auth: AuthRepository,
     private val connections: ConnectionRepository,
@@ -59,7 +62,7 @@ class HomeViewModel(
         refresh()
         if (poller?.isActive == true) return
         poller = viewModelScope.launch {
-            pollWithSignals(signals, this::changesList, POLL_MS, SIGNALLED_POLL_MS) {
+            pollWithSignals(signals, listChanges, POLL_MS, SIGNALLED_POLL_MS) {
                 loadChats()
                 _state.value.navigation == null
             }
@@ -117,6 +120,4 @@ class HomeViewModel(
         }
     }
 
-    private fun changesList(signal: RealtimeSignal): Boolean =
-        signal is RealtimeSignal.ChatChanged || signal is RealtimeSignal.ConnectionChanged
 }
