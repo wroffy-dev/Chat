@@ -20,10 +20,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -59,6 +61,7 @@ import app.vaultchat.domain.call.CallKind
 import app.vaultchat.domain.call.CallPhase
 import app.vaultchat.domain.permissions.AppPermission
 import app.vaultchat.domain.permissions.PermissionStatus
+import app.vaultchat.ui.components.AppIcons
 import app.vaultchat.ui.components.PrimaryButton
 import app.vaultchat.ui.permissions.PermissionPreferences
 import app.vaultchat.ui.permissions.openAppSettings
@@ -180,6 +183,23 @@ fun CallScreen(
                 )
             }
 
+            // With the controls hidden, a small reminder that the microphone is off.
+            if (!controlsVisible && !state.micOn) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .safeDrawingPadding()
+                        .padding(24.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(Color.Black.copy(alpha = 0.6f))
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                ) {
+                    Icon(AppIcons.MicOff, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(stringResource(R.string.call_muted), style = MaterialTheme.typography.labelLarge)
+                }
+            }
             AnimatedVisibility(visible = controlsVisible, enter = fadeIn(), exit = fadeOut()) {
             Column(
                 modifier = Modifier.fillMaxSize().safeDrawingPadding().padding(24.dp),
@@ -254,7 +274,18 @@ private fun Controls(
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilledTonalButton(onClick = onMic) { Text(stringResource(if (micOn) R.string.call_mute else R.string.call_unmute)) }
+            // Muted is shown loudly (white button, crossed-out mic) so it is never mistaken for live.
+            FilledTonalButton(
+                onClick = onMic,
+                colors = if (micOn) ButtonDefaults.filledTonalButtonColors() else ButtonDefaults.filledTonalButtonColors(
+                    containerColor = Color.White,
+                    contentColor = Color.Black,
+                ),
+            ) {
+                Icon(if (micOn) AppIcons.Mic else AppIcons.MicOff, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(if (micOn) R.string.call_mute else R.string.call_unmute))
+            }
             FilledTonalButton(onClick = onSpeaker) { Text(stringResource(if (speakerOn) R.string.call_earpiece else R.string.call_speaker)) }
         }
         if (kind == CallKind.VIDEO) {

@@ -97,19 +97,22 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
         }
     }
 
-    override suspend fun connect(url: String, token: String, video: Boolean) {
+    override suspend fun connect(url: String, token: String, video: Boolean, micOn: Boolean, cameraOn: Boolean) {
         room.connect(url, token)
         // The caller joins while it rings, so for the callee the peer is often already there.
         if (room.remoteParticipants.isNotEmpty()) _events.emit(MediaEvent.RemoteJoined)
-        room.localParticipant.setMicrophoneEnabled(true)
-        if (video) setCameraEnabled(true)
+        room.localParticipant.setMicrophoneEnabled(micOn)
+        if (video) setCameraEnabled(cameraOn)
     }
 
     override suspend fun setMicrophoneEnabled(enabled: Boolean) {
+        // Before the room connects there is nothing to change; connect() applies the wish.
+        if (room.state != Room.State.CONNECTED) return
         room.localParticipant.setMicrophoneEnabled(enabled)
     }
 
     override suspend fun setCameraEnabled(enabled: Boolean) {
+        if (room.state != Room.State.CONNECTED) return
         room.localParticipant.setCameraEnabled(enabled)
         _localVideo.value = if (enabled) room.localParticipant.getTrackPublication(Track.Source.CAMERA)?.track as? LocalVideoTrack else null
     }

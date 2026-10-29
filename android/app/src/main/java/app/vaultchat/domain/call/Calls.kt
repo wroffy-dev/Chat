@@ -46,8 +46,11 @@ sealed interface MediaEvent {
 
 interface MediaSession {
     val events: Flow<MediaEvent>
-    /** Connects and starts publishing the microphone (and the camera for video calls). Throws on failure. */
-    suspend fun connect(url: String, token: String, video: Boolean)
+    /**
+     * Connects and publishes the microphone if [micOn] (and, for video calls, the camera if [cameraOn]),
+     * so a mute chosen while it rang holds. Throws on failure.
+     */
+    suspend fun connect(url: String, token: String, video: Boolean, micOn: Boolean = true, cameraOn: Boolean = true)
     suspend fun setMicrophoneEnabled(enabled: Boolean)
     suspend fun setCameraEnabled(enabled: Boolean)
     fun switchCamera()

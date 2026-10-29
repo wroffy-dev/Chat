@@ -51,10 +51,12 @@ class FakeMedia : MediaSession {
     var video: Boolean? = null
     val log = mutableListOf<String>()
 
-    override suspend fun connect(url: String, token: String, video: Boolean) {
+    var connectedMic: Boolean? = null
+    override suspend fun connect(url: String, token: String, video: Boolean, micOn: Boolean, cameraOn: Boolean) {
         if (failConnect) throw IllegalStateException("no media")
         connected = true
         this.video = video
+        connectedMic = micOn
     }
     override suspend fun setMicrophoneEnabled(enabled: Boolean) { log += "mic:$enabled" }
     override suspend fun setCameraEnabled(enabled: Boolean) { log += "cam:$enabled" }
@@ -226,6 +228,30 @@ class CallControllerTest {
         assertTrue("mic:false" in media.log)
         assertFalse(media.log.any { it.startsWith("cam:") })
         assertTrue("speaker:true" in media.log)
+    }
+
+    @Test
+    fun `a mute chosen while it rings holds when the call connects`() = runTest {
+        val c = controller()
+        c.showIncoming(CallInfo("c1", CallKind.VIDEO, CallStatus.RINGING, isCaller = false, peerUsername = "bob"))
+        c.toggleMicrophone()
+        runCurrent()
+        assertFalse(c.state.value.micOn)
+        c.accept()
+        runCurrent()
+        assertTrue(media.connected)
+        assertEquals("joins muted", false, media.connectedMic)
+    }
+
+    @Test
+    fun `quick repeated mute taps end in the state the screen shows`() = runTest {
+        val c = controller()
+        c.startOutgoing("conn", CallKind.VIDEO, "bob")
+        runCurrent()
+        repeat(3) { c.toggleMicrophone() }
+        runCurrent()
+        assertFalse(c.state.value.micOn)
+        assertEquals("mic:false", media.log.last { it.startsWith("mic:") })
     }
 
     @Test
