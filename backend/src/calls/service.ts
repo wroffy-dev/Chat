@@ -78,7 +78,9 @@ export class CallService {
     if (existing) throw this.inProgress(existing.id);
     // With several contacts (D-21) either person may already be in a call with someone else.
     if (await this.liveCallOfUser(userId)) throw this.inProgress("");
-    if (await this.liveCallOfUser(calleeUserId)) throw appError(409, "PEER_BUSY");
+    const peerCall = await this.liveCallOfUser(calleeUserId);
+    // A call between these two that started a moment ago (both called at once) is this pair's call.
+    if (peerCall) throw peerCall.connectionId === connectionId ? this.inProgress(peerCall.id) : appError(409, "PEER_BUSY");
 
     const room = `call_${randomUUID()}`;
     try {
