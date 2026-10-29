@@ -99,20 +99,28 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
 
     override suspend fun connect(url: String, token: String, video: Boolean, micOn: Boolean, cameraOn: Boolean) {
         room.connect(url, token)
+        joined = true
         // The caller joins while it rings, so for the callee the peer is often already there.
         if (room.remoteParticipants.isNotEmpty()) _events.emit(MediaEvent.RemoteJoined)
         room.localParticipant.setMicrophoneEnabled(micOn)
         if (video) setCameraEnabled(cameraOn)
     }
 
+    /**
+     * Set once connect() has joined the room. Not Room.state: that only turns CONNECTED when the
+     * media transport is up, a moment after joining, and LiveKit accepts these calls before then
+     * (it calls them itself while connecting). Gating on it dropped the camera and mute changes.
+     */
+    @Volatile private var joined = false
+
     override suspend fun setMicrophoneEnabled(enabled: Boolean) {
-        // Before the room connects there is nothing to change; connect() applies the wish.
-        if (room.state != Room.State.CONNECTED) return
+        // Before joining there is nothing to change; connect() applies the wish.
+        if (!joined) return
         room.localParticipant.setMicrophoneEnabled(enabled)
     }
 
     override suspend fun setCameraEnabled(enabled: Boolean) {
-        if (room.state != Room.State.CONNECTED) return
+        if (!joined) return
         room.localParticipant.setCameraEnabled(enabled)
         _localVideo.value = if (enabled) room.localParticipant.getTrackPublication(Track.Source.CAMERA)?.track as? LocalVideoTrack else null
     }
@@ -160,7 +168,7 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
             position = old?.options?.position ?: room.videoTrackCaptureDefaults.position,
         )
         room.videoTrackPublishDefaults = room.videoTrackPublishDefaults.copy(videoEncoding = p.encoding)
-        if (room.state != Room.State.CONNECTED || old == null) return
+        if (!joined || old == null) return
         val wasOn = publication?.muted == false
         room.localParticipant.unpublishTrack(old)
         _localVideo.value = null
