@@ -1,5 +1,9 @@
 # 10 — Notifications (Firebase Cloud Messaging)
 
+> **D-24 (2026-10-29): notifications are switched off.** The app posts none and registers no push token
+> (`Push.NOTIFICATIONS_ENABLED = false`), so calls ring only while the app is open. The design below is
+> kept for a later change of mind.
+
 Status: **Implemented for calls and new messages** (see docs/IMPLEMENTATION_PLAN.md, calling slice 2 and chat slice 1); not yet exercised against a real Firebase project. Firebase facts remain **to be verified** against current Firebase documentation (`firebase.google.com` was not reachable from the build environment).
 
 ## 1. Why FCM

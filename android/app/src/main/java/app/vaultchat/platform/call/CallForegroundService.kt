@@ -42,6 +42,7 @@ class CallForegroundService : Service() {
             .setContentTitle(getString(R.string.app_name))
             .setContentText(getString(R.string.call_ongoing))
             .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
             .setOngoing(true)
             .setContentIntent(open)
             .build()
