@@ -136,7 +136,7 @@ describe.skipIf(!TEST_DB_URL)("Admin Console (PostgreSQL)", () => {
     expect(await database.prisma.user.count()).toBe(0);
   });
 
-  it("creates the two users, shows each temporary password once, and stops at two", async () => {
+  it("creates users, shows each temporary password once, and stops at ten (D-21)", async () => {
     await createAdmin();
     const { cookie, csrf } = await loginCookie();
     const first = await post("/admin/users", cookie, { csrf, username: "alice" });
@@ -144,14 +144,17 @@ describe.skipIf(!TEST_DB_URL)("Admin Console (PostgreSQL)", () => {
     const temp = temporaryPasswordIn(first);
     expect(temp).toHaveLength(18);
     await post("/admin/users", cookie, { csrf, username: "bob" });
+    const partial = await app.inject({ method: "GET", url: "/admin/users", headers: { cookie } });
+    expect(partial.body).toContain("Create user (2 of 10)");
+    for (let i = 3; i <= 10; i++) expect((await post("/admin/users", cookie, { csrf, username: `user${i}` })).statusCode).toBe(200);
 
     const list = await app.inject({ method: "GET", url: "/admin/users", headers: { cookie } });
-    expect(list.body).toContain("Both user accounts exist");
+    expect(list.body).toContain("All 10 user accounts exist");
     expect(list.body).not.toContain(temp!);
     expect(list.body).not.toContain("$argon2");
 
-    const third = await post("/admin/users", cookie, { csrf, username: "carol" });
-    expect(third.statusCode).toBe(409);
+    const eleventh = await post("/admin/users", cookie, { csrf, username: "carol" });
+    expect(eleventh.statusCode).toBe(409);
   });
 
   it("resets a password, revokes sessions, and records audit events", async () => {

@@ -3,7 +3,6 @@ package app.vaultchat.ui.connect
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.vaultchat.domain.connection.ConnResult
-import app.vaultchat.domain.connection.Connection
 import app.vaultchat.domain.connection.ConnectionFailure
 import app.vaultchat.domain.connection.ConnectionRepository
 import app.vaultchat.domain.connection.ConnectionRequest
@@ -38,7 +37,6 @@ private val pairingSignal: (RealtimeSignal) -> Boolean = { it is RealtimeSignal.
 
 data class InboxUiState(
     val loading: Boolean = true,
-    val connection: Connection? = null,
     val incoming: List<ConnectionRequest> = emptyList(),
     val outgoing: List<ConnectionRequest> = emptyList(),
     val busyRequestId: String? = null,
@@ -66,14 +64,12 @@ class InboxViewModel(private val repo: ConnectionRepository, private val signals
     }
 
     private suspend fun refresh() {
-        val connection = repo.connection()
         val requests = repo.requests(status = RequestStatus.PENDING)
         _state.update { s ->
-            val failure = (connection as? ConnResult.Failure)?.reason ?: (requests as? ConnResult.Failure)?.reason
+            val failure = (requests as? ConnResult.Failure)?.reason
             val list = (requests as? ConnResult.Ok)?.value
             s.copy(
                 loading = false,
-                connection = (connection as? ConnResult.Ok)?.value ?: s.connection,
                 incoming = list?.filter { it.direction == RequestDirection.INCOMING } ?: s.incoming,
                 outgoing = list?.filter { it.direction == RequestDirection.OUTGOING } ?: s.outgoing,
                 failure = failure,

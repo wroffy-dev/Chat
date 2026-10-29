@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.os.Build
 import android.text.Editable
+import android.text.format.DateUtils
 import android.text.InputType
 import android.text.TextWatcher
 import android.view.inputmethod.EditorInfo
@@ -12,7 +13,6 @@ import android.widget.EditText
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,12 +23,20 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Call
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -44,6 +52,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
@@ -62,7 +73,9 @@ import app.vaultchat.domain.chat.ChatText
 import app.vaultchat.domain.chat.Outgoing
 import app.vaultchat.domain.chat.OutgoingStatus
 import app.vaultchat.platform.push.Push
+import app.vaultchat.ui.components.AppIcons
 import app.vaultchat.ui.components.BannerKind
+import app.vaultchat.ui.components.InitialsAvatar
 import app.vaultchat.ui.components.FullScreenLoading
 import app.vaultchat.ui.components.StatusBanner
 
@@ -77,6 +90,7 @@ fun ChatScreen(
     peerUsername: String,
     onBack: () -> Unit,
     onSessionEnded: () -> Unit,
+    onCall: (video: Boolean) -> Unit,
 ) {
     val controller = viewModel.controller
     val state by controller.state.collectAsStateWithLifecycle()
@@ -122,22 +136,32 @@ fun ChatScreen(
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(modifier = Modifier.fillMaxSize().safeDrawingPadding().imePadding()) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                TextButton(onClick = onBack) { Text(stringResource(R.string.action_back)) }
-                Text(
-                    peerUsername,
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f).padding(start = 8.dp).semantics { heading() },
-                )
+            Surface(color = MaterialTheme.colorScheme.surface) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
+                    }
+                    InitialsAvatar(peerUsername, size = 40.dp)
+                    Text(
+                        peerUsername,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).padding(start = 12.dp).semantics { heading() },
+                    )
+                    CallButton(AppIcons.Videocam, stringResource(R.string.home_video_call)) { onCall(true) }
+                    CallButton(Icons.Filled.Call, stringResource(R.string.home_voice_call)) { onCall(false) }
+                }
             }
             Text(
                 stringResource(R.string.chat_deletion_rule),
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
             )
             noticeText(state.notice)?.let { (kind, text) ->
                 StatusBanner(
@@ -173,22 +197,28 @@ fun ChatScreen(
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                PrivateTextInput(
-                    value = draft,
-                    onValueChange = { draft = it },
-                    hint = stringResource(R.string.chat_input_hint),
-                    enabled = state.phase == ChatPhase.OPEN,
-                    modifier = Modifier.weight(1f),
-                )
-                Button(
-                    onClick = { if (controller.send(draft)) draft = "" },
-                    enabled = state.phase == ChatPhase.OPEN && draft.isNotBlank() && !tooLong,
-                ) { Text(stringResource(R.string.chat_send)) }
+            Surface(color = MaterialTheme.colorScheme.surface) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    PrivateTextInput(
+                        value = draft,
+                        onValueChange = { draft = it },
+                        hint = stringResource(R.string.chat_input_hint),
+                        enabled = state.phase == ChatPhase.OPEN,
+                        modifier = Modifier.weight(1f),
+                    )
+                    val canSend = state.phase == ChatPhase.OPEN && draft.isNotBlank() && !tooLong
+                    FilledIconButton(
+                        onClick = { if (controller.send(draft)) draft = "" },
+                        enabled = canSend,
+                        modifier = Modifier.size(48.dp),
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.chat_send))
+                    }
+                }
             }
         }
     }
@@ -213,8 +243,8 @@ private fun PrivateTextInput(
     val onChange by rememberUpdatedState(onValueChange)
     AndroidView(
         modifier = modifier
-            .border(1.dp, colors.outline, RoundedCornerShape(12.dp))
-            .padding(horizontal = 12.dp, vertical = 4.dp),
+            .background(colors.background, RoundedCornerShape(24.dp))
+            .padding(horizontal = 16.dp, vertical = 4.dp),
         factory = { context ->
             EditText(context).apply {
                 imeOptions = EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
@@ -271,10 +301,21 @@ private fun MessageList(
     LazyColumn(
         state = listState,
         modifier = modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        items(messages, key = { it.id }) { m -> Bubble(m.text, mine = m.senderId == myUserId) }
+        items(messages, key = { it.id }) { m ->
+            val mine = m.senderId == myUserId
+            Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
+                Bubble(m.text, mine = mine)
+                Text(
+                    DateUtils.formatDateTime(LocalContext.current, m.createdAtEpochMs, DateUtils.FORMAT_SHOW_TIME),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                )
+            }
+        }
         items(outgoing, key = { it.clientMessageId }) { o ->
             Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
                 Bubble(o.text, mine = true, faded = true)
@@ -297,22 +338,37 @@ private fun MessageList(
     }
 }
 
+/** White rounded bubbles on the grey background (reference design); mine sit on the right. */
 @Composable
 private fun Bubble(text: String, mine: Boolean, faded: Boolean = false) {
     val colors = MaterialTheme.colorScheme
+    val corner = 16.dp
+    val shape = if (mine) {
+        RoundedCornerShape(topStart = corner, topEnd = corner, bottomStart = corner, bottomEnd = 4.dp)
+    } else {
+        RoundedCornerShape(topStart = corner, topEnd = corner, bottomStart = 4.dp, bottomEnd = corner)
+    }
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
         Text(
             text,
-            style = MaterialTheme.typography.bodyLarge,
-            color = if (mine) colors.onPrimaryContainer else colors.onSurfaceVariant,
+            style = MaterialTheme.typography.bodyMedium,
+            color = colors.onSurface.copy(alpha = if (faded) 0.6f else 1f),
             modifier = Modifier
-                .widthIn(max = 300.dp)
-                .background(
-                    color = (if (mine) colors.primaryContainer else colors.surfaceVariant).copy(alpha = if (faded) 0.6f else 1f),
-                    shape = RoundedCornerShape(16.dp),
-                )
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .widthIn(max = 290.dp)
+                .background(colors.surface, shape)
+                .padding(horizontal = 14.dp, vertical = 10.dp),
         )
+    }
+}
+
+@Composable
+private fun CallButton(icon: ImageVector, description: String, onClick: () -> Unit) {
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.background,
+        modifier = Modifier.padding(horizontal = 4.dp).size(42.dp),
+    ) {
+        IconButton(onClick = onClick) { Icon(icon, contentDescription = description, modifier = Modifier.size(20.dp)) }
     }
 }
 

@@ -94,12 +94,6 @@ fun InboxScreen(
         }
         state.failure?.let { StatusBanner(BannerKind.ERROR, connectionFailureText(it)) }
 
-        val connection = state.connection
-        if (connection != null) {
-            StatusBanner(BannerKind.SUCCESS, stringResource(R.string.inbox_connected_with, connection.peerUsername))
-            return@ScreenScaffold
-        }
-
         Text(stringResource(R.string.inbox_how_it_works), style = MaterialTheme.typography.bodyMedium)
         PrimaryButton(stringResource(R.string.inbox_show_qr), onShowQr)
         OutlinedButton(onClick = onScanQr, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.inbox_scan_qr)) }

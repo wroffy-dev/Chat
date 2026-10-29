@@ -76,6 +76,9 @@ export class CallService {
 
     const existing = await this.liveCallFor(connectionId);
     if (existing) throw this.inProgress(existing.id);
+    // With several contacts (D-21) either person may already be in a call with someone else.
+    if (await this.liveCallOfUser(userId)) throw this.inProgress("");
+    if (await this.liveCallOfUser(calleeUserId)) throw appError(409, "PEER_BUSY");
 
     const room = `call_${randomUUID()}`;
     try {
@@ -260,6 +263,10 @@ export class CallService {
       maxVideoQuality: this.settings ? await this.settings.get("call.max_video_quality") : "1080p",
       ringTimeoutSeconds: await this.ringSeconds(),
     };
+  }
+
+  private liveCallOfUser(userId: string) {
+    return this.prisma.call.findFirst({ where: { status: { in: [...LIVE] }, OR: [{ callerUserId: userId }, { calleeUserId: userId }] } });
   }
 
   private liveCallFor(connectionId: string) {

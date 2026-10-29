@@ -12,7 +12,9 @@ Status: **Implemented** (backend + Android; see docs/IMPLEMENTATION_PLAN.md). Di
    **Accept** or **Reject**.
 6. On accept, A and B are permanently connected. Chat and calls become available.
 
-Because only two users exist, there is at most one connection. Once connected, the QR screens show
+**Superseded by D-21 (2026-10-29):** up to ten users exist and each may connect with several people,
+one connection per pair (scanning someone you are already connected with gives `ALREADY_CONNECTED`).
+Original text: Because only two users exist, there is at most one connection. Once connected, the QR screens show
 "You are already connected" and the generate/scan actions are disabled.
 
 ## 2. QR token design

@@ -30,7 +30,8 @@ export function throttleDelayMs(failedCount: number): number {
   return Math.min(THROTTLE_POLICY.baseDelayMs * 2 ** Math.min(exp, 20), THROTTLE_POLICY.maxDelayMs);
 }
 
-export const MAX_USERS = 2;
+/** Most app users that can exist (decision D-21; the database CHECK on users.slot agrees). */
+export const MAX_USERS = 10;
 
 export interface TokenPair {
   accessToken: string;
@@ -287,7 +288,7 @@ export class AuthService {
   // Administration (called from the Admin Console and the server CLI)
   // ---------------------------------------------------------------------------------------------
 
-  /** Creates one of the two app users with a temporary password that must be changed at first login. */
+  /** Creates an app user (at most MAX_USERS) with a temporary password that must be changed at first login. */
   async createUser(rawUsername: string, actor: { type: "admin" | "system"; id: string | null }): Promise<{ user: User; temporaryPassword: string }> {
     const username = normalizeUsername(rawUsername);
     if (!USERNAME_PATTERN.test(username)) {
@@ -300,8 +301,8 @@ export class AuthService {
     const user = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.user.findMany({ select: { slot: true, username: true } });
       if (existing.some((u) => u.username === username)) throw new AppError(409, "CONFLICT", "That username is already taken.");
-      const free = [1, 2].find((slot) => !existing.some((u) => u.slot === slot));
-      if (free === undefined) throw new AppError(409, "CONFLICT", "Both user accounts already exist.");
+      const free = Array.from({ length: MAX_USERS }, (_, i) => i + 1).find((slot) => !existing.some((u) => u.slot === slot));
+      if (free === undefined) throw new AppError(409, "CONFLICT", `All ${MAX_USERS} user accounts already exist.`);
       const created = await tx.user.create({
         data: { slot: free, username, passwordHash, passwordChangedAt: now, mustChangePassword: true },
       });

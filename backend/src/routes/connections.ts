@@ -38,6 +38,17 @@ export const connectionSchema = {
   },
 } as const;
 
+/** A chat-list row: the connection plus unread count and latest message time (D-21). */
+const connectionSummarySchema = {
+  ...connectionSchema,
+  required: [...connectionSchema.required, "unreadCount", "lastMessageAt"],
+  properties: {
+    ...connectionSchema.properties,
+    unreadCount: { type: "integer" },
+    lastMessageAt: { type: ["string", "null"], format: "date-time" },
+  },
+} as const;
+
 const toJson = (r: RequestView) => ({ ...r, createdAt: r.createdAt.toISOString(), expiresAt: r.expiresAt.toISOString() });
 
 /** QR pairing (docs/14-api-contracts.md §4). No delete-connection endpoint exists in v1. */
@@ -135,11 +146,11 @@ export async function connectionRoutes(app: FastifyInstance, opts: { auth: AuthS
     "/connections",
     {
       onRequest: user,
-      schema: { response: { 200: { type: "object", additionalProperties: false, required: ["items"], properties: { items: { type: "array", items: connectionSchema } } } } },
+      schema: { response: { 200: { type: "object", additionalProperties: false, required: ["items"], properties: { items: { type: "array", items: connectionSummarySchema } } } } },
     },
     async (request) => {
-      const c = await connections.connectionFor(authOf(request).user.id);
-      return { items: c ? [{ ...c, createdAt: c.createdAt.toISOString() }] : [] };
+      const items = await connections.summariesFor(authOf(request).user.id);
+      return { items: items.map((c) => ({ ...c, createdAt: c.createdAt.toISOString(), lastMessageAt: c.lastMessageAt?.toISOString() ?? null })) };
     },
   );
 }

@@ -93,7 +93,7 @@ Common to every authenticated route: `401` if token missing/expired/revoked; `40
 ### POST /connection-qr
 - **Auth:** user. **Rate limit:** 6/min, 60/h per user.
 - **Request:** `{}`. **Response 201:** `{ "token": string(43), "qrPayload": "vaultchat://connect?v=1&t=…", "expiresAt" }`
-- **Errors:** `409 ALREADY_CONNECTED`.
+- **Errors:** none specific: since D-21 a connected user may still show codes to connect with others.
 - **Side effects:** supersedes previous unconsumed token. **Audit:** none (high volume, low value).
 
 ### POST /connection-requests
@@ -116,7 +116,10 @@ Common to every authenticated route: `401` if token missing/expired/revoked; `40
 - **Auth:** user, must be the **requester**. **Response:** `{ "status": "cancelled" }`. **Errors:** `404`, `409 REQUEST_NOT_PENDING`.
 
 ### GET /connections
-- **Auth:** user. **Response:** `{ "items": [ { "id", "peer": { "id", "username" }, "conversationId", "createdAt" } ] }` (0 or 1 item). No delete endpoint exists.
+- **Auth:** user. **Response:** `{ "items": [ { "id", "peer": { "id", "username" }, "conversationId", "createdAt", "unreadCount", "lastMessageAt": date-time | null } ] }`,
+  every connection of the user, oldest first (D-21: up to nine). `unreadCount` counts the peer's messages after
+  the user's read cursor. This is the app's chat list. No delete endpoint exists.
+- `GET /me` keeps returning one `connection` (the oldest) for apps from before D-21.
 
 ## 5. Chat
 
@@ -192,7 +195,7 @@ All routes require the caller to be the caller or callee of `{id}` (else `404`).
 ### POST /calls
 - **Request:** `{ "connectionId": uuid, "kind": "video"|"voice" }`
 - **Response 201:** `{ "callId", "status": "ringing", "livekitUrl": "wss://rtc.<domain>", "livekitToken", "maxVideoQuality", "ringTimeoutSeconds" }`
-- **Errors:** `404` (not a member of the connection), `409 CALL_IN_PROGRESS` (the app then reads `GET /calls/current`), `503 MEDIA_UNAVAILABLE` (LiveKit not configured or unreachable).
+- **Errors:** `404` (not a member of the connection), `409 CALL_IN_PROGRESS` (this pair, or the caller, already has a live call; the app then reads `GET /calls/current`), `409 PEER_BUSY` (the other person is in a call with someone else, D-21), `503 MEDIA_UNAVAILABLE` (LiveKit not configured or unreachable).
 - **Side effects:** creates LiveKit room (max 2), call row; WS `call.incoming` + FCM `call` to callee. **Audit:** none (calls table is the record).
 - **Rate limit:** 10/min per user.
 

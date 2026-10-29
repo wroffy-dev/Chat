@@ -11,21 +11,24 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-// One calm accent colour on neutral surfaces (docs/15-android-ui-ux.md §1).
-private val Navy = Color(0xFF1F3A5F)
-private val NavyLight = Color(0xFFA9C7F0)
+// Minimal monochrome look (owner's reference design, 2026-10-29): near-black accents on white
+// surfaces over a light grey background (docs/15-android-ui-ux.md §1).
+private val Ink = Color(0xFF111111)
 
 private val LightColors = lightColorScheme(
-    primary = Navy,
+    primary = Ink,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFD5E3F8),
-    onPrimaryContainer = Color(0xFF0B1D33),
-    background = Color(0xFFFAFAFC),
-    onBackground = Color(0xFF1A1C1F),
-    surface = Color(0xFFFAFAFC),
-    onSurface = Color(0xFF1A1C1F),
-    surfaceVariant = Color(0xFFE2E4EA),
-    onSurfaceVariant = Color(0xFF44474E),
+    primaryContainer = Color(0xFFEDEDEF),
+    onPrimaryContainer = Ink,
+    secondaryContainer = Color(0xFFEDEDEF),
+    onSecondaryContainer = Ink,
+    background = Color(0xFFF4F4F5),
+    onBackground = Ink,
+    surface = Color.White,
+    onSurface = Ink,
+    surfaceVariant = Color(0xFFEDEDEF),
+    onSurfaceVariant = Color(0xFF6B6B70),
+    outline = Color(0xFFDADADD),
     error = Color(0xFFB3261E),
     onError = Color.White,
     errorContainer = Color(0xFFF9DEDC),
@@ -33,16 +36,19 @@ private val LightColors = lightColorScheme(
 )
 
 private val DarkColors = darkColorScheme(
-    primary = NavyLight,
-    onPrimary = Color(0xFF0B1D33),
-    primaryContainer = Color(0xFF2C4A72),
-    onPrimaryContainer = Color(0xFFD5E3F8),
-    background = Color(0xFF121316),
-    onBackground = Color(0xFFE3E2E6),
-    surface = Color(0xFF121316),
-    onSurface = Color(0xFFE3E2E6),
-    surfaceVariant = Color(0xFF2E3036),
-    onSurfaceVariant = Color(0xFFC4C6CE),
+    primary = Color(0xFFF2F2F2),
+    onPrimary = Ink,
+    primaryContainer = Color(0xFF2C2C2E),
+    onPrimaryContainer = Color(0xFFF2F2F2),
+    secondaryContainer = Color(0xFF2C2C2E),
+    onSecondaryContainer = Color(0xFFF2F2F2),
+    background = Color(0xFF0E0E10),
+    onBackground = Color(0xFFF2F2F2),
+    surface = Color(0xFF1C1C1E),
+    onSurface = Color(0xFFF2F2F2),
+    surfaceVariant = Color(0xFF2C2C2E),
+    onSurfaceVariant = Color(0xFFA1A1A6),
+    outline = Color(0xFF3A3A3C),
     error = Color(0xFFF2B8B5),
     onError = Color(0xFF601410),
     errorContainer = Color(0xFF8C1D18),

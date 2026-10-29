@@ -36,6 +36,12 @@ export interface ConnectionView {
   createdAt: Date;
 }
 
+/** A row of the app's chat list: the connection plus what the user has not read yet. */
+export interface ConnectionSummary extends ConnectionView {
+  unreadCount: number;
+  lastMessageAt: Date | null;
+}
+
 /** Fixed-window per-user counter, in memory (single backend instance, docs/02 ADR-07). */
 export class UserRateLimiter {
   private readonly windows = new Map<string, { start: number; count: number }>();
@@ -75,14 +81,43 @@ export class ConnectionService {
     this.events?.publish(userIds, { type: "connection.changed", requestId });
   }
 
+  /** The user's oldest connection; what apps from before D-21 (one contact) show. */
   async connectionFor(userId: string): Promise<ConnectionView | null> {
-    const c = await this.prisma.connection.findFirst({
+    return (await this.connectionsFor(userId))[0] ?? null;
+  }
+
+  /** Every connection of the user, oldest first (D-21: up to MAX_USERS - 1 contacts). */
+  async connectionsFor(userId: string): Promise<ConnectionView[]> {
+    const rows = await this.prisma.connection.findMany({
       where: { OR: [{ userAId: userId }, { userBId: userId }] },
       include: { userA: true, userB: true, conversation: { select: { id: true } } },
+      orderBy: { createdAt: "asc" },
     });
-    if (!c?.conversation) return null;
-    const peer = c.userAId === userId ? c.userB : c.userA;
-    return { id: c.id, peer: { id: peer.id, username: peer.username }, conversationId: c.conversation.id, createdAt: c.createdAt };
+    return rows.flatMap((c) => {
+      if (!c.conversation) return [];
+      const peer = c.userAId === userId ? c.userB : c.userA;
+      return [{ id: c.id, peer: { id: peer.id, username: peer.username }, conversationId: c.conversation.id, createdAt: c.createdAt }];
+    });
+  }
+
+  /** The chat list: each connection with the count of unread messages from the peer and the latest message time. */
+  async summariesFor(userId: string): Promise<ConnectionSummary[]> {
+    const views = await this.connectionsFor(userId);
+    if (views.length === 0) return [];
+    const ids = views.map((v) => v.conversationId);
+    const stats = await this.prisma.$queryRaw<{ conversation_id: string; unread: bigint; last_at: Date | null }[]>`
+      SELECT p.conversation_id,
+             COUNT(m.id) FILTER (WHERE m.seq > p.last_read_seq AND m.sender_user_id <> ${userId}::uuid) AS unread,
+             MAX(m.created_at) AS last_at
+      FROM conversation_participants p
+      LEFT JOIN messages m ON m.conversation_id = p.conversation_id
+      WHERE p.user_id = ${userId}::uuid AND p.conversation_id = ANY(${ids}::uuid[])
+      GROUP BY p.conversation_id`;
+    const byId = new Map(stats.map((s) => [s.conversation_id, s]));
+    return views.map((v) => {
+      const s = byId.get(v.conversationId);
+      return { ...v, unreadCount: Number(s?.unread ?? 0), lastMessageAt: s?.last_at ?? null };
+    });
   }
 
   /** Issues a fresh single-use QR token and invalidates the owner's previous unused one. */
@@ -90,7 +125,7 @@ export class ConnectionService {
     const now = this.now();
     this.limit(this.qrMinute, userId, now);
     this.limit(this.qrHour, userId, now);
-    if (await this.connectionFor(userId)) throw appError(409, "ALREADY_CONNECTED");
+    // Since D-21 a user may connect with several people; redeem still refuses an existing pair.
 
     const token = generateToken("vcq_");
     const expiresAt = new Date(now.getTime() + QR_POLICY.tokenTtlMs);
@@ -230,7 +265,7 @@ export class ConnectionService {
     });
     // Cross-scan requests cancelled above are covered: both people re-read their requests.
     this.changed(requestId, pair);
-    const view = await this.connectionFor(userId);
+    const view = (await this.connectionsFor(userId)).find((c) => c.peer.id === (pair[0] === userId ? pair[1] : pair[0]));
     if (!view) throw appError(409, "CONFLICT");
     return view;
   }

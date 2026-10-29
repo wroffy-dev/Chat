@@ -20,6 +20,7 @@ export type ErrorCode =
   | "REQUEST_NOT_PENDING"
   | "QR_INVALID_OR_EXPIRED"
   | "CALL_IN_PROGRESS"
+  | "PEER_BUSY"
   | "CALL_NOT_ACTIVE"
   | "MEDIA_UNAVAILABLE"
   | "CONVERSATION_CLEARED"
@@ -84,6 +85,7 @@ export const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   REQUEST_NOT_PENDING: "This request has already been answered or has expired.",
   QR_INVALID_OR_EXPIRED: "This code is no longer valid. Ask for a new one.",
   CALL_IN_PROGRESS: "A call is already in progress.",
+  PEER_BUSY: "They are on another call. Try again later.",
   CALL_NOT_ACTIVE: "This call is no longer ringing or active.",
   MEDIA_UNAVAILABLE: "Calling is temporarily unavailable.",
   CONVERSATION_CLEARED: "The chat was cleared. Your message was not sent.",
