@@ -8,6 +8,7 @@ import android.text.Editable
 import android.text.format.DateUtils
 import android.text.InputType
 import android.text.TextWatcher
+import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import androidx.activity.ComponentActivity
@@ -114,10 +115,17 @@ fun ChatScreen(
         entryLifecycle.addObserver(observer)
         onDispose { entryLifecycle.removeObserver(observer) }
     }
-    // The recent-apps thumbnail must not show messages (API 33+). Screenshots stay possible.
+    // D-23: while a chat is open, Android blanks it in screenshots, screen recordings, casting and the
+    // recent-apps thumbnail (FLAG_SECURE). It cannot stop a photo taken with another camera, and a
+    // modified (rooted) phone can ignore it.
     DisposableEffect(activity) {
+        val window = activity?.window
+        window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         if (Build.VERSION.SDK_INT >= 33) activity?.setRecentsScreenshotEnabled(false)
-        onDispose { if (Build.VERSION.SDK_INT >= 33) activity?.setRecentsScreenshotEnabled(true) }
+        onDispose {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            if (Build.VERSION.SDK_INT >= 33) activity?.setRecentsScreenshotEnabled(true)
+        }
     }
     LaunchedEffect(Unit) { Push.cancelMessageNotification(context) }
     LaunchedEffect(state.phase) {

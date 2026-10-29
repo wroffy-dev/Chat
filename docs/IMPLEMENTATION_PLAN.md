@@ -310,6 +310,9 @@ the deployed system.
 | App name "Vault" and new launcher icon (D-14): adaptive icon from the owner's artwork on a `#FDF2FF` background; plain ship's-wheel status-bar icon for notifications | Built in CI; **not yet seen on a phone** | — |
 | Up to ten users and many 1-to-1 connections (D-21): `users.slot` 1–10 (migration `20261029060000_up_to_ten_users`), Admin Console creates up to ten and lists every connection, QR codes work while connected, `GET /connections` returns all with `unreadCount`/`lastMessageAt`, `PEER_BUSY` for a person already in another call | Backend tested (127 tests); **not yet on the server or phones** | `test/auth`, `test/admin`, `test/connections`, `test/calls`, `test/chat` integration tests |
 | New look (D-22): chat list Home (initials avatars, name filter, All/Unread, unread badges, live refresh), chat screen with call buttons in the header, white bubbles with times, pill input and round send button; monochrome theme | Built in CI; **not yet seen on a phone** | Android unit test for the chat-list parsing |
+| Chat screen blocks screenshots and screen recording (D-23): `FLAG_SECURE` while a chat is open, cleared when it closes | Built in CI; **not yet tried on a phone** | — |
+| Video calls: the controls (mute, speaker, camera, end) and the name fade out after 4 s without a touch and return on any touch; not while TalkBack is on | Built in CI; **not yet tried on a phone** | — |
+| Mute fixes: a mute chosen while ringing now holds when the call connects (it used to switch the mic back on), quick repeated taps are applied one at a time to the latest state, the mute button shows a crossed-out mic on white when muted, and "You're muted" stays visible while the controls are hidden | Built in CI; **not yet tried on a phone** | `CallControllerTest`: muted while ringing joins muted; repeated taps end muted |
 
 ## Next task
 

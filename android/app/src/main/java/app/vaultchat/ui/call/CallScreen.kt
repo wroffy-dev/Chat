@@ -1,6 +1,10 @@
 package app.vaultchat.ui.call
 
 import android.app.Activity
+import android.view.accessibility.AccessibilityManager
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.activity.compose.BackHandler
 import app.vaultchat.platform.call.CallForegroundService
 import app.vaultchat.platform.push.Push
@@ -16,10 +20,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -27,6 +33,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,6 +61,7 @@ import app.vaultchat.domain.call.CallKind
 import app.vaultchat.domain.call.CallPhase
 import app.vaultchat.domain.permissions.AppPermission
 import app.vaultchat.domain.permissions.PermissionStatus
+import app.vaultchat.ui.components.AppIcons
 import app.vaultchat.ui.components.PrimaryButton
 import app.vaultchat.ui.permissions.PermissionPreferences
 import app.vaultchat.ui.permissions.openAppSettings
@@ -108,8 +122,33 @@ fun CallScreen(
     // Back hangs up rather than leaving a call running behind the app.
     BackHandler(enabled = state.phase != CallPhase.ENDED) { viewModel.controller.hangup() }
 
+    // In a connected video call the controls fade out after 4 s without a touch and come back on
+    // any touch. Not with TalkBack on: its users must always be able to reach the buttons.
+    val accessibility = remember(context) { context.getSystemService(AccessibilityManager::class.java) }
+    val autoHide = kind == CallKind.VIDEO && state.phase == CallPhase.ACTIVE && accessibility?.isTouchExplorationEnabled != true
+    var controlsVisible by remember { mutableStateOf(true) }
+    var lastTouch by remember { mutableIntStateOf(0) }
+    LaunchedEffect(autoHide, lastTouch) {
+        controlsVisible = true
+        if (autoHide) {
+            delay(CONTROLS_HIDE_MS)
+            controlsVisible = false
+        }
+    }
+
     Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF0E1013), contentColor = Color.White) {
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier.fillMaxSize().pointerInput(Unit) {
+                // Sees every touch before the buttons do, without consuming it, so a button press
+                // also restarts the timer.
+                awaitPointerEventScope {
+                    while (true) {
+                        awaitPointerEvent(PointerEventPass.Initial)
+                        lastTouch++
+                    }
+                }
+            },
+        ) {
             if (kind == CallKind.VIDEO && remoteVideo != null && state.phase in setOf(CallPhase.ACTIVE, CallPhase.RECONNECTING)) {
                 VideoView(viewModel.media.room, remoteVideo, mirror = false, modifier = Modifier.fillMaxSize())
             }
@@ -144,6 +183,24 @@ fun CallScreen(
                 )
             }
 
+            // With the controls hidden, a small reminder that the microphone is off.
+            if (!controlsVisible && !state.micOn) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .safeDrawingPadding()
+                        .padding(24.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(Color.Black.copy(alpha = 0.6f))
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                ) {
+                    Icon(AppIcons.MicOff, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(stringResource(R.string.call_muted), style = MaterialTheme.typography.labelLarge)
+                }
+            }
+            AnimatedVisibility(visible = controlsVisible, enter = fadeIn(), exit = fadeOut()) {
             Column(
                 modifier = Modifier.fillMaxSize().safeDrawingPadding().padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -196,9 +253,12 @@ fun CallScreen(
                     )
                 }
             }
+            }
         }
     }
 }
+
+private const val CONTROLS_HIDE_MS = 4_000L
 
 @Composable
 private fun Controls(
@@ -214,7 +274,18 @@ private fun Controls(
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilledTonalButton(onClick = onMic) { Text(stringResource(if (micOn) R.string.call_mute else R.string.call_unmute)) }
+            // Muted is shown loudly (white button, crossed-out mic) so it is never mistaken for live.
+            FilledTonalButton(
+                onClick = onMic,
+                colors = if (micOn) ButtonDefaults.filledTonalButtonColors() else ButtonDefaults.filledTonalButtonColors(
+                    containerColor = Color.White,
+                    contentColor = Color.Black,
+                ),
+            ) {
+                Icon(if (micOn) AppIcons.Mic else AppIcons.MicOff, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(if (micOn) R.string.call_mute else R.string.call_unmute))
+            }
             FilledTonalButton(onClick = onSpeaker) { Text(stringResource(if (speakerOn) R.string.call_earpiece else R.string.call_speaker)) }
         }
         if (kind == CallKind.VIDEO) {

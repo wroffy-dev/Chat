@@ -59,7 +59,7 @@ may hold the admin credential and one app account, but they are separate credent
   **No media upload endpoints will exist.**
 - Group chats or group calls (rooms are limited to 2 participants).
 - Deleting or archiving the connection (not available in the initial version).
-- Screenshot blocking (screenshots are allowed by requirement).
+- ~~Screenshot blocking (screenshots are allowed by requirement).~~ Changed by D-23: chats block screenshots and recording.
 - Call recording of any kind, including background capture.
 - Analytics SDKs, advertising SDKs, crash reporters that upload user content.
 - iOS, web, or desktop clients.
@@ -75,7 +75,9 @@ may hold the admin credential and one app account, but they are separate credent
 - **Calls:** Quality adapts automatically. When bandwidth is short, audio is protected first and video
   resolution/frame rate drops. 1080p30 is a target when both devices and networks support it, not a
   guarantee.
-- **Screenshots:** allowed. The app does not claim to prevent screenshots or external recording.
+- **Screenshots (D-23, 2026-10-29):** the chat screen sets `FLAG_SECURE`, so Android blanks it in screenshots,
+  screen recordings and casting. This is not a guarantee: a second camera, or a rooted/modified phone, can
+  still capture it. Other screens (chat list, calls, QR) are not covered.
 
 ## 8. Non-functional targets (proposed)
 

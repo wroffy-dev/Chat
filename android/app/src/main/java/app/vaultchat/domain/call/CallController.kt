@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 enum class CallPhase { STARTING, RINGING_OUT, RINGING_IN, CONNECTING, ACTIVE, RECONNECTING, ENDED }
 
@@ -56,6 +58,8 @@ class CallController(
     /** Live "call changed" signals: the status is re-read at once and polled slowly while connected. */
     private val signals: RealtimeSignals? = null,
 ) {
+    private val deviceLock = Mutex()
+
     companion object {
         const val STATUS_POLL_MS = 2_000L
         const val SIGNALLED_STATUS_POLL_MS = 10_000L
@@ -162,16 +166,31 @@ class CallController(
     }
 
     fun toggleMicrophone() {
-        val on = !_state.value.micOn
-        _state.update { it.copy(micOn = on) }
-        scope.launch { media.setMicrophoneEnabled(on) }
+        _state.update { it.copy(micOn = !it.micOn) }
+        applyDevice(microphone = true)
     }
 
     fun toggleCamera() {
         if (_state.value.kind != CallKind.VIDEO) return
-        val on = !_state.value.cameraOn
-        _state.update { it.copy(cameraOn = on) }
-        scope.launch { media.setCameraEnabled(on) }
+        _state.update { it.copy(cameraOn = !it.cameraOn) }
+        applyDevice(microphone = false)
+    }
+
+    /**
+     * Brings the microphone and camera in line with the screen. One change at a time, always to the
+     * latest wish: quick repeated taps cannot finish out of order and leave the mic in the wrong state.
+     */
+    private fun applyDevice(microphone: Boolean) {
+        scope.launch {
+            deviceLock.withLock {
+                val s = _state.value
+                try {
+                    if (microphone) media.setMicrophoneEnabled(s.micOn) else media.setCameraEnabled(s.cameraOn)
+                } catch (_: Exception) {
+                    // Not connected yet, or the device refused: connect() applies the wish later.
+                }
+            }
+        }
     }
 
     fun switchCamera() = media.switchCamera()
@@ -191,7 +210,7 @@ class CallController(
     // ---------------------------------------------------------------------------------------------
 
     private suspend fun joinMedia(join: JoinInfo, kind: CallKind): Boolean = try {
-        media.connect(join.livekitUrl, join.livekitToken, video = kind == CallKind.VIDEO)
+        media.connect(join.livekitUrl, join.livekitToken, video = kind == CallKind.VIDEO, micOn = _state.value.micOn, cameraOn = _state.value.cameraOn)
         media.setSpeakerphone(_state.value.speakerOn)
         true
     } catch (_: Exception) {

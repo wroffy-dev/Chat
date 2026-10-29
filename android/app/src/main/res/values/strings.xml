@@ -115,6 +115,7 @@
     <string name="call_end">End call</string>
     <string name="call_mute">Mute</string>
     <string name="call_unmute">Unmute</string>
+    <string name="call_muted">You\'re muted</string>
     <string name="call_speaker">Speaker</string>
     <string name="call_earpiece">Earpiece</string>
     <string name="call_camera_off">Camera off</string>
@@ -131,7 +132,7 @@
     <string name="loading">Loading</string>
     <string name="channel_messages">Messages</string>
     <string name="chat_new_message">New message</string>
-    <string name="chat_deletion_rule">Messages you have both seen are deleted when either of you leaves the chat, including about a minute after you leave the app. Unseen messages wait, for up to 24 hours. Screenshots are still possible.</string>
+    <string name="chat_deletion_rule">Messages you have both seen are deleted when either of you leaves the chat, including about a minute after you leave the app. Unseen messages wait, for up to 24 hours. Screenshots and screen recording of this screen are blocked; a photo from another camera is still possible.</string>
     <string name="chat_input_hint">Message</string>
     <string name="chat_send">Send</string>
     <string name="chat_sending">Sending…</string>

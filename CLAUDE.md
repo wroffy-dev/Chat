@@ -31,7 +31,8 @@ decisions there are either recorded as decided or still open; never decide an op
   is a separate operational identity, not an app user.
 - Chat deletion follows decisions D-01 (option D) and D-02 (60 s lease, 24 h backstop) in docs/17 — do not change them without the owner.
 - Location sharing is a **proposal requiring approval**; do not implement it without sign-off.
-- Do not claim end-to-end encryption, screenshot prevention, or guaranteed deletion.
+- Do not claim end-to-end encryption, guaranteed screenshot prevention, or guaranteed deletion. (Chats set
+  `FLAG_SECURE` per D-23, which stops ordinary screenshots and recordings, not another camera or a rooted phone.)
 - Do not claim the VPS supports N simultaneous calls or 1080p without real-device test results.
 - Never deploy to or modify the live server as part of documentation or code work unless asked.
 
