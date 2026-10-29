@@ -27,6 +27,8 @@ data class StatsSample(
     /** "host", "srflx", "prflx" or "relay"; never an address. */
     val candidateType: String? = null,
     val protocol: String? = null,
+    /** The sender's bandwidth estimate for this connection, bits per second (candidate-pair stats). */
+    val availableOutgoingBitrate: Double? = null,
 )
 
 /** Reads the standard WebRTC stats types (inbound-rtp, outbound-rtp, candidate-pair, local-candidate). */
@@ -65,6 +67,7 @@ object WebRtcStats {
             concealmentEvents = inAudio.sumOf { it.long("concealmentEvents") },
             candidateType = local?.str("candidateType"),
             protocol = local?.str("protocol"),
+            availableOutgoingBitrate = pairs.firstNotNullOfOrNull { it.num("availableOutgoingBitrate") },
         )
     }
 

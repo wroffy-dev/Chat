@@ -313,6 +313,7 @@ the deployed system.
 | Chat screen blocks screenshots and screen recording (D-23): `FLAG_SECURE` while a chat is open, cleared when it closes | Built in CI; **not yet tried on a phone** | — |
 | Video calls: the controls (mute, speaker, camera, end) and the name fade out after 4 s without a touch and return on any touch; not while TalkBack is on | Built in CI; **not yet tried on a phone** | — |
 | Mute fixes: a mute chosen while ringing now holds when the call connects (it used to switch the mic back on), quick repeated taps are applied one at a time to the latest state, the mute button shows a crossed-out mic on white when muted, and "You're muted" stays visible while the controls are hidden | Built in CI; **not yet tried on a phone** | `CallControllerTest`: muted while ringing joins muted; repeated taps end muted |
+| Video quality during a call: "Quality" button (Auto/1080p/720p/540p/360p) with a recommendation from the measured connection (`QualityAdvisor`: bandwidth estimate, RTT, loss); a change restarts the camera track at the new size | Built in CI; **not yet tried on a phone; thresholds untuned** | `QualityAdvisorTest`, `CallControllerTest` |
 
 ## Next task
 

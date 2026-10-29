@@ -141,6 +141,30 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
         CaptureQuality.P1080 -> VideoPreset169.H1080
         CaptureQuality.P720 -> VideoPreset169.H720
         CaptureQuality.P540 -> VideoPreset169.H540
+        CaptureQuality.P360 -> VideoPreset169.H360
+    }
+
+    override val autoQuality: CaptureQuality get() = quality
+
+    /**
+     * New defaults for the camera track, then the published track is replaced: LiveKit cannot change
+     * capture size and encoding of a live track, so the camera stops and restarts (a short pause).
+     * The facing camera and on/off state are kept.
+     */
+    override suspend fun setVideoQuality(quality: CaptureQuality) {
+        val p = preset(quality)
+        val publication = room.localParticipant.getTrackPublication(Track.Source.CAMERA)
+        val old = publication?.track as? LocalVideoTrack
+        room.videoTrackCaptureDefaults = room.videoTrackCaptureDefaults.copy(
+            captureParams = p.capture,
+            position = old?.options?.position ?: room.videoTrackCaptureDefaults.position,
+        )
+        room.videoTrackPublishDefaults = room.videoTrackPublishDefaults.copy(videoEncoding = p.encoding)
+        if (room.state != Room.State.CONNECTED || old == null) return
+        val wasOn = publication?.muted == false
+        room.localParticipant.unpublishTrack(old)
+        _localVideo.value = null
+        if (wasOn) setCameraEnabled(true)
     }
 
     override fun disconnect() {
