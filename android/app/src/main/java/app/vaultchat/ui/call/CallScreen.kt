@@ -270,6 +270,8 @@ fun CallScreen(
                         recommended = state.recommendedQuality,
                         onQuality = { qualityPicker = true },
                         onSpeaker = viewModel.controller::toggleSpeaker,
+                        noiseFilter = if (viewModel.controller.noiseReductionAvailable) state.noiseReduction else null,
+                        onNoiseFilter = viewModel.controller::toggleNoiseReduction,
                         onEnd = viewModel.controller::hangup,
                     )
                 }
@@ -361,6 +363,9 @@ private fun Controls(
     recommended: CaptureQuality?,
     onQuality: () -> Unit,
     onSpeaker: () -> Unit,
+    /** Null when the phone cannot run the noise filter. */
+    noiseFilter: Boolean?,
+    onNoiseFilter: () -> Unit,
     onEnd: () -> Unit,
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -378,6 +383,11 @@ private fun Controls(
                 Text(stringResource(if (micOn) R.string.call_mute else R.string.call_unmute))
             }
             FilledTonalButton(onClick = onSpeaker) { Text(stringResource(if (speakerOn) R.string.call_earpiece else R.string.call_speaker)) }
+        }
+        if (noiseFilter != null) {
+            FilledTonalButton(onClick = onNoiseFilter) {
+                Text(stringResource(if (noiseFilter) R.string.call_noise_filter_on else R.string.call_noise_filter_off))
+            }
         }
         if (kind == CallKind.VIDEO) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

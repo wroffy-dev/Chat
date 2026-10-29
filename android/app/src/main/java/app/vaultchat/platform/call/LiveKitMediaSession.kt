@@ -30,6 +30,7 @@ import io.livekit.android.LiveKit
 import io.livekit.android.LiveKitOverrides
 import io.livekit.android.RoomOptions
 import io.livekit.android.audio.AudioHandler
+import io.livekit.android.audio.AudioProcessorOptions
 import io.livekit.android.audio.AudioSwitchHandler
 import io.livekit.android.events.RoomEvent
 import io.livekit.android.room.Room
@@ -58,6 +59,7 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
     val quality: CaptureQuality = chooseQuality(appContext)
 
     private val audio = HandoverAudioHandler(AudioSwitchHandler(appContext))
+    private val denoiser = RnNoiseProcessor()
 
     val room: Room = LiveKit.create(
         appContext,
@@ -72,7 +74,12 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
                 simulcastLayers = layersBelow(quality),
             ),
         ),
-        LiveKitOverrides(audioOptions = AudioOptions(audioHandler = audio)),
+        LiveKitOverrides(
+            audioOptions = AudioOptions(
+                audioHandler = audio,
+                audioProcessorOptions = AudioProcessorOptions(capturePostProcessor = denoiser),
+            ),
+        ),
     )
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -230,6 +237,12 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
         }
     }
 
+    override val noiseReductionAvailable: Boolean get() = RnNoiseProcessor.available
+
+    override fun setNoiseReduction(enabled: Boolean) {
+        denoiser.enabled = enabled
+    }
+
     override fun disconnect() {
         if (released) return
         released = true
@@ -237,6 +250,7 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
         _remoteVideo.value = null
         room.disconnect()
         room.release()
+        denoiser.release()
         scope.cancel()
     }
 

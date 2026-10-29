@@ -61,6 +61,10 @@ interface MediaSession {
      * size may adapt to the network as in Auto.
      */
     suspend fun setVideoQuality(quality: CaptureQuality, forced: Boolean) = Unit
+    /** True when the on-device noise filter can run on this phone. */
+    val noiseReductionAvailable: Boolean get() = false
+    /** Turns the noise filter for the sent voice on or off; takes effect on the next 10 ms frame. */
+    fun setNoiseReduction(enabled: Boolean) = Unit
     fun switchCamera()
     fun setSpeakerphone(enabled: Boolean)
     /** Releases camera, microphone and the connection. Safe to call more than once. */
