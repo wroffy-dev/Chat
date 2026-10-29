@@ -260,6 +260,22 @@ class CallControllerTest {
     }
 
     @Test
+    fun `the other person's mute is shown as the server reports it`() = runTest {
+        val c = controller()
+        c.startOutgoing("conn", CallKind.VIDEO, "bob")
+        runCurrent()
+        media.events.emit(MediaEvent.RemoteJoined)
+        runCurrent()
+        assertTrue(c.state.value.remoteMicOn)
+        media.events.emit(MediaEvent.RemoteMicrophone(on = false))
+        runCurrent()
+        assertFalse(c.state.value.remoteMicOn)
+        media.events.emit(MediaEvent.RemoteMicrophone(on = true))
+        runCurrent()
+        assertTrue(c.state.value.remoteMicOn)
+    }
+
+    @Test
     fun `the noise filter starts on and can be turned off and on again`() = runTest {
         val c = controller()
         c.startOutgoing("conn", CallKind.VOICE, "bob")
