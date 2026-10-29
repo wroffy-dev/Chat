@@ -1,6 +1,10 @@
 package app.vaultchat.ui.call
 
 import android.app.Activity
+import android.view.accessibility.AccessibilityManager
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.activity.compose.BackHandler
 import app.vaultchat.platform.call.CallForegroundService
 import app.vaultchat.platform.push.Push
@@ -27,6 +31,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -108,8 +119,33 @@ fun CallScreen(
     // Back hangs up rather than leaving a call running behind the app.
     BackHandler(enabled = state.phase != CallPhase.ENDED) { viewModel.controller.hangup() }
 
+    // In a connected video call the controls fade out after 4 s without a touch and come back on
+    // any touch. Not with TalkBack on: its users must always be able to reach the buttons.
+    val accessibility = remember(context) { context.getSystemService(AccessibilityManager::class.java) }
+    val autoHide = kind == CallKind.VIDEO && state.phase == CallPhase.ACTIVE && accessibility?.isTouchExplorationEnabled != true
+    var controlsVisible by remember { mutableStateOf(true) }
+    var lastTouch by remember { mutableIntStateOf(0) }
+    LaunchedEffect(autoHide, lastTouch) {
+        controlsVisible = true
+        if (autoHide) {
+            delay(CONTROLS_HIDE_MS)
+            controlsVisible = false
+        }
+    }
+
     Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF0E1013), contentColor = Color.White) {
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier.fillMaxSize().pointerInput(Unit) {
+                // Sees every touch before the buttons do, without consuming it, so a button press
+                // also restarts the timer.
+                awaitPointerEventScope {
+                    while (true) {
+                        awaitPointerEvent(PointerEventPass.Initial)
+                        lastTouch++
+                    }
+                }
+            },
+        ) {
             if (kind == CallKind.VIDEO && remoteVideo != null && state.phase in setOf(CallPhase.ACTIVE, CallPhase.RECONNECTING)) {
                 VideoView(viewModel.media.room, remoteVideo, mirror = false, modifier = Modifier.fillMaxSize())
             }
@@ -144,6 +180,7 @@ fun CallScreen(
                 )
             }
 
+            AnimatedVisibility(visible = controlsVisible, enter = fadeIn(), exit = fadeOut()) {
             Column(
                 modifier = Modifier.fillMaxSize().safeDrawingPadding().padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -196,9 +233,12 @@ fun CallScreen(
                     )
                 }
             }
+            }
         }
     }
 }
+
+private const val CONTROLS_HIDE_MS = 4_000L
 
 @Composable
 private fun Controls(
