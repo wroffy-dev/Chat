@@ -49,6 +49,8 @@ data class CallState(
     val recommendedQuality: CaptureQuality? = null,
     /** On-device background-noise filter for the sent voice (docs/08 §8); on by default. */
     val noiseReduction: Boolean = true,
+    /** The other person's microphone as the server sees it; shown as "<name> is muted" when off. */
+    val remoteMicOn: Boolean = true,
 )
 
 /**
@@ -273,6 +275,7 @@ class CallController(
                         watchdog?.cancel()
                         _state.update { it.copy(phase = if (it.remotePresent) CallPhase.ACTIVE else CallPhase.CONNECTING) }
                     }
+                    is MediaEvent.RemoteMicrophone -> _state.update { it.copy(remoteMicOn = e.on) }
                     MediaEvent.Disconnected -> if (_state.value.phase != CallPhase.ENDED) {
                         finish(CallEndReason.NETWORK_LOST, notifyServer = true, serverReason = "network_lost")
                     }

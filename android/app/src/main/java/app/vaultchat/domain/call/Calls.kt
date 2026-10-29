@@ -40,6 +40,8 @@ sealed interface MediaEvent {
     data object RemoteLeft : MediaEvent
     data object Reconnecting : MediaEvent
     data object Reconnected : MediaEvent
+    /** The other person's microphone, as the server reports it: published and not muted. */
+    data class RemoteMicrophone(val on: Boolean) : MediaEvent
     /** The media connection is gone for good (server closed the room, or could not reconnect). */
     data object Disconnected : MediaEvent
 }

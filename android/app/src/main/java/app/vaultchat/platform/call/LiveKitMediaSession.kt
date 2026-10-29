@@ -41,6 +41,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -97,7 +98,18 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
         scope.launch {
             room.events.events.collect { e ->
                 when (e) {
-                    is RoomEvent.ParticipantConnected -> _events.emit(MediaEvent.RemoteJoined)
+                    is RoomEvent.ParticipantConnected -> {
+                        _events.emit(MediaEvent.RemoteJoined)
+                        // Their microphone is published a moment after they join; a peer who joined
+                        // muted never publishes it, so look once that moment has passed.
+                        launch {
+                            delay(3_000)
+                            emitRemoteMicrophone()
+                        }
+                    }
+                    // The server relays the other phone's mute; "muted" here means it really sends nothing.
+                    is RoomEvent.TrackMuted, is RoomEvent.TrackUnmuted, is RoomEvent.TrackPublished,
+                    is RoomEvent.TrackUnpublished -> emitRemoteMicrophone()
                     is RoomEvent.ParticipantDisconnected -> {
                         _remoteVideo.value = null
                         _events.emit(MediaEvent.RemoteLeft)
@@ -117,7 +129,10 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
         room.connect(url, token)
         joined = true
         // The caller joins while it rings, so for the callee the peer is often already there.
-        if (room.remoteParticipants.isNotEmpty()) _events.emit(MediaEvent.RemoteJoined)
+        if (room.remoteParticipants.isNotEmpty()) {
+            _events.emit(MediaEvent.RemoteJoined)
+            emitRemoteMicrophone()
+        }
         room.localParticipant.setMicrophoneEnabled(micOn)
         if (video) setCameraEnabled(cameraOn)
     }
@@ -149,6 +164,13 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
 
     override fun switchCamera() {
         (room.localParticipant.getTrackPublication(Track.Source.CAMERA)?.track as? LocalVideoTrack)?.switchCamera()
+    }
+
+    /** The other person's microphone: on only while it is published and not muted. */
+    private suspend fun emitRemoteMicrophone() {
+        val peer = room.remoteParticipants.values.firstOrNull() ?: return
+        val mic = peer.getTrackPublication(Track.Source.MICROPHONE)
+        _events.emit(MediaEvent.RemoteMicrophone(on = mic != null && !mic.muted))
     }
 
     /** The system call (core-telecom) routes audio from now on; see [HandoverAudioHandler]. */

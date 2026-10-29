@@ -296,6 +296,9 @@ Permissions are requested at the moment they are needed, with a one-line explana
 
 Controls: mute/unmute mic, camera on/off, switch front/back, speaker/earpiece/Bluetooth picker, end call.
 Camera switch uses the SDK's camera switching on the local video track (CameraX module optional).
+When the other person is muted the screen says "<name> is muted" (**Implemented** 2026-10-29). It follows
+the LiveKit server's view of their microphone (published and not muted), so it also confirms a mute
+reached the server.
 
 ## 11. Call statistics and diagnostics
 

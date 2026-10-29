@@ -88,6 +88,7 @@ fun CallScreen(
     onClose: () -> Unit,
 ) {
     val state by viewModel.controller.state.collectAsStateWithLifecycle()
+    val peerMuted = state.remotePresent && !state.remoteMicOn && state.phase != CallPhase.ENDED
     val remoteVideo by viewModel.media.remoteVideo.collectAsStateWithLifecycle()
     val localVideo by viewModel.media.localVideo.collectAsStateWithLifecycle()
     val liveStats by viewModel.controller.liveStats.collectAsStateWithLifecycle()
@@ -201,6 +202,14 @@ fun CallScreen(
                 )
             }
 
+            // The other person's mute stays visible with the controls hidden too.
+            if (!controlsVisible && peerMuted) {
+                MutedPill(
+                    stringResource(R.string.call_peer_muted, state.peerUsername),
+                    Modifier.align(Alignment.TopCenter).safeDrawingPadding().padding(24.dp),
+                )
+            }
+
             // With the controls hidden, a small reminder that the microphone is off.
             if (!controlsVisible && !state.micOn) {
                 Row(
@@ -232,6 +241,10 @@ fun CallScreen(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                 )
+                if (peerMuted) {
+                    Spacer(Modifier.height(8.dp))
+                    MutedPill(stringResource(R.string.call_peer_muted, state.peerUsername))
+                }
 
                 Spacer(Modifier.weight(1f))
 
@@ -282,6 +295,22 @@ fun CallScreen(
 }
 
 private const val CONTROLS_HIDE_MS = 4_000L
+
+@Composable
+private fun MutedPill(text: String, modifier: Modifier = Modifier) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .clip(RoundedCornerShape(50))
+            .background(Color.Black.copy(alpha = 0.6f))
+            .padding(horizontal = 14.dp, vertical = 8.dp)
+            .semantics { liveRegion = LiveRegionMode.Polite },
+    ) {
+        Icon(AppIcons.MicOff, contentDescription = null, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(text, style = MaterialTheme.typography.labelLarge)
+    }
+}
 
 @Composable
 private fun qualityLabel(choice: VideoQualityChoice): String = when (choice) {
