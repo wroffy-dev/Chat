@@ -75,6 +75,8 @@ class CallController(
         const val RECONNECT_GIVE_UP_MS = 30_000L
         /** After accepting, how long to wait for the other side's media before failing. */
         const val JOIN_GIVE_UP_MS = 30_000L
+        /** An unanswered incoming call is answered by the phone itself after this long (owner request). */
+        const val AUTO_ANSWER_MS = 10_000L
         /** How often call statistics are sampled while media flows (docs/08 §11). */
         const val STATS_INTERVAL_MS = 2_000L
     }
@@ -91,6 +93,7 @@ class CallController(
     private var mediaEvents: Job? = null
     private var watchdog: Job? = null
     private var statsJob: Job? = null
+    private var autoAnswer: Job? = null
     private val stats = CallStatsAggregator()
     /** The last few samples, for the quality recommendation. */
     private val recent = ArrayDeque<StatsSample>()
@@ -131,12 +134,18 @@ class CallController(
             speakerOn = info.kind == CallKind.VIDEO,
         )
         pollStatus()
+        // The phone still rings (sound and screen) for this long; the person can decline within it.
+        autoAnswer = scope.launch {
+            delay(AUTO_ANSWER_MS)
+            if (_state.value.phase == CallPhase.RINGING_IN) accept()
+        }
     }
 
     fun accept() {
         val s = _state.value
         val id = s.callId ?: return
         if (s.phase != CallPhase.RINGING_IN) return
+        autoAnswer?.cancel()
         _state.update { it.copy(phase = CallPhase.CONNECTING) }
         scope.launch {
             when (val r = repo.accept(id)) {
@@ -386,5 +395,6 @@ class CallController(
         poller?.cancel()
         watchdog?.cancel()
         mediaEvents?.cancel()
+        autoAnswer?.cancel()
     }
 }

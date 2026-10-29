@@ -89,6 +89,15 @@ A app                 Backend                         LiveKit                 FC
 Caller pre-connection (joining the room and publishing while ringing) removes connection time from the
 callee's perceived setup time. The caller's outgoing video is not sent to anyone until B subscribes.
 
+### 4.3 Auto-answer
+
+**Implemented (2026-10-29, owner request; this is a private app of at most ten QR-paired people, D-21).**
+An incoming call that the person does not pick up is answered by the phone itself after
+`AUTO_ANSWER_MS` (10 s), with camera and microphone on. It is not silent: the phone rings (sound and the
+incoming-call screen) for those 10 s and the person can decline within them, and once answered the normal
+in-call screen is shown (mute, camera, hang-up). The ring timeout that marks a call missed is longer
+(`ringSeconds`, 45 s), so auto-answer takes effect first.
+
 ## 5. Connectivity: STUN, TURN, UDP, TCP and NAT
 
 The VPS has a public IP, so phones normally connect straight to the SFU. Candidate order, best first:
@@ -165,7 +174,10 @@ Every end path runs the same cleanup on the device:
 
 ## 8. Adaptive quality policy
 
-**User choice during a call (Implemented, 2026-10-29, owner request).** In a video call the "Quality"
+**Removed from the screen (2026-10-29, owner request): the sent video is always Auto.** The picker
+described next is no longer shown; its code (`setVideoQuality`, `QualityAdvisor`) remains unused.
+
+**User choice during a call (was Implemented, 2026-10-29).** In a video call the "Quality"
 button lets the user pick the size they send: Auto (the phone's own pick above), 1080p, 720p, 540p or
 360p (data saver). The app recommends one from this call's measured connection (`QualityAdvisor`): the
 median WebRTC `availableOutgoingBitrate` of the last five stats samples (≥ 2.5 Mbps → 1080p,

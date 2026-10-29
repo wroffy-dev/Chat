@@ -115,15 +115,6 @@
     <string name="call_end">End call</string>
     <string name="call_mute">Mute</string>
     <string name="call_unmute">Unmute</string>
-    <string name="call_quality_button">Quality: %1$s</string>
-    <string name="call_quality_auto">Auto</string>
-    <string name="call_quality_auto_long">Auto (the phone decides)</string>
-    <string name="call_quality_saver">%1$s · data saver</string>
-    <string name="call_quality_title">Video you send</string>
-    <string name="call_quality_measured">Your connection in this call suits %1$s.</string>
-    <string name="call_quality_measuring">Measuring your connection…</string>
-    <string name="call_quality_recommended">recommended</string>
-    <string name="call_quality_note">Auto adapts to the network. A fixed size is sent exactly as chosen, at 30 fps; on a weak network the picture gets blockier rather than smaller. Changing it restarts your camera for a moment.</string>
     <string name="call_muted">You\'re muted</string>
     <string name="call_peer_muted">%1$s is muted</string>
     <string name="call_speaker">Speaker</string>

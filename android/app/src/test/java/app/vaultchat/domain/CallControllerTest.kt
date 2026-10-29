@@ -156,6 +156,32 @@ class CallControllerTest {
     }
 
     @Test
+    fun `an unanswered incoming call is answered by the phone after 10 s`() = runTest {
+        val c = controller()
+        c.showIncoming(CallInfo("c9", CallKind.VIDEO, CallStatus.RINGING, false, "alice"))
+        assertEquals(CallPhase.RINGING_IN, c.state.value.phase)
+        advanceTimeBy(CallController.AUTO_ANSWER_MS - 1)
+        runCurrent()
+        assertEquals("still ringing just before the timeout", CallPhase.RINGING_IN, c.state.value.phase)
+        advanceTimeBy(2)
+        runCurrent()
+        assertTrue("accept" in repo.calls)
+        assertTrue(media.connected)
+    }
+
+    @Test
+    fun `an incoming call declined before 10 s is not auto-answered`() = runTest {
+        val c = controller()
+        c.showIncoming(CallInfo("c9", CallKind.VOICE, CallStatus.RINGING, false, "alice"))
+        c.decline()
+        runCurrent()
+        advanceTimeBy(CallController.AUTO_ANSWER_MS + 1)
+        runCurrent()
+        assertFalse("accept" in repo.calls)
+        assertEquals(CallEndReason.DECLINED, c.state.value.endReason)
+    }
+
+    @Test
     fun `declining an incoming call tells the server`() = runTest {
         val c = controller()
         c.showIncoming(CallInfo("c9", CallKind.VOICE, CallStatus.RINGING, false, "alice"))

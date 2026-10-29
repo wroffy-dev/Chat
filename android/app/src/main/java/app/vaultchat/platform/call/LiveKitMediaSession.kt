@@ -78,7 +78,7 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
         LiveKitOverrides(
             audioOptions = AudioOptions(
                 audioHandler = audio,
-                audioProcessorOptions = AudioProcessorOptions(capturePostProcessor = denoiser),
+                audioProcessorOptions = if (NOISE_FILTER) AudioProcessorOptions(capturePostProcessor = denoiser) else null,
             ),
         ),
     )
@@ -259,7 +259,7 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
         }
     }
 
-    override val noiseReductionAvailable: Boolean get() = RnNoiseProcessor.available
+    override val noiseReductionAvailable: Boolean get() = NOISE_FILTER && RnNoiseProcessor.available
 
     override fun setNoiseReduction(enabled: Boolean) {
         denoiser.enabled = enabled
@@ -292,6 +292,12 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
 
     private fun RTCStatsReport.toRaw(): List<RawStat> = statsMap.values.map { RawStat(it.id, it.type, it.members) }
 }
+
+/**
+ * Noise filter off while calls that stopped connecting after it was added (v114, 2026-10-29) are
+ * investigated; the button is hidden and audio goes straight through, as before.
+ */
+private const val NOISE_FILTER = false
 
 /** Device capability check for 1080p capture (docs/08-calling.md §8). */
 private fun chooseQuality(context: Context): CaptureQuality {
