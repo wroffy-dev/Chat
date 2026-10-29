@@ -120,8 +120,9 @@ on screen; this is what decides which messages an exit deletes.
 3. On every chat-screen open and every socket reconnect, the app calls `GET /messages` and replaces
    its state with the server's. A stale cache therefore cannot restore deleted content.
 4. Notifications for new messages say only "New message" — no sender text, no preview (see [10](10-notifications.md)).
-5. The chat activity calls `setRecentsScreenshotEnabled(false)` (API 33+) so the recent-apps thumbnail
-   does not show messages. This does **not** block screenshots, which remain allowed.
+5. While a chat is open the window has `FLAG_SECURE` (D-23): Android blanks it in screenshots, screen
+   recordings, casting and the recent-apps thumbnail (plus `setRecentsScreenshotEnabled(false)` on API 33+).
+   A photo from another camera, or a rooted phone, can still capture it.
 6. The text field should request no personalised learning from the keyboard
    (`EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING`) — the keyboard may ignore this hint. Implemented
    with a platform `EditText` (Compose 1.7 text fields have no API for it). The draft is held in memory
@@ -201,7 +202,8 @@ The original question, for the record:
 
 Deletion from the server and the two apps **cannot** remove copies made outside the app's control:
 
-- Screenshots and screen recordings (allowed by requirement).
+- Photos of the screen taken with another device, and capture on rooted/modified phones (`FLAG_SECURE`,
+  D-23, stops ordinary screenshots and recordings only).
 - Photos of the screen taken with another device.
 - Content on rooted or modified devices, or modified APKs that save messages.
 - Text the keyboard app may have learned or stored, and the clipboard if the user copied text.

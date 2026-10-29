@@ -115,7 +115,8 @@ Reference frameworks: OWASP ASVS (backend/API/admin) and OWASP MASVS (Android). 
 
 ## 7. Screenshots and recording
 
-- Screenshots and screen recording are **allowed**; no `FLAG_SECURE`.
+- The chat screen sets `FLAG_SECURE` (D-23, 2026-10-29): ordinary screenshots, screen recordings and casting
+  show it blank. Other screens are not covered.
 - The app cannot prevent screenshots, screen recording, rooted-device capture, or a second camera
   pointed at the screen, and will not claim to.
 - The app never records calls and never captures camera/microphone outside a call the user started or accepted.
