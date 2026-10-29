@@ -123,7 +123,7 @@
     <string name="call_quality_measured">Your connection in this call suits %1$s.</string>
     <string name="call_quality_measuring">Measuring your connection…</string>
     <string name="call_quality_recommended">recommended</string>
-    <string name="call_quality_note">Changing it restarts your camera for a moment. On a weak network the picture is still lowered automatically.</string>
+    <string name="call_quality_note">Auto adapts to the network. A fixed size is sent exactly as chosen, at 30 fps; on a weak network the picture gets blockier rather than smaller. Changing it restarts your camera for a moment.</string>
     <string name="call_muted">You\'re muted</string>
     <string name="call_speaker">Speaker</string>
     <string name="call_earpiece">Earpiece</string>

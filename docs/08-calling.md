@@ -171,7 +171,13 @@ button lets the user pick the size they send: Auto (the phone's own pick above),
 median WebRTC `availableOutgoingBitrate` of the last five stats samples (≥ 2.5 Mbps → 1080p,
 ≥ 1.2 → 720p, ≥ 0.6 → 540p, else 360p; by round-trip time alone when no estimate exists), one step lower
 with > 5 % loss or > 350 ms RTT. The thresholds are starting values to be tuned from real calls
-(docs/09). A change restarts the camera in place (LiveKit `LocalVideoTrack.restartTrack`): the publication stays, video pauses briefly. With the camera off the new size waits until it is turned on.
+(docs/09). A change republishes the camera on a fresh track (video pauses briefly; with the camera off it waits
+until the camera is turned on). **A fixed size is forced (owner request):** one layer (no simulcast,
+so neither the SFU nor the receiver can pick a smaller one), 30 fps, and WebRTC degradation DISABLED,
+so the size and frame rate stay and a weak network makes the picture blockier instead. **Auto** keeps
+simulcast with LiveKit's camera default (keep 30 fps, lower the size), with all lower layers at 30 fps
+(360p/540p, or 180p for a 360p top; LiveKit's own 180p/216p presets are 15 fps). An encoder that
+cannot keep up (a slow phone at 1080p) can still drop frames.
 Congestion control still lowers the picture on its own.
 
 LiveKit Android SDK defaults (checked in source): `adaptiveStream = false`, `dynacast = false`,

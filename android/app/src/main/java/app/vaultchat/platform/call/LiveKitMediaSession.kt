@@ -8,7 +8,12 @@ import android.util.Size
 import app.vaultchat.domain.call.CaptureQuality
 import app.vaultchat.domain.call.VideoQualityPolicy
 import io.livekit.android.room.participant.VideoTrackPublishDefaults
+import io.livekit.android.room.participant.VideoTrackPublishOptions
+import livekit.org.webrtc.RtpParameters
 import io.livekit.android.room.track.LocalVideoTrackOptions
+import io.livekit.android.room.track.VideoCaptureParameter
+import io.livekit.android.room.track.VideoEncoding
+import io.livekit.android.room.track.VideoPreset
 import io.livekit.android.room.track.VideoPreset169
 import app.vaultchat.domain.call.MediaEvent
 import app.vaultchat.domain.call.MediaSession
@@ -61,7 +66,11 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
             dynacast = true,
             videoTrackCaptureDefaults = LocalVideoTrackOptions(captureParams = preset(quality).capture),
             // Simulcast lets the server drop to a lower layer instantly when the receiver's network weakens.
-            videoTrackPublishDefaults = VideoTrackPublishDefaults(videoEncoding = preset(quality).encoding, simulcast = true),
+            videoTrackPublishDefaults = VideoTrackPublishDefaults(
+                videoEncoding = preset(quality).encoding,
+                simulcast = true,
+                simulcastLayers = layersBelow(quality),
+            ),
         ),
         LiveKitOverrides(audioOptions = AudioOptions(audioHandler = audio)),
     )
@@ -122,11 +131,11 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
     override suspend fun setCameraEnabled(enabled: Boolean) {
         if (!joined) return
         room.localParticipant.setCameraEnabled(enabled)
-        val pending = pendingQuality
-        if (enabled && pending != null) {
-            pendingQuality = null
+        val wanted = pending
+        if (enabled && wanted != null) {
+            pending = null
             (room.localParticipant.getTrackPublication(Track.Source.CAMERA)?.track as? LocalVideoTrack)
-                ?.let { it.restartTrack(it.options.copy(captureParams = preset(pending).capture)) }
+                ?.let { republishCamera(it, wanted.first, wanted.second) }
         }
         _localVideo.value = if (enabled) room.localParticipant.getTrackPublication(Track.Source.CAMERA)?.track as? LocalVideoTrack else null
     }
@@ -160,27 +169,65 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
 
     override val autoQuality: CaptureQuality get() = quality
 
+    /** Lower simulcast layers at 30 fps (LiveKit's defaults include 180p at 15 fps). */
+    private fun layersBelow(top: CaptureQuality) = when (top) {
+        CaptureQuality.P1080, CaptureQuality.P720 -> listOf(VideoPreset169.H360, VideoPreset169.H540)
+        CaptureQuality.P540 -> listOf(VideoPreset169.H360)
+        CaptureQuality.P360 -> listOf(P180at30)
+    }
+
+    /** 180p at 30 fps: LiveKit's own 180p and 216p presets run at 15 fps. */
+    private object P180at30 : VideoPreset {
+        override val capture = VideoCaptureParameter(320, 180, 30)
+        override val encoding = VideoEncoding(200_000, 30)
+    }
+
     /** A size picked while the camera was off; applied when it is turned back on. */
-    private var pendingQuality: CaptureQuality? = null
+    private var pending: Pair<CaptureQuality, Boolean>? = null
 
     /**
-     * Restarts the camera at the new size in place (LiveKit's restartTrack): the publication and the
-     * other person's subscription stay, only the capture changes, so video pauses for a moment. The
-     * facing camera is kept. Unpublishing and enabling again does not work: LiveKit would re-publish
-     * its cached default track, which unpublish had stopped, and nothing would be sent.
+     * Republishes the camera at the new size. Forced: one layer (no simulcast, so neither the server
+     * nor the other phone can pick a smaller one), 30 fps, and no WebRTC degradation, so size and frame
+     * rate stay; on a weak network the picture gets blockier instead. Auto: simulcast and LiveKit's
+     * default degradation (keep the frame rate, lower the size), as at the start of the call.
+     * A fresh track is created: enabling again after an unpublish would reuse LiveKit's cached,
+     * stopped default track. The facing camera is kept.
      */
-    override suspend fun setVideoQuality(quality: CaptureQuality) {
-        val p = preset(quality)
-        room.videoTrackCaptureDefaults = room.videoTrackCaptureDefaults.copy(captureParams = p.capture)
+    override suspend fun setVideoQuality(quality: CaptureQuality, forced: Boolean) {
         val publication = room.localParticipant.getTrackPublication(Track.Source.CAMERA)
-        val track = publication?.track as? LocalVideoTrack
-        if (!joined || track == null) return
-        // Restarting a turned-off camera would start sending again; wait until it is turned on.
+        val old = publication?.track as? LocalVideoTrack
+        if (!joined || old == null) return
+        // Republishing a turned-off camera would start sending again; wait until it is turned on.
         if (publication?.muted == true) {
-            pendingQuality = quality
+            pending = quality to forced
             return
         }
-        track.restartTrack(track.options.copy(captureParams = p.capture))
+        republishCamera(old, quality, forced)
+    }
+
+    private suspend fun republishCamera(old: LocalVideoTrack, quality: CaptureQuality, forced: Boolean) {
+        val p = preset(quality)
+        val participant = room.localParticipant
+        val fresh = participant.createVideoTrack(options = old.options.copy(captureParams = p.capture))
+        participant.unpublishTrack(old)
+        _localVideo.value = null
+        fresh.startCapture()
+        val published = participant.publishVideoTrack(
+            fresh,
+            VideoTrackPublishOptions(
+                videoEncoding = p.encoding,
+                simulcast = !forced,
+                simulcastLayers = if (forced) null else layersBelow(quality),
+                source = Track.Source.CAMERA,
+                degradationPreference = if (forced) RtpParameters.DegradationPreference.DISABLED else null,
+            ),
+        )
+        if (published) {
+            _localVideo.value = fresh
+        } else {
+            fresh.stopCapture()
+            fresh.dispose()
+        }
     }
 
     override fun disconnect() {

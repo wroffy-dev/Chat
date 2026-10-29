@@ -194,7 +194,8 @@ class CallController(
             deviceLock.withLock {
                 val wanted = _state.value.videoQuality
                 try {
-                    media.setVideoQuality(wanted.capture ?: media.autoQuality)
+                    val fixed = wanted.capture
+                    if (fixed != null) media.setVideoQuality(fixed, forced = true) else media.setVideoQuality(media.autoQuality, forced = false)
                 } catch (_: Exception) {
                     // The camera could not restart at that size; the call goes on as it was.
                 }

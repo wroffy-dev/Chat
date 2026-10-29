@@ -55,8 +55,12 @@ interface MediaSession {
     suspend fun setCameraEnabled(enabled: Boolean)
     /** The size the phone picked by itself (used for "Auto"). */
     val autoQuality: CaptureQuality get() = CaptureQuality.P720
-    /** Changes the sent video size mid-call; the camera restarts, so video pauses for a moment. */
-    suspend fun setVideoQuality(quality: CaptureQuality) = Unit
+    /**
+     * Changes the sent video size mid-call; the camera restarts, so video pauses for a moment.
+     * [forced]: send exactly this size at 30 fps (one layer, no automatic lowering); otherwise the
+     * size may adapt to the network as in Auto.
+     */
+    suspend fun setVideoQuality(quality: CaptureQuality, forced: Boolean) = Unit
     fun switchCamera()
     fun setSpeakerphone(enabled: Boolean)
     /** Releases camera, microphone and the connection. Safe to call more than once. */

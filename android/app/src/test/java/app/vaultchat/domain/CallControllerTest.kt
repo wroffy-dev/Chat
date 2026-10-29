@@ -63,7 +63,7 @@ class FakeMedia : MediaSession {
     override suspend fun setMicrophoneEnabled(enabled: Boolean) { log += "mic:$enabled" }
     override suspend fun setCameraEnabled(enabled: Boolean) { log += "cam:$enabled" }
     override val autoQuality = CaptureQuality.P1080
-    override suspend fun setVideoQuality(quality: CaptureQuality) { log += "quality:$quality" }
+    override suspend fun setVideoQuality(quality: CaptureQuality, forced: Boolean) { log += "quality:$quality" + if (forced) ":forced" else "" }
     override fun switchCamera() { log += "switch" }
     override fun setSpeakerphone(enabled: Boolean) { log += "speaker:$enabled" }
     override fun disconnect() {
@@ -268,7 +268,7 @@ class CallControllerTest {
         assertEquals(VideoQualityChoice.P540, c.state.value.videoQuality)
         c.setVideoQuality(VideoQualityChoice.AUTO)
         runCurrent()
-        assertEquals(listOf("quality:P540", "quality:P1080"), media.log.filter { it.startsWith("quality:") })
+        assertEquals(listOf("quality:P540:forced", "quality:P1080"), media.log.filter { it.startsWith("quality:") })
     }
 
     @Test
