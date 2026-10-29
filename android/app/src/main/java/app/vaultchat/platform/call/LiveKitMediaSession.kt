@@ -122,6 +122,12 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
     override suspend fun setCameraEnabled(enabled: Boolean) {
         if (!joined) return
         room.localParticipant.setCameraEnabled(enabled)
+        val pending = pendingQuality
+        if (enabled && pending != null) {
+            pendingQuality = null
+            (room.localParticipant.getTrackPublication(Track.Source.CAMERA)?.track as? LocalVideoTrack)
+                ?.let { it.restartTrack(it.options.copy(captureParams = preset(pending).capture)) }
+        }
         _localVideo.value = if (enabled) room.localParticipant.getTrackPublication(Track.Source.CAMERA)?.track as? LocalVideoTrack else null
     }
 
@@ -154,25 +160,27 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
 
     override val autoQuality: CaptureQuality get() = quality
 
+    /** A size picked while the camera was off; applied when it is turned back on. */
+    private var pendingQuality: CaptureQuality? = null
+
     /**
-     * New defaults for the camera track, then the published track is replaced: LiveKit cannot change
-     * capture size and encoding of a live track, so the camera stops and restarts (a short pause).
-     * The facing camera and on/off state are kept.
+     * Restarts the camera at the new size in place (LiveKit's restartTrack): the publication and the
+     * other person's subscription stay, only the capture changes, so video pauses for a moment. The
+     * facing camera is kept. Unpublishing and enabling again does not work: LiveKit would re-publish
+     * its cached default track, which unpublish had stopped, and nothing would be sent.
      */
     override suspend fun setVideoQuality(quality: CaptureQuality) {
         val p = preset(quality)
+        room.videoTrackCaptureDefaults = room.videoTrackCaptureDefaults.copy(captureParams = p.capture)
         val publication = room.localParticipant.getTrackPublication(Track.Source.CAMERA)
-        val old = publication?.track as? LocalVideoTrack
-        room.videoTrackCaptureDefaults = room.videoTrackCaptureDefaults.copy(
-            captureParams = p.capture,
-            position = old?.options?.position ?: room.videoTrackCaptureDefaults.position,
-        )
-        room.videoTrackPublishDefaults = room.videoTrackPublishDefaults.copy(videoEncoding = p.encoding)
-        if (!joined || old == null) return
-        val wasOn = publication?.muted == false
-        room.localParticipant.unpublishTrack(old)
-        _localVideo.value = null
-        if (wasOn) setCameraEnabled(true)
+        val track = publication?.track as? LocalVideoTrack
+        if (!joined || track == null) return
+        // Restarting a turned-off camera would start sending again; wait until it is turned on.
+        if (publication?.muted == true) {
+            pendingQuality = quality
+            return
+        }
+        track.restartTrack(track.options.copy(captureParams = p.capture))
     }
 
     override fun disconnect() {
