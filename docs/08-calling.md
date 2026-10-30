@@ -307,7 +307,7 @@ Permissions are requested at the moment they are needed, with a one-line explana
 ### 10.4 Camera switching and controls
 
 Controls: mute/unmute mic, camera on/off, switch front/back, speaker/earpiece/Bluetooth picker, end call.
-Camera switch uses the SDK's camera switching on the local video track (CameraX module optional).
+Camera switch flips front ↔ back by reopening the camera with `LocalVideoTrack.restartTrack` and the other position (since 2026-10-30). The publication and the self-view are kept. The SDK's `switchCamera()` handed the switch to the Camera2 capturer, which on the owner's phones failed silently (it only logs "switching camera failed"). A turned-off camera is never flipped, because a restart would switch it back on. The self-view is mirrored only for the front camera.
 
 The **Switch** button opens a menu with two choices: switch this phone's own camera, or flip **the other** person's camera during a video call ("Switch their camera";
 owner request 2026-10-29, **Implemented**). It only flips an already-shared camera front/back — it

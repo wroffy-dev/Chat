@@ -101,6 +101,7 @@ fun CallScreen(
     val peerMuted = state.remotePresent && !state.remoteMicOn && state.phase != CallPhase.ENDED
     val remoteVideo by viewModel.media.remoteVideo.collectAsStateWithLifecycle()
     val localVideo by viewModel.media.localVideo.collectAsStateWithLifecycle()
+    val localFront by viewModel.media.localFront.collectAsStateWithLifecycle()
     val liveStats by viewModel.controller.liveStats.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
@@ -143,7 +144,10 @@ fun CallScreen(
     // In a connected video call the controls fade out after 4 s without a touch and come back on
     // any touch. Not with TalkBack on: its users must always be able to reach the buttons.
     val accessibility = remember(context) { context.getSystemService(AccessibilityManager::class.java) }
-    val autoHide = kind == CallKind.VIDEO && state.phase == CallPhase.ACTIVE &&
+    // The Switch menu is a separate popup window whose touches never reach this screen, so the
+    // controls (and the menu with them) must not fade while it is open.
+    var switchMenuOpen by remember { mutableStateOf(false) }
+    val autoHide = kind == CallKind.VIDEO && state.phase == CallPhase.ACTIVE && !switchMenuOpen &&
         accessibility?.isTouchExplorationEnabled != true
     var controlsVisible by remember { mutableStateOf(true) }
     var lastTouch by remember { mutableIntStateOf(0) }
@@ -198,7 +202,7 @@ fun CallScreen(
                 VideoView(
                     viewModel.media.room,
                     localVideo,
-                    mirror = true,
+                    mirror = localFront,
                     modifier = Modifier
                         .safeDrawingPadding()
                         .padding(16.dp)
@@ -340,6 +344,7 @@ fun CallScreen(
                         kind = kind,
                         peerVideoPresent = showVideo,
                         onSwitchPeerCamera = { viewModel.controller.switchPeerCamera(); sentFlips++ },
+                        onSwitchMenuOpen = { switchMenuOpen = it },
                         micOn = state.micOn,
                         cameraOn = state.cameraOn,
                         speakerOn = state.speakerOn,
@@ -428,8 +433,11 @@ private fun SwitchCameraControl(
     peerVideoPresent: Boolean,
     onSwitchMine: () -> Unit,
     onSwitchTheirs: () -> Unit,
+    onOpenChange: (Boolean) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
+    LaunchedEffect(expanded) { onOpenChange(expanded) }
+    DisposableEffect(Unit) { onDispose { onOpenChange(false) } }
     Box {
         RoundToggle(
             label = stringResource(R.string.call_switch),
@@ -474,6 +482,7 @@ private fun Controls(
     kind: CallKind,
     peerVideoPresent: Boolean,
     onSwitchPeerCamera: () -> Unit,
+    onSwitchMenuOpen: (Boolean) -> Unit,
     micOn: Boolean,
     cameraOn: Boolean,
     speakerOn: Boolean,
@@ -516,6 +525,7 @@ private fun Controls(
                     peerVideoPresent = peerVideoPresent,
                     onSwitchMine = onSwitch,
                     onSwitchTheirs = onSwitchPeerCamera,
+                    onOpenChange = onSwitchMenuOpen,
                 )
             }
             RoundToggle(
