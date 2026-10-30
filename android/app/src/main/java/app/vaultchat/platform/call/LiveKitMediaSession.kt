@@ -51,6 +51,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 
 /**
  * LiveKit-backed media for one call. The server issues a room-scoped token; this class never sees
@@ -179,29 +180,36 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
     }
 
     override fun switchCamera() {
-        flipFrontBack()
+        scope.launch { flipFrontBack() }
     }
+
+    /** One flip at a time: a second tap while the camera is being reopened is ignored. */
+    private val flipLock = Mutex()
 
     /**
      * Front to back or back to front, on a camera that is on. Returns whether it flipped.
      *
-     * Reopens the camera with restartTrack (the publication and the self-view stay) instead of the
-     * SDK's switchCamera(): that one hands the switch to the Camera2 capturer, which on some phones
-     * fails and only logs "switching camera failed", so nothing changed on screen (owner reports
-     * v120-v122). restartTrack opens the camera the same way as at the start of the call.
+     * Publishes a fresh camera track facing the other way, through the same [republishCamera] the
+     * quality change used, and which worked on the phones. The SDK's switchCamera() failed silently
+     * on some phones ("switching camera failed", v120-v122), and restartTrack() closed the app on
+     * the owner's phone (v123), so neither is used.
      */
-    private fun flipFrontBack(): Boolean {
-        val publication = room.localParticipant.getTrackPublication(Track.Source.CAMERA) ?: return false
-        val track = publication.track as? LocalVideoTrack ?: return false
-        if (publication.muted) return false
-        val target = if (track.options.position == CameraPosition.BACK) CameraPosition.FRONT else CameraPosition.BACK
-        if (!hasCamera(target)) return false
-        return try {
-            track.restartTrack(track.options.copy(deviceId = null, position = target))
-            _localFront.value = target == CameraPosition.FRONT
-            true
+    private suspend fun flipFrontBack(): Boolean {
+        if (!joined || !flipLock.tryLock()) return false
+        try {
+            val publication = room.localParticipant.getTrackPublication(Track.Source.CAMERA) ?: return false
+            val old = publication.track as? LocalVideoTrack ?: return false
+            // A turned-off camera stays off: publishing a new track would switch it on.
+            if (publication.muted) return false
+            val target = if (old.options.position == CameraPosition.BACK) CameraPosition.FRONT else CameraPosition.BACK
+            if (!hasCamera(target)) return false
+            val flipped = republishCamera(old, quality, forced = false, position = target)
+            if (flipped) _localFront.value = target == CameraPosition.FRONT
+            return flipped
         } catch (_: Exception) {
-            false
+            return false
+        } finally {
+            flipLock.unlock()
         }
     }
 
@@ -289,10 +297,21 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
         republishCamera(old, quality, forced)
     }
 
-    private suspend fun republishCamera(old: LocalVideoTrack, quality: CaptureQuality, forced: Boolean) {
+    private suspend fun republishCamera(
+        old: LocalVideoTrack,
+        quality: CaptureQuality,
+        forced: Boolean,
+        /** Open this camera instead of the one in use (front/back flip). */
+        position: CameraPosition? = null,
+    ): Boolean {
         val p = preset(quality)
         val participant = room.localParticipant
-        val fresh = participant.createVideoTrack(options = old.options.copy(captureParams = p.capture))
+        val options = if (position == null) {
+            old.options.copy(captureParams = p.capture)
+        } else {
+            old.options.copy(captureParams = p.capture, deviceId = null, position = position)
+        }
+        val fresh = participant.createVideoTrack(options = options)
         participant.unpublishTrack(old)
         _localVideo.value = null
         fresh.startCapture()
@@ -312,6 +331,7 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
             fresh.stopCapture()
             fresh.dispose()
         }
+        return published
     }
 
     override val noiseReductionAvailable: Boolean get() = NOISE_FILTER && RnNoiseProcessor.available
