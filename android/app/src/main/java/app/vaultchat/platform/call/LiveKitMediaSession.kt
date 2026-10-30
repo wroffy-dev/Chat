@@ -60,6 +60,8 @@ private const val TOPIC_SWITCH_CAMERA = "vaultchat.switch_camera"
 private val SWITCH_CAMERA_PAYLOAD = ByteArray(0)
 
 class LiveKitMediaSession(appContext: Context) : MediaSession {
+    private val cameraManager: CameraManager? = appContext.getSystemService(CameraManager::class.java)
+
     // Adaptive stream: receive only the resolution actually shown. Dynacast: stop encoding layers
     // nobody watches. Both are off by default in the SDK (docs/08-calling.md §8).
     val quality: CaptureQuality = chooseQuality(appContext)
@@ -97,6 +99,10 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
     private val _localVideo = MutableStateFlow<VideoTrack?>(null)
     val localVideo: StateFlow<VideoTrack?> = _localVideo.asStateFlow()
 
+    /** The camera in use faces the person (front). Mirrors the self-view only then, as camera apps do. */
+    private val _localFront = MutableStateFlow(true)
+    val localFront: StateFlow<Boolean> = _localFront.asStateFlow()
+
     private var released = false
 
     init {
@@ -122,12 +128,9 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
                     is RoomEvent.TrackSubscribed -> (e.track as? VideoTrack)?.let { _remoteVideo.value = it }
                     is RoomEvent.TrackUnsubscribed -> if (e.track == _remoteVideo.value) _remoteVideo.value = null
                     is RoomEvent.DataReceived -> if (e.topic == TOPIC_SWITCH_CAMERA) {
-                        // The other person asked to flip our camera; flip the already-on camera only.
-                        val camera = room.localParticipant.getTrackPublication(Track.Source.CAMERA)?.track as? LocalVideoTrack
-                        if (camera != null) {
-                            camera.flipFrontBack()
-                            _events.emit(MediaEvent.CameraSwitchedByPeer)
-                        }
+                        // The other person asked to flip our camera. Only a camera that is on: a flip
+                        // restarts capture, so on a turned-off camera it would switch it back on.
+                        if (flipFrontBack()) _events.emit(MediaEvent.CameraSwitchedByPeer)
                     }
                     is RoomEvent.Reconnecting -> _events.emit(MediaEvent.Reconnecting)
                     is RoomEvent.Reconnected -> _events.emit(MediaEvent.Reconnected)
@@ -176,17 +179,40 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
     }
 
     override fun switchCamera() {
-        (room.localParticipant.getTrackPublication(Track.Source.CAMERA)?.track as? LocalVideoTrack)?.flipFrontBack()
+        flipFrontBack()
     }
 
     /**
-     * Front to back or back to front. The SDK's plain switchCamera() steps through every camera id
-     * the phone lists, starting from an unset id, so on phones with several back lenses it often
-     * moved to another back lens and looked like it did nothing.
+     * Front to back or back to front, on a camera that is on. Returns whether it flipped.
+     *
+     * Reopens the camera with restartTrack (the publication and the self-view stay) instead of the
+     * SDK's switchCamera(): that one hands the switch to the Camera2 capturer, which on some phones
+     * fails and only logs "switching camera failed", so nothing changed on screen (owner reports
+     * v120-v122). restartTrack opens the camera the same way as at the start of the call.
      */
-    private fun LocalVideoTrack.flipFrontBack() {
-        val target = if (options.position == CameraPosition.BACK) CameraPosition.FRONT else CameraPosition.BACK
-        switchCamera(position = target)
+    private fun flipFrontBack(): Boolean {
+        val publication = room.localParticipant.getTrackPublication(Track.Source.CAMERA) ?: return false
+        val track = publication.track as? LocalVideoTrack ?: return false
+        if (publication.muted) return false
+        val target = if (track.options.position == CameraPosition.BACK) CameraPosition.FRONT else CameraPosition.BACK
+        if (!hasCamera(target)) return false
+        return try {
+            track.restartTrack(track.options.copy(deviceId = null, position = target))
+            _localFront.value = target == CameraPosition.FRONT
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    private fun hasCamera(position: CameraPosition): Boolean {
+        val facing = if (position == CameraPosition.FRONT) CameraCharacteristics.LENS_FACING_FRONT else CameraCharacteristics.LENS_FACING_BACK
+        val cameras = cameraManager ?: return false
+        return try {
+            cameras.cameraIdList.any { cameras.getCameraCharacteristics(it).get(CameraCharacteristics.LENS_FACING) == facing }
+        } catch (_: Exception) {
+            false
+        }
     }
 
     override suspend fun requestPeerSwitchCamera() {
