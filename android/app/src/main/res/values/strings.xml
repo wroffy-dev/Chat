@@ -145,6 +145,7 @@
     <string name="chat_deletion_short">Seen messages are deleted when either of you leaves</string>
     <string name="chat_input_hint">Message</string>
     <string name="chat_send">Send</string>
+    <string name="chat_react">React</string>
     <string name="chat_sending">Sending…</string>
     <string name="chat_not_sent">Not sent</string>
     <string name="chat_discard">Discard</string>

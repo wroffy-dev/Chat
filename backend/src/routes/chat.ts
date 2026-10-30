@@ -21,6 +21,20 @@ const messageSchema = {
   },
 } as const;
 
+const reactionSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["messageId", "userId", "emoji"],
+  properties: { messageId: { type: "string" }, userId: { type: "string" }, emoji: { type: "string" } },
+} as const;
+
+const reactionParams = {
+  type: "object",
+  required: ["id", "messageId"],
+  additionalProperties: false,
+  properties: { id: { type: "string", pattern: UUID }, messageId: { type: "string", pattern: UUID } },
+} as const;
+
 const sentSchema = {
   type: "object",
   additionalProperties: false,
@@ -106,8 +120,14 @@ export async function chatRoutes(app: FastifyInstance, opts: { auth: AuthService
           200: {
             type: "object",
             additionalProperties: false,
-            required: ["epoch", "cleared", "items", "hasMore"],
-            properties: { epoch: { type: "integer" }, cleared: { type: "boolean" }, items: { type: "array", items: messageSchema }, hasMore: { type: "boolean" } },
+            required: ["epoch", "cleared", "items", "hasMore", "reactions"],
+            properties: {
+              epoch: { type: "integer" },
+              cleared: { type: "boolean" },
+              items: { type: "array", items: messageSchema },
+              hasMore: { type: "boolean" },
+              reactions: { type: "array", items: reactionSchema },
+            },
           },
         },
       },
@@ -143,6 +163,37 @@ export async function chatRoutes(app: FastifyInstance, opts: { auth: AuthService
     async (request, reply) => {
       const { created, ...sent } = await chat.send(authOf(request).user.id, request.params.id, request.body);
       return reply.status(created ? 201 : 200).send({ ...sent, createdAt: sent.createdAt.toISOString() });
+    },
+  );
+
+  // Reactions (D-25): set or replace the caller's one emoji on a message, or remove it.
+  app.put<{ Params: { id: string; messageId: string }; Body: { emoji: string } }>(
+    "/conversations/:id/messages/:messageId/reaction",
+    {
+      onRequest: user,
+      bodyLimit: 1_024,
+      config: { rateLimit: { max: 120, timeWindow: MINUTE } },
+      schema: {
+        params: reactionParams,
+        body: { type: "object", additionalProperties: false, required: ["emoji"], properties: { emoji: { type: "string", minLength: 1, maxLength: 32 } } },
+      },
+    },
+    async (request, reply) => {
+      await chat.react(authOf(request).user.id, request.params.id, request.params.messageId, request.body.emoji);
+      return reply.status(204).send();
+    },
+  );
+
+  app.delete<{ Params: { id: string; messageId: string } }>(
+    "/conversations/:id/messages/:messageId/reaction",
+    {
+      onRequest: user,
+      config: { rateLimit: { max: 120, timeWindow: MINUTE } },
+      schema: { params: reactionParams },
+    },
+    async (request, reply) => {
+      await chat.react(authOf(request).user.id, request.params.id, request.params.messageId, null);
+      return reply.status(204).send();
     },
   );
 

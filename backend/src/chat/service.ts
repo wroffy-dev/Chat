@@ -19,6 +19,8 @@ export const CHAT_POLICY = {
   backstopMs: 24 * 60 * MINUTE,
   maxCodePoints: 4000,
   sendsPerMinute: 30,
+  /** Reaction changes per user per minute (D-25). */
+  reactionsPerMinute: 60,
   pageSize: 200,
   /** At most one "new message" push per recipient in this interval (the push carries no content). */
   messagePushIntervalMs: MINUTE,
@@ -39,12 +41,25 @@ export interface MessageView {
   createdAt: Date;
 }
 
+/** One person's reaction on one message (D-25). */
+export interface ReactionView {
+  messageId: string;
+  userId: string;
+  emoji: string;
+}
+
 export interface HistoryView {
   epoch: number;
   /** The caller's epoch was stale: it must drop everything it holds; `items` start from the beginning. */
   cleared: boolean;
   items: MessageView[];
   hasMore: boolean;
+  /**
+   * Every reaction in the conversation now, not only on `items`: history is read incrementally, so
+   * a reaction added to an older message would otherwise never be seen. Small, because seen
+   * messages are deleted on exit.
+   */
+  reactions: ReactionView[];
 }
 
 export interface SentView {
@@ -68,8 +83,19 @@ export function normalizeText(text: string): string {
   return trimmed;
 }
 
+// `\p{RGI_Emoji}` needs the `v` flag (ES2024; Node 20+). Built from a string because the compile
+// target is ES2023, which rejects the flag in a regex literal.
+const SINGLE_EMOJI = new RegExp("^\\p{RGI_Emoji}$", "v");
+
+/** Exactly one emoji (one RGI emoji sequence, skin tones and ZWJ families included), or an error. */
+export function normalizeReaction(emoji: string): string {
+  if (!SINGLE_EMOJI.test(emoji)) throw appError(400, "VALIDATION_FAILED", [{ path: "/emoji", rule: "singleEmoji" }]);
+  return emoji;
+}
+
 export class ChatService {
   private readonly sendLimiter = new UserRateLimiter(CHAT_POLICY.sendsPerMinute, MINUTE);
+  private readonly reactionLimiter = new UserRateLimiter(CHAT_POLICY.reactionsPerMinute, MINUTE);
   private readonly lastMessagePush = new Map<string, number>();
 
   constructor(
@@ -204,10 +230,33 @@ export class ChatService {
           cleared,
           hasMore: rows.length > limit,
           items: rows.slice(0, limit).map((m) => ({ id: m.id, seq: Number(m.seq), senderId: m.senderUserId, text: m.body, createdAt: m.createdAt })),
+          reactions: await this.reactionsOf(tx, conversationId),
         };
       },
       { isolationLevel: "RepeatableRead" },
     );
+  }
+
+  /**
+   * Sets (or with `null`, removes) the caller's reaction on a message (D-25). One emoji per person per
+   * message; the sender may react to their own message too. A message that is gone (deleted on an
+   * exit or by the backstop) is 404, so a reaction can never bring it back.
+   */
+  async react(userId: string, conversationId: string, messageId: string, emoji: string | null): Promise<void> {
+    const value = emoji === null ? null : normalizeReaction(emoji);
+    const now = this.now();
+    const changed = await this.prisma.$transaction(async (tx) => {
+      await this.lockConversation(tx, conversationId);
+      await this.participant(tx, conversationId, userId);
+      const m = await tx.message.findFirst({ where: { id: messageId, conversationId }, select: { senderUserId: true, senderReaction: true, recipientReaction: true } });
+      if (!m) throw appError(404, "NOT_FOUND");
+      const mine = m.senderUserId === userId;
+      if ((mine ? m.senderReaction : m.recipientReaction) === value) return false;
+      this.limitReactions(userId, now);
+      await tx.message.update({ where: { id: messageId }, data: mine ? { senderReaction: value } : { recipientReaction: value } });
+      return true;
+    });
+    if (changed) this.changed(conversationId);
   }
 
   /** Records what the caller has displayed (monotonic; capped at the last allocated sequence). */
@@ -312,6 +361,24 @@ export class ChatService {
     return p;
   }
 
+  /** Every reaction in the conversation, attributed to the person who made it. */
+  private async reactionsOf(tx: Tx, conversationId: string): Promise<ReactionView[]> {
+    const rows = await tx.message.findMany({
+      where: { conversationId, OR: [{ senderReaction: { not: null } }, { recipientReaction: { not: null } }] },
+      orderBy: { seq: "asc" },
+      select: { id: true, senderUserId: true, senderReaction: true, recipientReaction: true },
+    });
+    if (rows.length === 0) return [];
+    const people = await tx.conversationParticipant.findMany({ where: { conversationId }, select: { userId: true } });
+    const out: ReactionView[] = [];
+    for (const m of rows) {
+      if (m.senderReaction) out.push({ messageId: m.id, userId: m.senderUserId, emoji: m.senderReaction });
+      const other = people.find((p) => p.userId !== m.senderUserId)?.userId;
+      if (m.recipientReaction && other) out.push({ messageId: m.id, userId: other, emoji: m.recipientReaction });
+    }
+    return out;
+  }
+
   private async epochOf(tx: Tx, conversationId: string): Promise<number> {
     const c = await tx.conversation.findUniqueOrThrow({ where: { id: conversationId }, select: { clearEpoch: true } });
     return Number(c.clearEpoch);
@@ -322,6 +389,11 @@ export class ChatService {
       where: { conversationId_userId: { conversationId, userId } },
       data: { leaseId, leaseExpiresAt: new Date(now.getTime() + CHAT_POLICY.leaseTtlMs) },
     });
+  }
+
+  private limitReactions(userId: string, now: Date) {
+    const wait = this.reactionLimiter.take(userId, now.getTime());
+    if (wait > 0) throw new AppError(429, "RATE_LIMITED", DEFAULT_MESSAGES.RATE_LIMITED, undefined, wait);
   }
 
   private limitSends(userId: string, now: Date) {

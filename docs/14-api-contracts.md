@@ -143,7 +143,9 @@ Request bodies of these routes are never logged. In slice 1 the app polls instea
 - **Audit:** none per clear (would leak chat-activity timing).
 
 ### GET /conversations/{id}/messages?afterSeq={n}&epoch={e}&limit={1..200}
-- **Response 200:** `{ "epoch", "cleared": bool, "items": [ { "id", "seq", "senderId", "text", "createdAt" } ], "hasMore": bool }`
+- **Response 200:** `{ "epoch", "cleared": bool, "items": [ { "id", "seq", "senderId", "text", "createdAt" } ], "hasMore": bool, "reactions": [ { "messageId", "userId", "emoji" } ] }`
+- `reactions` (D-25) lists every reaction in the conversation, not only on `items`, because history is
+  read incrementally and a reaction can land on an older message.
 - `cleared: true` means the client's `epoch` is stale: `afterSeq` is ignored, items start from the
   beginning, and the client must replace its state with them.
 
@@ -156,6 +158,18 @@ Request bodies of these routes are never logged. In slice 1 the app polls instea
   `422 MESSAGE_TOO_LONG`, `400 VALIDATION_FAILED` (empty after trimming, or NUL).
 - **Side effects:** FCM `{"t":"msg"}` (normal priority, no content) to the recipient if they hold no
   active lease, at most one per minute.
+
+### PUT /conversations/{id}/messages/{messageId}/reaction
+- D-25. **Request:** `{ "emoji": string }`: exactly one RGI emoji (skin tones and ZWJ sequences
+  included). Sets or replaces the caller's one reaction on that message; the sender may react to
+  their own message. **Response:** `204`.
+- **Rate limit:** 60 changes/min per user (120 requests/min per route).
+- **Errors:** `400 VALIDATION_FAILED` (not a single emoji), `404 NOT_FOUND` (not a participant, or
+  the message is gone: deleted messages can never be reacted to).
+- **Side effects:** `chat.changed` to both participants.
+
+### DELETE /conversations/{id}/messages/{messageId}/reaction
+- Removes the caller's reaction. Idempotent. **Response:** `204`. Errors and side effects as for PUT.
 
 ### POST /conversations/{id}/read
 - **Request:** `{ "seq": int }` — the highest sequence displayed. Monotonic (lower values ignored) and
