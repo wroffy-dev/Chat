@@ -9,9 +9,22 @@ data class ChatMessage(
     val createdAtEpochMs: Long,
 )
 
+/** One person's emoji on one message (D-25). Deleted with its message, like the message itself. */
+data class Reaction(val messageId: String, val userId: String, val emoji: String)
+
+/** The quick reactions offered on a long press, as on WhatsApp. */
+val QUICK_REACTIONS = listOf("\u2764\uFE0F", "\uD83D\uDC4D", "\uD83D\uDE02", "\uD83D\uDE2E", "\uD83D\uDE22", "\uD83D\uDE4F")
+
 data class EnterInfo(val leaseId: String, val heartbeatSeconds: Int, val epoch: Long)
 
-data class HistoryPage(val epoch: Long, val cleared: Boolean, val items: List<ChatMessage>, val hasMore: Boolean)
+/** [reactions] covers the whole conversation, not only [items] (history is read incrementally). */
+data class HistoryPage(
+    val epoch: Long,
+    val cleared: Boolean,
+    val items: List<ChatMessage>,
+    val hasMore: Boolean,
+    val reactions: List<Reaction> = emptyList(),
+)
 
 data class SentMessage(val id: String, val seq: Long, val epoch: Long, val createdAtEpochMs: Long)
 
@@ -42,6 +55,8 @@ interface ChatRepository {
     suspend fun history(conversationId: String, afterSeq: Long, epoch: Long?): ChatResult<HistoryPage>
     suspend fun send(conversationId: String, clientMessageId: String, epoch: Long, text: String): ChatResult<SentMessage>
     suspend fun markRead(conversationId: String, seq: Long): ChatResult<Unit>
+    /** Sets this user's reaction on a message, or removes it when [emoji] is null (D-25). */
+    suspend fun react(conversationId: String, messageId: String, emoji: String?): ChatResult<Unit>
 }
 
 /**

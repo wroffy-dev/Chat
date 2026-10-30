@@ -1,5 +1,19 @@
 package app.vaultchat.ui.chat
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
+import app.vaultchat.domain.chat.EmojiText
+import app.vaultchat.domain.chat.QUICK_REACTIONS
+import app.vaultchat.domain.chat.Reaction
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -186,6 +200,8 @@ fun ChatScreen(
                 else -> MessageList(
                     messages = state.messages,
                     outgoing = state.outgoing,
+                    reactions = state.reactions,
+                    onReact = controller::react,
                     myUserId = myUserId,
                     onRetry = controller::retry,
                     onDiscard = controller::discard,
@@ -287,6 +303,8 @@ private fun PrivateTextInput(
 private fun MessageList(
     messages: List<ChatMessage>,
     outgoing: List<Outgoing>,
+    reactions: Map<String, List<Reaction>>,
+    onReact: (messageId: String, emoji: String) -> Unit,
     myUserId: String,
     onRetry: (String) -> Unit,
     onDiscard: (String) -> Unit,
@@ -315,8 +333,24 @@ private fun MessageList(
     ) {
         items(messages, key = { it.id }) { m ->
             val mine = m.senderId == myUserId
+            val onThis = reactions[m.id].orEmpty()
+            var picking by remember { mutableStateOf(false) }
             Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
-                Bubble(m.text, mine = mine)
+                Box {
+                    Bubble(m.text, mine = mine, onLongPress = { picking = true })
+                    if (picking) {
+                        ReactionPicker(
+                            chosen = onThis.find { it.userId == myUserId }?.emoji,
+                            alignEnd = mine,
+                            onPick = { emoji ->
+                                picking = false
+                                onReact(m.id, emoji)
+                            },
+                            onDismiss = { picking = false },
+                        )
+                    }
+                }
+                if (onThis.isNotEmpty()) ReactionPill(onThis, onClick = { picking = true })
                 Text(
                     DateUtils.formatDateTime(LocalContext.current, m.createdAtEpochMs, DateUtils.FORMAT_SHOW_TIME),
                     style = MaterialTheme.typography.labelSmall,
@@ -349,7 +383,8 @@ private fun MessageList(
 
 /** White rounded bubbles on the grey background (reference design); mine sit on the right. */
 @Composable
-private fun Bubble(text: String, mine: Boolean, faded: Boolean = false) {
+@OptIn(ExperimentalFoundationApi::class)
+private fun Bubble(text: String, mine: Boolean, faded: Boolean = false, onLongPress: (() -> Unit)? = null) {
     val colors = MaterialTheme.colorScheme
     val corner = 16.dp
     val shape = if (mine) {
@@ -357,16 +392,81 @@ private fun Bubble(text: String, mine: Boolean, faded: Boolean = false) {
     } else {
         RoundedCornerShape(topStart = corner, topEnd = corner, bottomStart = 4.dp, bottomEnd = corner)
     }
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start) {
+    val press = if (onLongPress != null) {
+        Modifier.combinedClickable(onClick = {}, onLongClickLabel = stringResource(R.string.chat_react), onLongClick = onLongPress)
+    } else {
+        Modifier
+    }
+    // Only emoji (1 to 3): large and without a bubble, as on WhatsApp (D-25).
+    val emojiCount = EmojiText.count(text.trim())
+    if (emojiCount != null && emojiCount in 1..EmojiText.MAX_BIG) {
         Text(
-            text,
-            style = MaterialTheme.typography.bodyMedium,
+            text.trim(),
+            fontSize = when (emojiCount) { 1 -> 48.sp; 2 -> 40.sp; else -> 34.sp },
             color = colors.onSurface.copy(alpha = if (faded) 0.6f else 1f),
-            modifier = Modifier
-                .widthIn(max = 290.dp)
-                .background(colors.surface, shape)
-                .padding(horizontal = 14.dp, vertical = 10.dp),
+            modifier = press.padding(horizontal = 4.dp),
         )
+        return
+    }
+    Text(
+        text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = colors.onSurface.copy(alpha = if (faded) 0.6f else 1f),
+        modifier = Modifier
+            .widthIn(max = 290.dp)
+            .clip(shape)
+            .then(press)
+            .background(colors.surface, shape)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+    )
+}
+
+/**
+ * The WhatsApp-style row of quick reactions, floating above the pressed message. The emoji already
+ * chosen is ringed; picking it again removes it.
+ */
+@Composable
+private fun ReactionPicker(chosen: String?, alignEnd: Boolean, onPick: (String) -> Unit, onDismiss: () -> Unit) {
+    val lift = with(LocalDensity.current) { 56.dp.roundToPx() }
+    Popup(
+        alignment = if (alignEnd) Alignment.TopEnd else Alignment.TopStart,
+        offset = IntOffset(0, -lift),
+        onDismissRequest = onDismiss,
+        properties = PopupProperties(focusable = true),
+    ) {
+        Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 6.dp) {
+            Row(modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                QUICK_REACTIONS.forEach { emoji ->
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(if (emoji == chosen) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent)
+                            .clickable { onPick(emoji) },
+                        contentAlignment = Alignment.Center,
+                    ) { Text(emoji, fontSize = 26.sp) }
+                }
+            }
+        }
+    }
+}
+
+/** The reactions on a message, tucked under its bubble: each emoji once, with a count when both chose it. */
+@Composable
+private fun ReactionPill(reactions: List<Reaction>, onClick: () -> Unit) {
+    val counts = reactions.groupingBy { it.emoji }.eachCount()
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.background),
+        shadowElevation = 1.dp,
+        modifier = Modifier.padding(horizontal = 8.dp).offset(y = (-6).dp).clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick),
+    ) {
+        Row(modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            counts.forEach { (emoji, n) ->
+                Text(if (n > 1) "$emoji $n" else emoji, fontSize = 14.sp)
+            }
+        }
     }
 }
 

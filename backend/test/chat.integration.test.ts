@@ -74,7 +74,7 @@ describe.skipIf(!TEST_DB_URL)("chat (PostgreSQL)", () => {
     });
     return changed.json().accessToken as string;
   }
-  const req = (token: string, method: "GET" | "POST" | "PUT", url: string, payload?: object) =>
+  const req = (token: string, method: "GET" | "POST" | "PUT" | "DELETE", url: string, payload?: object) =>
     app.inject({ method, url: `/api/v1${url}`, headers: { authorization: `Bearer ${token}` }, ...(payload ? { payload } : {}) });
 
   /** Two paired users; returns tokens, user ids and the conversation id from /me. */
@@ -281,6 +281,58 @@ describe.skipIf(!TEST_DB_URL)("chat (PostgreSQL)", () => {
     const limited = await send(alice, conv, "one too many");
     expect(limited.statusCode).toBe(429);
     expect(limited.headers["retry-after"]).toBeDefined();
+  });
+
+  const react = (token: string, conv: string, messageId: string, emoji: string) =>
+    req(token, "PUT", `/conversations/${conv}/messages/${messageId}/reaction`, { emoji });
+  const unreact = (token: string, conv: string, messageId: string) => req(token, "DELETE", `/conversations/${conv}/messages/${messageId}/reaction`);
+
+  it("D-25: one reaction per person per message; set, replace, remove; visible to both even when read incrementally", async () => {
+    const { alice, bob, aliceId, bobId, conv } = await pair();
+    const m1 = (await send(alice, conv, "first")).json().id as string;
+    await send(alice, conv, "second");
+
+    expect((await react(bob, conv, m1, "❤️")).statusCode).toBe(204);
+    expect((await react(alice, conv, m1, "😂")).statusCode).toBe(204); // the sender may react to their own message
+    // Read with afterSeq past both messages: the reactions still arrive.
+    const later = await history(alice, conv, "?afterSeq=2&epoch=0");
+    expect(later.items).toEqual([]);
+    expect(later.reactions).toEqual(
+      expect.arrayContaining([
+        { messageId: m1, userId: bobId, emoji: "❤️" },
+        { messageId: m1, userId: aliceId, emoji: "😂" },
+      ]),
+    );
+    expect(later.reactions).toHaveLength(2);
+
+    // Replace, then remove; skin tones and ZWJ sequences count as one emoji.
+    expect((await react(bob, conv, m1, "👍🏽")).statusCode).toBe(204);
+    expect((await history(bob, conv)).reactions).toContainEqual({ messageId: m1, userId: bobId, emoji: "👍🏽" });
+    expect((await unreact(bob, conv, m1)).statusCode).toBe(204);
+    expect((await unreact(bob, conv, m1)).statusCode).toBe(204); // idempotent
+    expect((await history(bob, conv)).reactions).toEqual([{ messageId: m1, userId: aliceId, emoji: "😂" }]);
+  });
+
+  it("D-25: refuses anything but a single emoji, and messages that are gone or not in the conversation", async () => {
+    const { alice, bob, conv } = await pair();
+    const m1 = (await send(alice, conv, "hi")).json().id as string;
+    for (const bad of ["😂😂", "ok", "❤", " 👍", ""]) {
+      expect({ bad, status: (await react(bob, conv, m1, bad)).statusCode }).toEqual({ bad, status: 400 });
+    }
+    expect((await react(bob, conv, randomUUID(), "👍")).statusCode).toBe(404);
+    expect((await react(bob, randomUUID(), m1, "👍")).statusCode).toBe(404);
+  });
+
+  it("D-25 with D-01: a reaction is deleted with its message, and a deleted message cannot be reacted to", async () => {
+    const { alice, bob, conv } = await pair();
+    const m1 = (await send(alice, conv, "seen soon")).json().id as string;
+    await react(bob, conv, m1, "🙏");
+    await req(bob, "POST", `/conversations/${conv}/read`, { seq: 1 });
+    await leave(alice, conv);
+    const h = await history(bob, conv);
+    expect(h.items).toEqual([]);
+    expect(h.reactions).toEqual([]);
+    expect((await react(bob, conv, m1, "👍")).statusCode).toBe(404);
   });
 
   it("never writes message text to the logs", async () => {

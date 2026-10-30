@@ -13,8 +13,12 @@ Text only. Each message is plain Unicode text, 1–4,000 characters (counted as 
 trimmed of leading/trailing whitespace.
 
 Explicitly **not** supported, and no endpoint will exist for: images, video, files, attachments, voice
-notes, stickers/GIFs, link previews (would make the server or app fetch URLs), forwarding, reactions,
+notes, stickers/GIFs, link previews (would make the server or app fetch URLs), forwarding,
 editing, media storage, public media links, profile pictures.
+
+**Reactions** (D-25, 2026-10-30): one emoji per person per message, WhatsApp-style. They are stored on
+the message row, so they are deleted with the message under the same rules (§2, D-01, D-02) and never
+outlive it. A message made only of 1–3 emoji is shown large, without a bubble.
 
 ## 2. Required behaviour
 

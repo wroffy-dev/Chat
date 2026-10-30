@@ -268,15 +268,19 @@ model ConversationParticipant {
 }
 
 model Message {
-  id              String   @id @default(uuid()) @db.Uuid
-  conversationId  String   @map("conversation_id") @db.Uuid
-  seq             BigInt
-  epoch           BigInt
-  senderUserId    String   @map("sender_user_id") @db.Uuid
-  clientMessageId String   @map("client_message_id") @db.Uuid
+  id                String   @id @default(uuid()) @db.Uuid
+  conversationId    String   @map("conversation_id") @db.Uuid
+  seq               BigInt
+  epoch             BigInt
+  senderUserId      String   @map("sender_user_id") @db.Uuid
+  clientMessageId   String   @map("client_message_id") @db.Uuid
   /// Sensitive: never logged, excluded from backups.
-  body            String
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  body              String
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// Reactions (D-25): one emoji each, by the sender and by the other participant. Same
+  /// sensitivity as `body`; deleted with the message.
+  senderReaction    String?  @map("sender_reaction")
+  recipientReaction String?  @map("recipient_reaction")
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender       User         @relation(fields: [senderUserId], references: [id], onDelete: Cascade)

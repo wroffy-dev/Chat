@@ -207,8 +207,11 @@ Row is locked `FOR UPDATE` by every send and clear ([07 §3](07-chat-and-disappe
 | `client_message_id` | uuid | no | |
 | `body` | text | no | `CHECK (char_length(body) BETWEEN 1 AND 4000)`. **Sensitive** |
 | `created_at` | timestamptz | no | |
+| `sender_reaction` | text | yes | D-25: the sender's one emoji on their own message. `CHECK (char_length BETWEEN 1 AND 32)`; the API accepts exactly one RGI emoji. **Sensitive** |
+| `recipient_reaction` | text | yes | D-25: the other participant's one emoji. Same rules |
 
 UNIQUE `(conversation_id, seq)`; UNIQUE `(conversation_id, sender_user_id, client_message_id)`.
+Reactions live on the message row, so every deletion below removes them with the message.
 Deletion: **hard DELETE** by the clear transaction (D-01 option D: rows whose recipient's `last_read_seq >= seq`); backstop job deletes rows with `created_at` older than 24 h (D-02).
 Backups: data excluded. Never logged.
 

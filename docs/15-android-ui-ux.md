@@ -11,7 +11,7 @@ where this document and the built screens differ, the plan records what exists.
 - Light and dark themes following the system setting.
 - Every screen has explicit loading, empty, error and offline states.
 - Plain language. Errors say what happened and what to do next.
-- **No** My Profile screen, profile photos, avatars, bios, user search, discovery, stories, reactions, or
+- **No** My Profile screen, profile photos, avatars, bios, user search, discovery, stories, or
   media pickers.
 
 ## 2. App structure

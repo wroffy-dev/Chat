@@ -13,6 +13,7 @@ import app.vaultchat.domain.chat.HistoryPage
 import app.vaultchat.domain.chat.OutgoingStatus
 import app.vaultchat.domain.chat.PendingLeave
 import app.vaultchat.domain.chat.PendingLeaveStore
+import app.vaultchat.domain.chat.Reaction
 import app.vaultchat.domain.chat.SentMessage
 import app.vaultchat.domain.chat.flushPendingLeave
 import app.vaultchat.domain.realtime.RealtimeSignal
@@ -42,6 +43,10 @@ class FakeChatRepo : ChatRepository {
     var leaveFailure: ChatFailure? = null
     val reads = mutableListOf<Long>()
     val sends = mutableListOf<Triple<String, Long, String>>()
+    /** messageId to (userId to emoji), as the server keeps them (D-25). */
+    val reactions = mutableMapOf<String, MutableMap<String, String>>()
+    var reactFailure: ChatFailure? = null
+    private fun reactionList() = reactions.flatMap { (id, by) -> by.map { (user, emoji) -> Reaction(id, user, emoji) } }
 
     override suspend fun enter(conversationId: String): ChatResult<EnterInfo> {
         log += "enter"
@@ -61,9 +66,9 @@ class FakeChatRepo : ChatRepository {
     override suspend fun history(conversationId: String, afterSeq: Long, epoch: Long?): ChatResult<HistoryPage> {
         log += "history:$afterSeq"
         return if (epoch != null && epoch != this.epoch) {
-            ChatResult.Ok(HistoryPage(this.epoch, true, server.toList(), false))
+            ChatResult.Ok(HistoryPage(this.epoch, true, server.toList(), false, reactionList()))
         } else {
-            ChatResult.Ok(HistoryPage(this.epoch, false, server.filter { it.seq > afterSeq }, false))
+            ChatResult.Ok(HistoryPage(this.epoch, false, server.filter { it.seq > afterSeq }, false, reactionList()))
         }
     }
 
@@ -78,6 +83,15 @@ class FakeChatRepo : ChatRepository {
 
     override suspend fun markRead(conversationId: String, seq: Long): ChatResult<Unit> {
         reads += seq
+        return ChatResult.Ok(Unit)
+    }
+
+    override suspend fun react(conversationId: String, messageId: String, emoji: String?): ChatResult<Unit> {
+        log += "react:$messageId:$emoji"
+        reactFailure?.let { return ChatResult.Failure(it) }
+        if (server.none { it.id == messageId }) return ChatResult.Failure(ChatFailure.NOT_FOUND)
+        val by = reactions.getOrPut(messageId) { mutableMapOf() }
+        if (emoji == null) by.remove("me") else by["me"] = emoji
         return ChatResult.Ok(Unit)
     }
 
@@ -352,5 +366,40 @@ class ChatControllerTest {
         assertEquals(ChatPhase.SESSION_ENDED, c.state.value.phase)
         c.leave()
         assertNull("no exit is stored for an ended session", pending.value)
+    }
+
+    @Test
+    fun `D-25 reacting shows at once, picking the same emoji again removes it, and the server view wins`() = runTest {
+        repo.peerSays("hi")
+        val c = controller()
+        c.start()
+        runCurrent()
+
+        c.react("m1", "\u2764\uFE0F")
+        assertEquals(listOf(Reaction("m1", "me", "\u2764\uFE0F")), c.state.value.reactions["m1"])
+        runCurrent()
+        assertEquals("\u2764\uFE0F", repo.reactions["m1"]?.get("me"))
+
+        c.react("m1", "\u2764\uFE0F") // same emoji again: removed
+        assertEquals(null, c.state.value.reactions["m1"])
+        runCurrent()
+        assertTrue(repo.log.contains("react:m1:null"))
+
+        // A request that fails is undone by the next sync with the server's view.
+        repo.reactFailure = ChatFailure.NETWORK
+        c.react("m1", "\uD83D\uDC4D")
+        runCurrent()
+        assertEquals(null, c.state.value.reactions["m1"])
+    }
+
+    @Test
+    fun `D-25 the peer's reaction on an older message arrives with an incremental sync`() = runTest {
+        repo.peerSays("hi")
+        val c = controller()
+        c.start()
+        runCurrent()
+        repo.reactions["m1"] = mutableMapOf("peer" to "\uD83D\uDE02")
+        advanceTimeBy(ChatController.POLL_MS + 1)
+        assertEquals(listOf(Reaction("m1", "peer", "\uD83D\uDE02")), c.state.value.reactions["m1"])
     }
 }

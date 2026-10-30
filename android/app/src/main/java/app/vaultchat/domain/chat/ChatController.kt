@@ -44,6 +44,8 @@ data class ChatState(
     val notice: ChatNotice? = null,
     /** Text the server refused because the chat was cleared; the UI puts it back into the input once. */
     val restoredDraft: String? = null,
+    /** Reactions by message id (D-25), as the server last reported them plus this user's pending change. */
+    val reactions: Map<String, List<Reaction>> = emptyMap(),
 )
 
 /**
@@ -167,6 +169,24 @@ class ChatController(
         scope.launch { deliver(again) }
     }
 
+    /**
+     * WhatsApp-style: picking the emoji already chosen removes it, any other replaces it (D-25). Shown
+     * at once; the next sync brings the server's view, which wins if the request failed.
+     */
+    fun react(messageId: String, emoji: String) {
+        if (_state.value.phase != ChatPhase.OPEN) return
+        val mine = _state.value.reactions[messageId].orEmpty().find { it.userId == myUserId }?.emoji
+        val next = if (mine == emoji) null else emoji
+        _state.update { s -> s.copy(reactions = s.reactions.withMine(messageId, next)) }
+        scope.launch {
+            when (val r = repo.react(conversationId, messageId, next)) {
+                is ChatResult.Ok -> Unit
+                is ChatResult.Failure -> if (r.reason == ChatFailure.SESSION_ENDED) failed(r.reason)
+            }
+            sync()
+        }
+    }
+
     fun discard(clientMessageId: String) {
         _state.update { s -> s.copy(outgoing = s.outgoing.filterNot { it.clientMessageId == clientMessageId }) }
     }
@@ -199,7 +219,7 @@ class ChatController(
             syncLock.withLock {
                 epoch = r.value.epoch
                 syncedSeq = 0
-                _state.update { it.copy(messages = emptyList()) }
+                _state.update { it.copy(messages = emptyList(), reactions = emptyMap()) }
             }
             sync()
             if (!_state.value.phase.isFinal()) _state.update { it.copy(phase = ChatPhase.OPEN) }
@@ -221,7 +241,7 @@ class ChatController(
             is ChatResult.Failure -> when (r.reason) {
                 ChatFailure.LEASE_EXPIRED -> {
                     leaseId = null
-                    _state.update { it.copy(messages = emptyList(), outgoing = emptyList(), notice = ChatNotice.LEFT_WHILE_AWAY) }
+                    _state.update { it.copy(messages = emptyList(), outgoing = emptyList(), reactions = emptyMap(), notice = ChatNotice.LEFT_WHILE_AWAY) }
                     false
                 }
                 ChatFailure.NETWORK, ChatFailure.UNEXPECTED, ChatFailure.RATE_LIMITED -> true // try again next beat
@@ -253,6 +273,7 @@ class ChatController(
             } else {
                 _state.update { s -> s.copy(messages = merge(s.messages, page.items)) }
             }
+            _state.update { s -> s.copy(reactions = page.reactions.groupBy { it.messageId }) }
             syncedSeq = maxOf(if (page.cleared) 0 else syncedSeq, page.items.maxOfOrNull { it.seq } ?: 0)
             if (!page.hasMore) break
         }
@@ -310,6 +331,12 @@ class ChatController(
     }
 
     private fun List<Outgoing>.without(out: Outgoing) = filterNot { it.clientMessageId == out.clientMessageId }
+
+    private fun Map<String, List<Reaction>>.withMine(messageId: String, emoji: String?): Map<String, List<Reaction>> {
+        val others = this[messageId].orEmpty().filterNot { it.userId == myUserId }
+        val updated = if (emoji == null) others else others + Reaction(messageId, myUserId, emoji)
+        return if (updated.isEmpty()) this - messageId else this + (messageId to updated)
+    }
 
     private fun ChatPhase.isFinal() = this == ChatPhase.LEFT || this == ChatPhase.SESSION_ENDED || this == ChatPhase.UNAVAILABLE
 }
