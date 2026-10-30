@@ -133,7 +133,7 @@ Issued by the backend with `livekit-server-sdk` (`AccessToken` + `VideoGrant`).
 | `roomJoin` | true | |
 | `canPublish` / `canSubscribe` | true / true | |
 | `canPublishSources` | `[camera, microphone]` | No screen share |
-| `canPublishData` | false | Chat uses the app backend, not LiveKit data channels |
+| `canPublishData` | true (since 2026-10-30) | Only for in-call controls ("switch their camera", §10.4). Chat still uses the app backend, never LiveKit data. The room holds two people, and the app ignores every topic but its own |
 | `canUpdateOwnMetadata`, `roomCreate`, `roomAdmin`, `hidden` | false | Least privilege |
 
 Rules:

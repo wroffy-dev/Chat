@@ -7,6 +7,7 @@ import android.os.PowerManager
 import android.util.Size
 import app.vaultchat.domain.call.CaptureQuality
 import app.vaultchat.domain.call.VideoQualityPolicy
+import io.livekit.android.room.track.CameraPosition
 import io.livekit.android.room.track.DataPublishReliability
 import io.livekit.android.room.participant.VideoTrackPublishDefaults
 import io.livekit.android.room.participant.VideoTrackPublishOptions
@@ -124,7 +125,7 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
                         // The other person asked to flip our camera; flip the already-on camera only.
                         val camera = room.localParticipant.getTrackPublication(Track.Source.CAMERA)?.track as? LocalVideoTrack
                         if (camera != null) {
-                            camera.switchCamera()
+                            camera.flipFrontBack()
                             _events.emit(MediaEvent.CameraSwitchedByPeer)
                         }
                     }
@@ -175,7 +176,17 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
     }
 
     override fun switchCamera() {
-        (room.localParticipant.getTrackPublication(Track.Source.CAMERA)?.track as? LocalVideoTrack)?.switchCamera()
+        (room.localParticipant.getTrackPublication(Track.Source.CAMERA)?.track as? LocalVideoTrack)?.flipFrontBack()
+    }
+
+    /**
+     * Front to back or back to front. The SDK's plain switchCamera() steps through every camera id
+     * the phone lists, starting from an unset id, so on phones with several back lenses it often
+     * moved to another back lens and looked like it did nothing.
+     */
+    private fun LocalVideoTrack.flipFrontBack() {
+        val target = if (options.position == CameraPosition.BACK) CameraPosition.FRONT else CameraPosition.BACK
+        switchCamera(position = target)
     }
 
     override suspend fun requestPeerSwitchCamera() {

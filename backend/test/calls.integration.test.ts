@@ -127,7 +127,7 @@ describe.skipIf(!TEST_DB_URL)("calls (PostgreSQL)", () => {
 
     const claims = jwtPayload(s.livekitToken);
     expect(claims.sub).toBe(alice.id);
-    expect(claims.video).toMatchObject({ roomJoin: true, room, canPublish: true, canSubscribe: true, canPublishData: false });
+    expect(claims.video).toMatchObject({ roomJoin: true, room, canPublish: true, canSubscribe: true, canPublishData: true });
     expect(claims.video.canPublishSources.sort()).toEqual(["camera", "microphone"]);
     expect(claims.video.roomCreate).toBeFalsy();
     expect(claims.video.roomAdmin).toBeFalsy();

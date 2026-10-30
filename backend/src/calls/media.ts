@@ -52,14 +52,15 @@ export class LiveKitGateway implements MediaGateway {
 
   async joinToken(identity: string, displayName: string, room: string): Promise<string> {
     const token = new AccessToken(this.apiKey, this.apiSecret, { identity, name: displayName, ttl: JOIN_TOKEN_TTL_SECONDS });
-    // Least privilege: join this one room, publish camera and microphone only, no data channel,
-    // no screen share, no room creation or admin.
+    // Least privilege: join this one room, publish camera and microphone only, no screen share, no
+    // room creation or admin. Data messages are allowed for in-call controls only ("switch their
+    // camera", docs/08 §10.4); chat never goes over them. The room holds exactly two people.
     token.addGrant({
       roomJoin: true,
       room,
       canPublish: true,
       canSubscribe: true,
-      canPublishData: false,
+      canPublishData: true,
       canPublishSources: [TrackSource.CAMERA, TrackSource.MICROPHONE],
       canUpdateOwnMetadata: false,
       roomCreate: false,
