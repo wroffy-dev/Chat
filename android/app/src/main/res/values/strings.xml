@@ -22,7 +22,6 @@
 
     <string name="server_checking">Checking server…</string>
     <string name="server_reachable">Server reachable</string>
-    <string name="server_unreachable">Can\'t reach the server</string>
     <string name="server_unreachable_detail">Check your internet connection. If it persists, the server may be down.</string>
     <string name="action_retry">Retry</string>
     <string name="action_open_settings">Open settings</string>
@@ -91,12 +90,8 @@
     <string name="connect_error_already_pending">You already sent a request. Wait for an answer.</string>
     <string name="connect_error_not_pending">This request was already answered or has expired.</string>
 
-    <string name="channel_calls">Incoming calls</string>
-    <string name="channel_ongoing_call">Ongoing call</string>
-    <string name="call_ongoing">Call in progress</string>
     <string name="call_starting">Starting call…</string>
     <string name="call_ringing">Ringing…</string>
-    <string name="call_incoming">Incoming call</string>
     <string name="call_connecting">Connecting…</string>
     <string name="call_connected">Connected</string>
     <string name="call_reconnecting">Reconnecting…</string>
@@ -139,8 +134,6 @@
     <string name="home_not_connected_body">Connect with someone using a QR code: one of you shows it, the other scans it.</string>
 
     <string name="loading">Loading</string>
-    <string name="channel_messages">Messages</string>
-    <string name="chat_new_message">New message</string>
     <string name="chat_deletion_rule">Messages you have both seen are deleted when either of you leaves the chat, including about a minute after you leave the app. Unseen messages wait, for up to 24 hours. Screenshots and screen recording of this screen are blocked; a photo from another camera is still possible.</string>
     <string name="chat_deletion_short">Seen messages are deleted when either of you leaves</string>
     <string name="chat_input_hint">Message</string>
@@ -166,13 +159,6 @@
     <string name="upgrade_installed">Installed: version %1$d, APK SHA-256 %2$s</string>
     <string name="upgrade_latest">Latest: version %1$d, APK SHA-256 %2$s</string>
     <string name="upgrade_no_hash">not published</string>
-    <string name="update_available">A new version (%1$d) is available.</string>
-    <string name="update_action">Update</string>
-    <string name="update_needs_permission">Allow Vault to install updates, then come back and tap Update.</string>
-    <string name="update_allow">Allow</string>
-    <string name="update_downloading">Downloading update… %1$d%%</string>
-    <string name="update_installing">Confirm the installation in Android\'s dialog.</string>
-    <string name="update_failed">The update could not be installed.</string>
     <string name="home_title">Chats</string>
     <string name="home_about">About this app</string>
     <string name="home_connect_new">Connect with someone new</string>
@@ -202,11 +188,6 @@
     <string name="location_open_device_settings">Open location settings</string>
     <string name="location_error_offline">Could not reach the server. Check your connection and try again.</string>
     <string name="location_error_failed">That did not work. Try again.</string>
-    <string name="location_indicator">Location shared with the administrator · sent %1$s</string>
-    <string name="location_indicator_on">Location shared with the administrator</string>
-    <string name="location_indicator_sending">Sending your location to the administrator…</string>
-    <string name="location_indicator_unavailable">Location sharing is on, but your location could not be read. Try near a window or outdoors</string>
-    <string name="location_indicator_send_failed">Your location was read but not sent (%1$s). Tap to try again</string>
     <string name="location_send_now">Send my location now</string>
     <string name="location_settings">Location sharing</string>
     <string name="location_settings_title">Location sharing is on</string>

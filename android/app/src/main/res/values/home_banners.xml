@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Banners and status lines on the Home screen: server unreachable, in-app update, location sharing (D-06).
+  Kept apart from strings.xml so these texts are found and changed in one place.
+-->
+<resources>
+    <string name="server_unreachable">Can\'t reach the server</string>
+    <string name="update_available">A new version (%1$d) is available.</string>
+    <string name="update_action">Update</string>
+    <string name="update_needs_permission">Allow Vault to install updates, then come back and tap Update.</string>
+    <string name="update_allow">Allow</string>
+    <string name="update_downloading">Downloading update… %1$d%%</string>
+    <string name="update_installing">Confirm the installation in Android\'s dialog.</string>
+    <string name="update_failed">The update could not be installed.</string>
+    <string name="location_indicator">Location shared with the administrator · sent %1$s</string>
+    <string name="location_indicator_on">Location shared with the administrator</string>
+    <string name="location_indicator_sending">Sending your location to the administrator…</string>
+    <string name="location_indicator_unavailable">Location sharing is on, but your location could not be read. Try near a window or outdoors</string>
+    <string name="location_indicator_send_failed">Your location was read but not sent (%1$s). Tap to try again</string>
+</resources>
