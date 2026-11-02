@@ -68,6 +68,11 @@ Opaque random tokens, stored only as SHA-256 hashes in the `sessions` table
 - **Revocation** sets `revoked_at` and `revoke_reason`; the next request with that token gets `401`.
   Revocation also closes that session's WebSocket and removes its FCM token.
 - **Logout** revokes the current session and deletes the FCM token.
+- **Lost-answer retry (2026-11-02):** after a refresh the session is marked unconfirmed until its new access token is
+  first used. While unconfirmed, the previous refresh token is accepted once more and renewed (the phone never got the
+  answer, e.g. a weak network or the app closed mid-request); once the new tokens are in use, the previous token
+  showing up again still ends the session (`auth.refresh_reuse_detected`). Column `sessions.refresh_confirmed`
+  (migration `20261102130000_session_refresh_confirmed`). This fixed users being logged out without reason.
 
 ### Token storage on Android
 

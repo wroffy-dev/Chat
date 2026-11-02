@@ -189,7 +189,6 @@ fun VaultChatNavHost(container: AppContainer) {
             )
             HomeScreen(
                 viewModel = viewModel,
-                onChangePassword = { navController.navigate(ChangePasswordRoute(forced = false)) },
                 onSignedOut = { navController.replaceAll(LoginRoute) },
                 onPasswordChangeRequired = { navController.replaceAll(ChangePasswordRoute(forced = true)) },
                 onOpenInbox = { navController.navigate(InboxRoute) },

@@ -142,6 +142,25 @@ describe.skipIf(!TEST_DB_URL)("app-user authentication (PostgreSQL)", () => {
     expect(events).toHaveLength(1);
   });
 
+  it("renews instead of logging out when a refresh answer was lost (old token again, new ones never used)", async () => {
+    const s = await activeUser();
+    const lost = await app.inject({ method: "POST", url: "/api/v1/auth/refresh", payload: { refreshToken: s.refreshToken } });
+    expect(lost.statusCode).toBe(200); // the phone never received this answer
+
+    const again = await app.inject({ method: "POST", url: "/api/v1/auth/refresh", payload: { refreshToken: s.refreshToken } });
+    expect(again.statusCode).toBe(200);
+    const t = again.json();
+    expect((await me(t.accessToken)).statusCode).toBe(200);
+    // The answer that was lost is no longer valid.
+    expect((await me(lost.json().accessToken)).statusCode).toBe(401);
+    expect(await database.prisma.auditEvent.count({ where: { action: "auth.refresh_reuse_detected" } })).toBe(0);
+
+    // Once the new tokens are in use, the old token showing up again is still treated as stolen.
+    const replay = await app.inject({ method: "POST", url: "/api/v1/auth/refresh", payload: { refreshToken: s.refreshToken } });
+    expect(replay.statusCode).toBe(401);
+    expect((await me(t.accessToken)).json().error.code).toBe("SESSION_REVOKED");
+  });
+
   it("expires access tokens after 15 minutes but allows refresh", async () => {
     const s = await activeUser();
     clock = new Date(Date.now() + 16 * 60_000);
