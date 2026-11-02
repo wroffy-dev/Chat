@@ -131,6 +131,14 @@ describe.skipIf(!TEST_DB_URL)("location sharing (PostgreSQL)", () => {
     expect(all).not.toContain("77.20");
   });
 
+  it("serves the consent text from its one file, with the version agreement must name", async () => {
+    const alice = await signIn("alice");
+    const c = (await call(alice.token, "GET", "/consents/location-sharing")).json();
+    expect(c).toMatchObject({ id: "location-sharing", version: LOCATION_CONSENT_VERSION });
+    expect(c.points.length).toBeGreaterThan(0);
+    expect((await app.inject({ method: "GET", url: "/api/v1/consents/location-sharing" })).statusCode).toBe(401);
+  });
+
   it("refuses anonymous requests", async () => {
     expect((await app.inject({ method: "GET", url: "/api/v1/location-sharing" })).statusCode).toBe(401);
     expect((await app.inject({ method: "PUT", url: "/api/v1/location-sharing/current", payload: point() })).statusCode).toBe(401);

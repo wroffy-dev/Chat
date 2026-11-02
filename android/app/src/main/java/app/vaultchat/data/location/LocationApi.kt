@@ -15,6 +15,10 @@ data class LocationStateDto(
     val lastViewedByAdminAt: String?,
 )
 
+/** A consent text as the server keeps it (backend/consents/<id>.json, its only source). */
+@Serializable
+data class ConsentDto(val id: String, val version: Int, val title: String, val points: List<String>, val agree: String)
+
 @Serializable
 private data class EnableBody(val enabled: Boolean, val consentVersion: Int, val precision: String)
 
@@ -26,6 +30,9 @@ private data class PointBody(val lat: Double, val lng: Double, val accuracyM: Do
 
 /** Location sharing with the administrator (docs/14, docs/11; owner decision D-06). */
 class LocationApi(private val http: HttpJson, private val caller: AuthorizedCaller) {
+    suspend fun consent(): ApiResult<ConsentDto> =
+        caller.call { http.get("api/v1/consents/location-sharing", ConsentDto.serializer(), it) }
+
     suspend fun state(): ApiResult<LocationStateDto> =
         caller.call { http.get("api/v1/location-sharing", LocationStateDto.serializer(), it) }
 

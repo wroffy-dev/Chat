@@ -29,7 +29,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -44,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import app.vaultchat.R
+import app.vaultchat.data.location.ConsentDto
 import app.vaultchat.domain.location.LocationBlock
 import app.vaultchat.platform.location.LocationSharing
 import app.vaultchat.platform.location.LocationUi
@@ -64,19 +67,24 @@ fun LocationRequiredScreen(ui: LocationUi, sharing: LocationSharing, onLogout: (
     var working by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<Int?>(null) }
     var askedOnce by remember { mutableStateOf(false) }
+    // The consent text comes only from the server (backend/consents/location-sharing.json).
+    var consent by remember { mutableStateOf<ConsentDto?>(null) }
+    var loading by remember { mutableStateOf(true) }
+    var reload by remember { mutableIntStateOf(0) }
+    LaunchedEffect(reload) {
+        loading = true
+        consent = sharing.consent()
+        loading = false
+    }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { sharing.recheck() }
 
     fun agree() {
+        val agreed = consent ?: return
         working = true
         error = null
         scope.launch {
-            val version = sharing.consentVersion()
-            if (version == null) {
-                error = R.string.location_error_offline
-            } else if (!sharing.enable(version)) {
-                error = R.string.location_error_failed
-            }
+            if (!sharing.enable(agreed.version)) error = R.string.location_error_failed
             working = false
         }
     }
@@ -95,18 +103,24 @@ fun LocationRequiredScreen(ui: LocationUi, sharing: LocationSharing, onLogout: (
         ) {
             Spacer(Modifier.size(24.dp))
             Icon(Icons.Filled.LocationOn, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
+            val title = when (ui.block) {
+                LocationBlock.DEVICE_OFF -> stringResource(R.string.location_device_off_title)
+                LocationBlock.PERMISSION -> stringResource(R.string.location_permission_title)
+                else -> consent?.title ?: stringResource(R.string.location_required_title)
+            }
             Text(
-                stringResource(
-                    when (ui.block) {
-                        LocationBlock.DEVICE_OFF -> R.string.location_device_off_title
-                        LocationBlock.PERMISSION -> R.string.location_permission_title
-                        else -> R.string.location_required_title
-                    },
-                ),
+                title,
                 style = MaterialTheme.typography.headlineSmall,
                 modifier = Modifier.semantics { heading() },
             )
-            ConsentText()
+            when {
+                consent != null -> ConsentPoints(consent?.points.orEmpty())
+                loading -> Text(stringResource(R.string.location_consent_loading), style = MaterialTheme.typography.bodyMedium)
+                else -> {
+                    Text(stringResource(R.string.location_error_offline), color = MaterialTheme.colorScheme.error)
+                    TextButton(onClick = { reload++ }) { Text(stringResource(R.string.action_retry)) }
+                }
+            }
             when (ui.block) {
                 LocationBlock.DEVICE_OFF -> {
                     Text(stringResource(R.string.location_device_off_body), style = MaterialTheme.typography.bodyMedium)
@@ -128,7 +142,8 @@ fun LocationRequiredScreen(ui: LocationUi, sharing: LocationSharing, onLogout: (
                     }
                 }
                 else -> PrimaryButton(
-                    stringResource(R.string.location_agree),
+                    consent?.agree ?: stringResource(R.string.location_agree),
+                    enabled = consent != null,
                     loading = working,
                     onClick = { if (sharing.hasPermission()) agree() else if (askedOnce) openAppSettings(context) else ask() },
                 )
@@ -140,14 +155,9 @@ fun LocationRequiredScreen(ui: LocationUi, sharing: LocationSharing, onLogout: (
 }
 
 @Composable
-private fun ConsentText() {
+private fun ConsentPoints(points: List<String>) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        listOf(
-            R.string.location_consent_1,
-            R.string.location_consent_2,
-            R.string.location_consent_3,
-            R.string.location_consent_4,
-        ).forEach { Text("•  " + stringResource(it), style = MaterialTheme.typography.bodyMedium) }
+        points.forEach { Text("•  $it", style = MaterialTheme.typography.bodyMedium) }
     }
 }
 
@@ -182,6 +192,9 @@ fun LocationIndicator(ui: LocationUi, onClick: () -> Unit, modifier: Modifier = 
 @Composable
 fun LocationSettingsDialog(ui: LocationUi, sharing: LocationSharing, onDismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
+    // What the user agreed to: fetched from the server, or the last copy fetched while offline.
+    var consent by remember { mutableStateOf(sharing.cachedConsent()) }
+    LaunchedEffect(Unit) { sharing.consent()?.let { consent = it } }
     var confirmOff by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
     AlertDialog(
@@ -189,7 +202,7 @@ fun LocationSettingsDialog(ui: LocationUi, sharing: LocationSharing, onDismiss: 
         title = { Text(stringResource(R.string.location_settings_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.verticalScroll(rememberScrollState())) {
-                ConsentText()
+                consent?.let { ConsentPoints(it.points) }
                 Text(stringResource(R.string.location_last_sent, ui.lastSentAt?.let { ago(it) } ?: "—"), style = MaterialTheme.typography.bodySmall)
                 Text(stringResource(R.string.location_last_viewed, ui.lastViewedByAdminAt?.let { ago(it) } ?: stringResource(R.string.location_never)), style = MaterialTheme.typography.bodySmall)
                 if (confirmOff) {

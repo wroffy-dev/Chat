@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.CancellationSignal
 import android.os.Looper
 import androidx.core.content.ContextCompat
+import app.vaultchat.data.location.ConsentDto
 import app.vaultchat.data.location.LocationApi
 import app.vaultchat.data.location.LocationStateDto
 import app.vaultchat.data.network.ApiResult
@@ -34,6 +35,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Instant
+import kotlinx.serialization.json.Json
 import kotlin.coroutines.resume
 
 data class LocationUi(
@@ -126,8 +128,19 @@ class LocationSharing(
         scope.launch { lock.withLock { if (_state.value.block == LocationBlock.NONE) send() } }
     }
 
-    /** The server's current consent version, needed on the consent screen; null when offline. */
-    suspend fun consentVersion(): Int? = (api.state() as? ApiResult.Ok)?.value?.currentConsentVersion
+    /**
+     * The consent text to show, always from the server (backend/consents/location-sharing.json). The last
+     * one fetched is kept so the menu can show what was agreed while offline; agreeing needs the server.
+     */
+    suspend fun consent(): ConsentDto? = when (val r = api.consent()) {
+        is ApiResult.Ok -> r.value.also { prefs.edit().putString(CONSENT_CACHE, json.encodeToString(ConsentDto.serializer(), it)).apply() }
+        else -> null
+    }
+
+    /** The last consent text fetched, for showing while offline; null if never fetched. */
+    fun cachedConsent(): ConsentDto? = prefs.getString(CONSENT_CACHE, null)?.let {
+        runCatching { json.decodeFromString(ConsentDto.serializer(), it) }.getOrNull()
+    }
 
     private suspend fun syncAndSend() {
         when (val r = api.state()) {
@@ -277,7 +290,10 @@ class LocationSharing(
 
     private fun parse(iso: String): Instant? = runCatching { Instant.parse(iso) }.getOrNull()
 
+    private val json = Json { ignoreUnknownKeys = true }
+
     private companion object {
+        const val CONSENT_CACHE = "consent_location_sharing"
         const val RECENT_MS = 2 * 60_000L
         const val FALLBACK_MS = 55 * 60_000L
         const val FRESH_TIMEOUT_MS = 30_000L

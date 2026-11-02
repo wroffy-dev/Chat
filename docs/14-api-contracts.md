@@ -250,6 +250,8 @@ All three need a signed-in, unrestricted user. Response body for each: `{ enable
 currentConsentVersion, precision, lastSentAt, lastViewedByAdminAt }` (`enabled` is true only with the
 current consent version).
 
+- `GET /consents/location-sharing` — the consent text `{ id, version, title, points[], agree }`, read only from
+  `backend/consents/location-sharing.json` ([docs/consents](consents/README.md)). The app shows it as sent.
 - `GET /location-sharing`
 - `PUT /location-sharing` — `{ "enabled": true, "consentVersion": 1, "precision": "precise"|"approximate" }`
   (`409 CONSENT_OUTDATED` for another version) or `{ "enabled": false }` (deletes the stored point). 20/min.
