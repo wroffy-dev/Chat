@@ -7,6 +7,8 @@
 > **not** nulled after 24 h. Everything else holds: administrator only, foreground only, no background
 > permission, latest point only (no history), visible indicator on Home, admin views audited and shown to
 > the user, coordinates excluded from logs and backups.
+> Later change (owner, 2026-11-02): the Home indicator line was removed; the status (last sent, last viewed
+> by the admin, turn off) is in ⋮ → Location sharing.
 >
 > Original status: PROPOSED FEATURE — REQUIRES EXPLICIT APPROVAL BEFORE ANY IMPLEMENTATION (open decision D-06).
 > It must not be built, partially built, or stubbed in the MVP without written sign-off from the product owner,

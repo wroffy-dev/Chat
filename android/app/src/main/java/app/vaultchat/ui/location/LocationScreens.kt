@@ -7,10 +7,8 @@ import android.provider.Settings
 import android.text.format.DateUtils
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
@@ -158,33 +155,6 @@ fun LocationRequiredScreen(ui: LocationUi, sharing: LocationSharing, onLogout: (
 private fun ConsentPoints(points: List<String>) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         points.forEach { Text("•  $it", style = MaterialTheme.typography.bodyMedium) }
-    }
-}
-
-/** Always on Home while sharing is on, so it is never forgotten that the location goes to the administrator. */
-@Composable
-fun LocationIndicator(ui: LocationUi, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val colors = MaterialTheme.colorScheme
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = colors.surface,
-        modifier = modifier.fillMaxWidth().clickable(onClick = onClick),
-    ) {
-        Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Filled.LocationOn, contentDescription = null, tint = colors.primary, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.size(8.dp))
-            Text(
-                when {
-                    ui.sending -> stringResource(R.string.location_indicator_sending)
-                    ui.unavailable -> stringResource(R.string.location_indicator_unavailable)
-                    ui.sendError != null -> stringResource(R.string.location_indicator_send_failed, ui.sendError)
-                    ui.lastSentAt != null -> stringResource(R.string.location_indicator, ago(ui.lastSentAt))
-                    else -> stringResource(R.string.location_indicator_on)
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.onSurfaceVariant,
-            )
-        }
     }
 }
 

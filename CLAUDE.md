@@ -31,7 +31,7 @@ decisions there are either recorded as decided or still open; never decide an op
   is a separate operational identity, not an app user.
 - Chat deletion follows decisions D-01 (option D) and D-02 (60 s lease, 24 h backstop) in docs/17 — do not change them without the owner.
 - Location sharing is **approved with changes** (D-06, 2026-11-02): with the administrator only, sent when the
-  app is opened (never in the background, no history), required to use the app, always shown on Home. Do not
+  app is opened (never in the background, no history), required to use the app; its state is in ⋮ → Location sharing (the Home line was removed by the owner, 2026-11-02). Do not
   widen it (background tracking, history, sharing with other users) without the owner.
 - Do not claim end-to-end encryption, guaranteed screenshot prevention, or guaranteed deletion. (Chats set
   `FLAG_SECURE` per D-23, which stops ordinary screenshots and recordings, not another camera or a rooted phone.)

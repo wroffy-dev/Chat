@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Banners and status lines on the Home screen: server unreachable, in-app update.
+  Kept apart from strings.xml so these texts are found and changed in one place.
+-->
+<resources>
+    <string name="server_unreachable">Can\'t reach the server</string>
+    <string name="update_available">A new version (%1$d) is available.</string>
+    <string name="update_action">Update</string>
+    <string name="update_needs_permission">Allow Vault to install updates, then come back and tap Update.</string>
+    <string name="update_allow">Allow</string>
+    <string name="update_downloading">Downloading update… %1$d%%</string>
+    <string name="update_installing">Confirm the installation in Android\'s dialog.</string>
+    <string name="update_failed">The update could not be installed.</string>
+</resources>

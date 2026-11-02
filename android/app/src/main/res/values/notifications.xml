@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Notification texts: channel names and the call / message notifications (docs/10). The app posts no message or
+  incoming-call notifications while D-24 holds; the ongoing-call one is required by Android for a call in the background.
+  Kept apart from strings.xml so these texts are found and changed in one place.
+-->
+<resources>
+    <string name="channel_calls">Incoming calls</string>
+    <string name="channel_messages">Messages</string>
+    <string name="channel_ongoing_call">Ongoing call</string>
+    <string name="call_incoming">Incoming call</string>
+    <string name="call_ongoing">Call in progress</string>
+    <string name="chat_new_message">New message</string>
+</resources>
