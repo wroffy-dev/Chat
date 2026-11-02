@@ -22,6 +22,8 @@ import type { RealtimeHub } from "./realtime/hub.js";
 import type { SettingsService } from "./settings/service.js";
 import { healthRoutes } from "./routes/health.js";
 import { appUpdateRoutes, type AppUpdateRouteOptions } from "./routes/app-updates.js";
+import { locationRoutes } from "./routes/location.js";
+import type { LocationService } from "./location/service.js";
 import { AppError, appError } from "./errors.js";
 
 export interface AppDeps {
@@ -41,11 +43,13 @@ export interface AppDeps {
   settings?: SettingsService;
   /** In-app updates: upload by the build workflow, download by signed-in users. */
   updates?: Omit<AppUpdateRouteOptions, "auth">;
+  /** Location sharing with the administrator (D-06). */
+  location?: LocationService;
   /** Overrides the logger (tests pass `false` or a capturing stream). */
   logger?: FastifyServerOptions["logger"];
 }
 
-export function buildApp({ config, database, auth, connections, calls, chat, media, push, realtime, settings, updates, logger }: AppDeps): FastifyInstance {
+export function buildApp({ config, database, auth, connections, calls, chat, media, push, realtime, settings, updates, location, logger }: AppDeps): FastifyInstance {
   const app = Fastify({
     logger: logger ?? buildLoggerOptions(config),
     // Client-supplied request IDs are not trusted; every request gets a fresh one.
@@ -137,6 +141,7 @@ export function buildApp({ config, database, auth, connections, calls, chat, med
       if (chat) await api.register(chatRoutes, { auth, chat });
       if (push) await api.register(deviceRoutes, { auth, push });
       if (updates) await api.register(appUpdateRoutes, { auth, ...updates });
+      if (location) await api.register(locationRoutes, { auth, location });
       if (realtime) {
         // 16 KB frames at most; the app sends nothing but pongs anyway.
         await api.register(websocket, { options: { maxPayload: 16_384 } });

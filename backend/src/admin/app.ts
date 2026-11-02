@@ -17,6 +17,7 @@ import { safeEqual } from "../auth/tokens.js";
 import { buildLoggerOptions } from "../logger.js";
 import { ADMIN_SESSION_POLICY, AdminLoginError, type AdminContext, type AdminService } from "./service.js";
 import { csrfField, esc, fmt, page } from "./views.js";
+import type { LocationService } from "../location/service.js";
 
 const COOKIE = "vc_admin";
 
@@ -31,6 +32,8 @@ export interface AdminAppDeps {
   pushEnabled?: boolean;
   realtime?: RealtimeHub;
   settings?: SettingsService;
+  /** Location sharing (D-06): shown per user; each view of a point is audited. */
+  location?: LocationService;
   logger?: FastifyServerOptions["logger"];
 }
 
@@ -195,6 +198,14 @@ export function buildAdminApp(deps: AdminAppDeps): FastifyInstance {
       orderBy: { slot: "asc" },
       include: { sessions: { where: { revokedAt: null }, orderBy: { lastUsedAt: "desc" } } },
     });
+    const shares = deps.location ? await deps.location.overview() : null;
+    const locationCell = (userId: string) => {
+      if (!shares) return "—";
+      const s = shares.get(userId);
+      if (!s?.enabled) return `<span class="muted">Off</span>`;
+      const when = s.receivedAt ? `updated ${fmt(s.receivedAt)}` : "no point yet";
+      return `Sharing · ${when}${s.receivedAt ? `<br><a href="/admin/users/${userId}/location">View location</a>` : ""}`;
+    };
     const rows = users.map((u) => {
       const sessions = u.sessions
         .map((s) => `${fmt(s.lastUsedAt)} · ${esc(s.deviceModel ?? "unknown device")} · v${esc(s.appVersionCode ?? "?")}${s.restricted ? " · must change password" : ""}
@@ -204,7 +215,7 @@ export function buildAdminApp(deps: AdminAppDeps): FastifyInstance {
       return `<tr>
         <td>${u.slot}</td><td><strong>${esc(u.username)}</strong></td>
         <td>${esc(u.status)}${u.mustChangePassword ? "<br><span class=muted>must change password</span>" : ""}</td>
-        <td>${fmt(u.lastSeenAt)}</td><td>${sessions}</td>
+        <td>${fmt(u.lastSeenAt)}</td><td>${sessions}</td><td>${locationCell(u.id)}</td>
         <td>
           <form class="inline" method="post" action="/admin/users/${u.id}/reset-password">${csrfField(csrf)}<button>Reset password</button></form>
           <form class="inline" method="post" action="/admin/users/${u.id}/revoke-sessions">${csrfField(csrf)}<button>Revoke sessions</button></form>
@@ -225,9 +236,39 @@ export function buildAdminApp(deps: AdminAppDeps): FastifyInstance {
           .join("")}</ul><p class="muted">Connections are permanent in this version. Users pair by scanning a QR code in the app.</p>`
       : `<p class="muted">No users are connected yet (they pair by scanning a QR code in the app).</p>`;
     return html(reply, page("Users", `<h1>Users</h1>${connectionLine}
-      <table><thead><tr><th>Slot</th><th>Username</th><th>Status</th><th>Last seen</th><th>Active sessions</th><th>Actions</th></tr></thead>
-      <tbody>${rows.join("") || `<tr><td colspan="6" class="muted">No users yet.</td></tr>`}</tbody></table>${create}`, nav(request)));
+      <table><thead><tr><th>Slot</th><th>Username</th><th>Status</th><th>Last seen</th><th>Active sessions</th><th>Location</th><th>Actions</th></tr></thead>
+      <tbody>${rows.join("") || `<tr><td colspan="7" class="muted">No users yet.</td></tr>`}</tbody></table>${create}`, nav(request)));
   });
+
+  // The latest shared point. Opening this page is audited and shown to the user in the app (D-06).
+  app.get<{ Params: { id: string } }>(
+    "/admin/users/:id/location",
+    { preHandler: requireAdmin, schema: { params: idParams } },
+    async (request, reply) => {
+      const user = await prisma.user.findUnique({ where: { id: request.params.id } });
+      if (!user || !deps.location) throw new AppError(404, "NOT_FOUND", "User not found.");
+      const s = await deps.location.viewByAdmin(user.id, actor(request).id);
+      const body = s?.enabled && s.latitude != null && s.longitude != null
+        ? (() => {
+            const lat = s.latitude.toFixed(5);
+            const lng = s.longitude.toFixed(5);
+            const osm = `https://www.openstreetmap.org/?mlat=${lat}&amp;mlon=${lng}#map=16/${lat}/${lng}`;
+            return `<table><tbody>
+              <tr><th>Latitude, longitude</th><td><code>${lat}, ${lng}</code></td></tr>
+              <tr><th>Accuracy</th><td>about ${Math.round(s.accuracyM ?? 0)} m (${esc(s.precision ?? "–")})</td></tr>
+              <tr><th>Taken on the phone</th><td>${fmt(s.capturedAt)}</td></tr>
+              <tr><th>Received</th><td>${fmt(s.receivedAt)}</td></tr>
+            </tbody></table>
+            <p><a href="${osm}" target="_blank" rel="noopener noreferrer">Open in OpenStreetMap</a>
+            <span class="muted">(opens an external site)</span></p>`;
+          })()
+        : `<p class="muted">${esc(user.username)} is not sharing a location right now.</p>`;
+      return html(reply, page("Location", `<h1>Location of ${esc(user.username)}</h1>${body}
+        <p class="muted">The app sends the location each time it is opened; only the latest one is kept.
+        This view was recorded in the audit log and is shown to the user.</p>
+        <p><a href="/admin/users">Back to users</a></p>`, nav(request)));
+    },
+  );
 
   const showTemporaryPassword = (request: FastifyRequest, reply: FastifyReply, username: string, password: string, what: string) =>
     html(reply, page("Temporary password", `<h1>${esc(what)}</h1>

@@ -31,6 +31,8 @@ import app.vaultchat.data.network.HttpJson
 import app.vaultchat.domain.auth.AuthRepository
 import app.vaultchat.platform.KeystoreTokenStore
 import app.vaultchat.ui.permissions.PermissionPreferences
+import app.vaultchat.data.location.LocationApi
+import app.vaultchat.platform.location.LocationSharing
 
 /** Manual dependency container. Small enough that a DI framework would add more than it saves. */
 class AppContainer(context: Context) {
@@ -73,6 +75,9 @@ class AppContainer(context: Context) {
 
     /** For work that must finish after a screen closes (e.g. the chat exit request). */
     val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** Location sharing with the administrator (D-06); the app is used only while it is on. */
+    val locationSharing = LocationSharing(appContext, LocationApi(httpJson, caller), applicationScope) { authRepository.currentUser()?.id }
 
     /** In-app updates (Home shows the Update button after sign-in). */
     val appUpdater = AppUpdater(appContext, appVersionApi, ApkDownloader(BuildConfig.API_BASE_URL, http, caller), applicationScope)

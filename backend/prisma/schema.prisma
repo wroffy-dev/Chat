@@ -49,6 +49,7 @@ model User {
   callDiagnostics            CallDiagnostic[]
   conversationParticipants   ConversationParticipant[]
   sentMessages               Message[]
+  locationShare              LocationShare?
 
   @@map("users")
 }
@@ -303,4 +304,25 @@ model AppSetting {
   updatedBy String?  @map("updated_by") @db.Uuid
 
   @@map("app_settings")
+}
+
+/// Location shared with the administrator (D-06). The latest point only; overwritten, never appended.
+model LocationShare {
+  userId              String    @id @map("user_id") @db.Uuid
+  enabled             Boolean   @default(false)
+  consentVersion      Int?      @map("consent_version")
+  consentedAt         DateTime? @map("consented_at") @db.Timestamptz(3)
+  /// "approximate" | "precise" (CHECK in SQL)
+  precision           String?
+  latitude            Float?
+  longitude           Float?
+  accuracyM           Float?    @map("accuracy_m") @db.Real
+  capturedAt          DateTime? @map("captured_at") @db.Timestamptz(3)
+  receivedAt          DateTime? @map("received_at") @db.Timestamptz(3)
+  lastViewedByAdminAt DateTime? @map("last_viewed_by_admin_at") @db.Timestamptz(3)
+  updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("location_shares")
 }
