@@ -65,8 +65,6 @@ import app.vaultchat.R
 import app.vaultchat.VaultChatApplication
 import app.vaultchat.domain.connection.Connection
 import app.vaultchat.ui.about.AboutApp
-import app.vaultchat.domain.location.LocationBlock
-import app.vaultchat.ui.location.LocationIndicator
 import app.vaultchat.ui.location.LocationSettingsDialog
 import app.vaultchat.ui.about.UpdateBanner
 import app.vaultchat.ui.components.BannerKind
@@ -120,10 +118,6 @@ fun HomeScreen(
                 onLocation = { locationDialog = true },
                 onLogout = viewModel::logout,
             )
-            // Always shown while sharing is on (D-06): the location goes to the administrator.
-            if (location.block == LocationBlock.NONE) {
-                LocationIndicator(location, onClick = { locationDialog = true }, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-            }
             UpdateBanner(updater, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             AskBatteryExemptionOnce()
             if (state.offline) {
