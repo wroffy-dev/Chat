@@ -1,3 +1,4 @@
+import { LocationService } from "./location/service.js";
 import { resolve } from "node:path";
 import { buildAdminApp } from "./admin/app.js";
 import { AdminService } from "./admin/service.js";
@@ -56,10 +57,11 @@ async function main() {
           audit(database.prisma, { actorType: "system", action: "app.apk_published", metadata: { ...meta } }),
       }
     : undefined;
-  const app = buildApp({ config, database, auth, connections, calls, chat, media, push, realtime: { hub }, settings, ...(updates ? { updates } : {}) });
+  const location = new LocationService(database.prisma);
+  const app = buildApp({ config, database, auth, connections, calls, chat, media, push, realtime: { hub }, settings, location, ...(updates ? { updates } : {}) });
   logPush = (msg, extra) => app.log.warn(extra ?? {}, msg);
   // The database is owned (and closed) by the public app; the admin app shares it.
-  const adminApp = buildAdminApp({ config, prisma: database.prisma, database, auth, admin, media, pushEnabled: push.enabled, realtime: hub, settings });
+  const adminApp = buildAdminApp({ config, prisma: database.prisma, database, auth, admin, media, pushEnabled: push.enabled, realtime: hub, settings, location });
 
   const retention = new RetentionService(database.prisma);
   // Hourly housekeeping: spent QR tokens and records past their retention period (D-12).

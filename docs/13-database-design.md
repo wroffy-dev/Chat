@@ -44,7 +44,7 @@ column names used in the other docs.
 | `audit_events` | Security and admin action trail |
 | `error_events` | Summarised errors for the Admin Console |
 | `app_settings` | Allow-listed admin-editable settings |
-| `location_shares` | **Only if D-06 is approved** |
+| `location_shares` | Latest shared point per user (D-06, migration `20261102060000_location_shares`) |
 
 Not created, on purpose: `devices` (merged into `sessions`), `roles` (two fixed identity types), rate-limit
 tables (in-memory + `users` columns), location history (prohibited), media/attachments (prohibited),
@@ -253,12 +253,14 @@ No IP addresses, no location. Retention: same as `calls`.
 
 Index `(occurred_at DESC)`, `(action, occurred_at DESC)`. Append-only for `vc_app`. Retention (D-12): 365 days.
 
-### 3.14 location_shares (proposed — only if D-06 approved)
+### 3.14 location_shares (Implemented 2026-11-02, D-06)
 
-`user_id` uuid PK FK, `enabled` boolean, `consent_version` integer, `consented_at`, `precision` text,
-`latitude` numeric(8,5), `longitude` numeric(8,5), `accuracy_m` real, `captured_at`, `received_at`,
-`updated_at`. `CHECK (enabled OR (latitude IS NULL AND longitude IS NULL))`. Overwritten in place; coordinates
-nulled on disable and after 24 h. Backups exclude data. **Sensitive.**
+`user_id` uuid PK FK → users (cascade), `enabled` boolean, `consent_version` integer, `consented_at`,
+`precision` text (`approximate`|`precise`), `latitude`/`longitude` double precision (rounded in code to 5 or
+2 decimals), `accuracy_m` real, `captured_at`, `received_at`, `last_viewed_by_admin_at`, `updated_at`.
+CHECKs: ranges, `accuracy_m` in (0, 100000], `enabled OR (latitude IS NULL AND longitude IS NULL)`.
+Overwritten in place (no history); coordinates nulled when sharing is turned off; not nulled after 24 h
+(owner decision D-06). Backups exclude its data. **Sensitive.**
 
 ### 3.15 app_settings
 

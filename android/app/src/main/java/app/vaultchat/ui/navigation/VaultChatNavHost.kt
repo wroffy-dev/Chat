@@ -44,6 +44,12 @@ import app.vaultchat.ui.login.LoginScreen
 import app.vaultchat.ui.login.LoginViewModel
 import app.vaultchat.ui.password.ChangePasswordScreen
 import app.vaultchat.ui.password.ChangePasswordViewModel
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Modifier
+import app.vaultchat.domain.location.LocationBlock
+import app.vaultchat.ui.location.LocationRequiredScreen
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -113,7 +119,17 @@ fun VaultChatNavHost(container: AppContainer) {
         val job = if (signedIn) container.applicationScope.launch { container.realtime.run() } else null
         onStopOrDispose { job?.cancel() }
     }
-    IncomingCallWatcher(container.callRepository, container.realtime, enabled = signedIn && !onCallScreen) { call ->
+    // Location sharing (D-06): sent each time the app comes to the front; the app is blocked while it
+    // is off. A call in progress is never covered.
+    val location by container.locationSharing.state.collectAsStateWithLifecycle()
+    LifecycleStartEffect(signedIn) {
+        if (signedIn) container.locationSharing.onAppOpened()
+        onStopOrDispose { }
+    }
+    val locationBlocked = signedIn && !onCallScreen && location.block != LocationBlock.NONE
+    val scope = rememberCoroutineScope()
+
+    IncomingCallWatcher(container.callRepository, container.realtime, enabled = signedIn && !onCallScreen && !locationBlocked) { call ->
         navController.navigate(CallRoute(video = call.kind == CallKind.VIDEO, peerUsername = call.peerUsername, callId = call.id))
     }
 
@@ -139,6 +155,7 @@ fun VaultChatNavHost(container: AppContainer) {
         }
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     NavHost(navController = navController, startDestination = start) {
         composable<LoginRoute> {
             val viewModel: LoginViewModel = viewModel(
@@ -268,5 +285,19 @@ fun VaultChatNavHost(container: AppContainer) {
                 onBack = { navController.popBackStack() },
             )
         }
+    }
+    if (locationBlocked) {
+        LocationRequiredScreen(
+            ui = location,
+            sharing = container.locationSharing,
+            onLogout = {
+                scope.launch {
+                    Push.forgetOnDevice()
+                    container.authRepository.logout()
+                    navController.replaceAll(LoginRoute)
+                }
+            },
+        )
+    }
     }
 }

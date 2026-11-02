@@ -18,7 +18,7 @@ Reference frameworks: OWASP ASVS (backend/API/admin) and OWASP MASVS (Android). 
 | APK signing key | Critical (can publish "updates" the phones will accept) |
 | Message content (until deleted) | High |
 | Call media (in transit) | High |
-| Location (if D-06 approved) | High |
+| Location (D-06, latest point only) | High |
 | Call metadata, audit log | Medium |
 | Database backups | High |
 

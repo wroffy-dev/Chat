@@ -65,6 +65,9 @@ import app.vaultchat.R
 import app.vaultchat.VaultChatApplication
 import app.vaultchat.domain.connection.Connection
 import app.vaultchat.ui.about.AboutApp
+import app.vaultchat.domain.location.LocationBlock
+import app.vaultchat.ui.location.LocationIndicator
+import app.vaultchat.ui.location.LocationSettingsDialog
 import app.vaultchat.ui.about.UpdateBanner
 import app.vaultchat.ui.components.BannerKind
 import app.vaultchat.ui.components.EmptyState
@@ -89,6 +92,10 @@ fun HomeScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val updater = (context.applicationContext as VaultChatApplication).container.appUpdater
+    val locationSharing = (context.applicationContext as VaultChatApplication).container.locationSharing
+    val location by locationSharing.state.collectAsStateWithLifecycle()
+    var locationDialog by remember { mutableStateOf(false) }
+    if (locationDialog) LocationSettingsDialog(location, locationSharing) { locationDialog = false }
 
     LifecycleResumeEffect(viewModel) {
         viewModel.start()
@@ -110,8 +117,13 @@ fun HomeScreen(
                 username = state.username,
                 onConnect = onOpenInbox,
                 onChangePassword = onChangePassword,
+                onLocation = { locationDialog = true },
                 onLogout = viewModel::logout,
             )
+            // Always shown while sharing is on (D-06): the location goes to the administrator.
+            if (location.block == LocationBlock.NONE) {
+                LocationIndicator(location, onClick = { locationDialog = true }, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+            }
             UpdateBanner(updater, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             AskBatteryExemptionOnce()
             if (state.offline) {
@@ -141,7 +153,7 @@ fun HomeScreen(
 }
 
 @Composable
-private fun Header(username: String?, onConnect: () -> Unit, onChangePassword: () -> Unit, onLogout: () -> Unit) {
+private fun Header(username: String?, onConnect: () -> Unit, onChangePassword: () -> Unit, onLocation: () -> Unit, onLogout: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     var about by remember { mutableStateOf(false) }
     if (about) {
@@ -174,6 +186,7 @@ private fun Header(username: String?, onConnect: () -> Unit, onChangePassword: (
                     DropdownMenuItem(text = { Text(stringResource(R.string.home_signed_in_as, it)) }, onClick = {}, enabled = false)
                 }
                 DropdownMenuItem(text = { Text(stringResource(R.string.home_change_password)) }, onClick = { menu = false; onChangePassword() })
+                DropdownMenuItem(text = { Text(stringResource(R.string.location_settings)) }, onClick = { menu = false; onLocation() })
                 DropdownMenuItem(text = { Text(stringResource(R.string.home_about)) }, onClick = { menu = false; about = true })
                 DropdownMenuItem(text = { Text(stringResource(R.string.action_log_out)) }, onClick = { menu = false; onLogout() })
             }

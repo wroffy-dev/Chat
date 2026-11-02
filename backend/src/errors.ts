@@ -31,7 +31,9 @@ export type ErrorCode =
   | "UNSUPPORTED_MEDIA_TYPE"
   | "RATE_LIMITED"
   | "INTERNAL_ERROR"
-  | "SERVICE_UNAVAILABLE";
+  | "SERVICE_UNAVAILABLE"
+  | "SHARING_DISABLED"
+  | "CONSENT_OUTDATED";
 
 export interface ErrorDetail {
   path: string;
@@ -97,6 +99,8 @@ export const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   RATE_LIMITED: "Too many requests. Try again later.",
   INTERNAL_ERROR: "Something went wrong.",
   SERVICE_UNAVAILABLE: "The service is temporarily unavailable.",
+  SHARING_DISABLED: "Location sharing is off.",
+  CONSENT_OUTDATED: "The location-sharing explanation has changed. Read it and agree again.",
 };
 
 /** Maps a client-error HTTP status (from Fastify or a plugin) to a stable public code. */

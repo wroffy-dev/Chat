@@ -189,4 +189,32 @@
         <item quantity="other">%1$d new messages</item>
     </plurals>
     <string name="action_close">Close</string>
+    <!-- Location sharing with the administrator (D-06, docs/11) -->
+    <string name="location_required_title">Share your location to use Vault</string>
+    <string name="location_permission_title">Allow location for Vault</string>
+    <string name="location_device_off_title">Turn on your phone\'s location</string>
+    <string name="location_consent_1">Vault sends your location to the administrator each time you open the app.</string>
+    <string name="location_consent_2">Only the latest location is kept. There is no history, and nothing is sent while the app is closed.</string>
+    <string name="location_consent_3">Other Vault users cannot see your location. You can see when the administrator last looked at it.</string>
+    <string name="location_consent_4">You can turn this off in the menu (⋮ → Location sharing), but Vault cannot be used while it is off.</string>
+    <string name="location_agree">Agree and turn on location</string>
+    <string name="location_turning_on">Turning on…</string>
+    <string name="location_allow">Allow location</string>
+    <string name="location_permission_body">Vault needs Android\'s location permission. If you choose \"approximate\", only an approximate location is sent.</string>
+    <string name="location_device_off_body">Your phone\'s location is switched off, so Vault cannot read where you are.</string>
+    <string name="location_open_device_settings">Open location settings</string>
+    <string name="location_error_offline">Could not reach the server. Check your connection and try again.</string>
+    <string name="location_error_failed">That did not work. Try again.</string>
+    <string name="location_indicator">Location shared with the administrator · sent %1$s</string>
+    <string name="location_indicator_on">Location shared with the administrator</string>
+    <string name="location_indicator_sending">Sending your location to the administrator…</string>
+    <string name="location_indicator_unavailable">Location sharing is on, but your location could not be read just now</string>
+    <string name="location_settings">Location sharing</string>
+    <string name="location_settings_title">Location sharing is on</string>
+    <string name="location_last_sent">Last sent: %1$s</string>
+    <string name="location_last_viewed">Administrator last looked: %1$s</string>
+    <string name="location_never">never</string>
+    <string name="location_turn_off">Turn off</string>
+    <string name="location_turn_off_confirm">Turn off anyway</string>
+    <string name="location_off_warning">Turning it off deletes your location from the server, and Vault cannot be used until you turn it on again.</string>
 </resources>

@@ -1,6 +1,14 @@
 # 11 — Optional Location Sharing (Proposal)
 
-> **Status: PROPOSED FEATURE — REQUIRES EXPLICIT APPROVAL BEFORE ANY IMPLEMENTATION (open decision D-06).**
+> **Status: Implemented (2026-11-02) with the owner's changes — see D-06 in [17](17-open-decisions.md).**
+> Differences from the proposal below: sharing is **required to use the app** (agreed at first use; turning
+> it off, revoking Android's permission or switching off the phone's location blocks the app until it is
+> on again); the point is sent **each time the app is opened** (not every 5 minutes); the stored point is
+> **not** nulled after 24 h. Everything else holds: administrator only, foreground only, no background
+> permission, latest point only (no history), visible indicator on Home, admin views audited and shown to
+> the user, coordinates excluded from logs and backups.
+>
+> Original status: PROPOSED FEATURE — REQUIRES EXPLICIT APPROVAL BEFORE ANY IMPLEMENTATION (open decision D-06).
 > It must not be built, partially built, or stubbed in the MVP without written sign-off from the product owner,
 > and it should also be agreed with **both users**.
 

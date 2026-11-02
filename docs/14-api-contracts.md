@@ -244,10 +244,23 @@ All routes require the caller to be the caller or callee of `{id}` (else `404`).
   internal Docker network (Traefik does not route `/internal/*`).
 - Handles `participant_joined`, `participant_left`, `room_finished`. Unknown rooms ignored. **Response:** `200`.
 
-## 7. Location sharing (proposed — only if D-06 approved)
+## 7. Location sharing (Implemented 2026-11-02, D-06)
 
-See [11 §5](11-location-sharing-proposal.md#5-api-proposed): `GET /location-sharing`, `PUT /location-sharing`,
-`PUT /location-sharing/current`. Admin: `GET /admin/users/{id}/location`.
+All three need a signed-in, unrestricted user. Response body for each: `{ enabled, consentVersion,
+currentConsentVersion, precision, lastSentAt, lastViewedByAdminAt }` (`enabled` is true only with the
+current consent version).
+
+- `GET /location-sharing`
+- `PUT /location-sharing` — `{ "enabled": true, "consentVersion": 1, "precision": "precise"|"approximate" }`
+  (`409 CONSENT_OUTDATED` for another version) or `{ "enabled": false }` (deletes the stored point). 20/min.
+- `PUT /location-sharing/current` — `{ "lat", "lng", "accuracyM", "capturedAt", "precision" }`; lat ∈ [-90, 90],
+  lng ∈ [-180, 180], accuracyM ∈ (0, 100000], capturedAt ISO time no more than 1 h old or 5 min ahead.
+  Stored rounded (5 decimals precise, 2 approximate), replacing the previous point. `409 SHARING_DISABLED`
+  when off. 6/min.
+
+Admin Console: the Users page shows each user's sharing state; `GET /admin/users/{id}/location` shows the
+latest point with an OpenStreetMap link, writes audit `admin.location_viewed` and sets
+`last_viewed_by_admin_at`.
 
 ## 8. Health
 
