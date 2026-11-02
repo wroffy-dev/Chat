@@ -1,6 +1,21 @@
 package app.vaultchat.ui.about
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import app.vaultchat.platform.CrashLog
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -41,12 +56,29 @@ fun rememberApkHash(): String? {
 @Composable
 fun AboutApp(modifier: Modifier = Modifier) {
     val hash = rememberApkHash()
-    SelectionContainer(modifier = modifier) {
-        Text(
-            stringResource(R.string.about_version, BuildConfig.VERSION_CODE, hash ?: "…"),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+    val context = LocalContext.current
+    var crash by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) { crash = withContext(Dispatchers.IO) { CrashLog.last(context) } }
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        SelectionContainer {
+            Text(
+                stringResource(R.string.about_version, BuildConfig.VERSION_CODE, hash ?: "…"),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        // The last crash's reason, for testers to copy and send; it never leaves the phone by itself.
+        crash?.let { text ->
+            val clipboard = LocalClipboardManager.current
+            Text(stringResource(R.string.about_last_crash), style = MaterialTheme.typography.labelLarge)
+            SelectionContainer(Modifier.heightIn(max = 220.dp).verticalScroll(rememberScrollState())) {
+                Text(text, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = { clipboard.setText(AnnotatedString(text)) }) { Text(stringResource(R.string.about_copy_crash)) }
+                TextButton(onClick = { CrashLog.clear(context); crash = null }) { Text(stringResource(R.string.about_clear_crash)) }
+            }
+        }
     }
 }
 

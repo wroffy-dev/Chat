@@ -39,6 +39,7 @@ import io.livekit.android.room.Room
 import io.livekit.android.room.track.LocalVideoTrack
 import io.livekit.android.room.track.Track
 import io.livekit.android.room.track.VideoTrack
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -131,7 +132,8 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
                     is RoomEvent.DataReceived -> if (e.topic == TOPIC_SWITCH_CAMERA) {
                         // The other person asked to flip our camera. Only a camera that is on: a flip
                         // restarts capture, so on a turned-off camera it would switch it back on.
-                        if (flipFrontBack()) _events.emit(MediaEvent.CameraSwitchedByPeer)
+                        // Its own coroutine: the event stream keeps flowing while the camera reopens.
+                        launch { if (flipFrontBack()) _events.emit(MediaEvent.CameraSwitchedByPeer) }
                     }
                     is RoomEvent.Reconnecting -> _events.emit(MediaEvent.Reconnecting)
                     is RoomEvent.Reconnected -> _events.emit(MediaEvent.Reconnected)
@@ -206,7 +208,11 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
             val flipped = republishCamera(old, quality, forced = false, position = target)
             if (flipped) _localFront.value = target == CameraPosition.FRONT
             return flipped
-        } catch (_: Exception) {
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Throwable) {
+            // Any failure (an Error from the SDK included) leaves the call as it was instead of
+            // closing the app.
             return false
         } finally {
             flipLock.unlock()
