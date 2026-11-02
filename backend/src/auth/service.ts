@@ -193,6 +193,10 @@ export class AuthService {
       throw appError(403, "ACCOUNT_DISABLED");
     }
 
+    // The phone has the tokens of its latest refresh: from now on the older refresh token is a copy.
+    if (!session.refreshConfirmed) {
+      await this.prisma.session.update({ where: { id: session.id }, data: { refreshConfirmed: true } });
+    }
     if (now.getTime() - session.lastUsedAt.getTime() >= SESSION_POLICY.touchIntervalMs) {
       await this.prisma.$transaction([
         this.prisma.session.update({ where: { id: session.id }, data: { lastUsedAt: now } }),
@@ -209,8 +213,25 @@ export class AuthService {
     const session = await this.prisma.session.findUnique({ where: { refreshTokenHash: hash }, include: { user: true } });
 
     if (!session) {
-      // A previously rotated token presented again means it was copied: end that session.
-      const reused = await this.prisma.session.findFirst({ where: { previousRefreshTokenHash: hash, revokedAt: null } });
+      const reused = await this.prisma.session.findFirst({ where: { previousRefreshTokenHash: hash, revokedAt: null }, include: { user: true } });
+      // The phone asked again with the token it held before because the last answer never reached it
+      // (weak network, app closed mid-request): it has not used the new tokens yet. Renew from there
+      // instead of ending the session, which logged users out for no reason.
+      if (reused && !reused.refreshConfirmed && reused.idleExpiresAt > now && reused.absoluteExpiresAt > now && reused.user.status === "active") {
+        const retried = this.newTokens(now);
+        const ok = await this.prisma.session.updateMany({
+          where: { id: reused.id, previousRefreshTokenHash: hash, refreshConfirmed: false, revokedAt: null },
+          data: { ...this.tokenColumns(retried, now, reused.absoluteExpiresAt), lastUsedAt: now },
+        });
+        if (ok.count === 1) {
+          return {
+            ...retried,
+            user: { id: reused.user.id, username: reused.user.username, mustChangePassword: reused.user.mustChangePassword },
+          };
+        }
+      }
+      // Otherwise a previously rotated token presented again, after the new ones were in use, means it
+      // was copied: end that session.
       if (reused) {
         await this.revokeSession(reused.id, "refresh_reuse", now);
         await audit(this.prisma, { actorType: "system", action: "auth.refresh_reuse_detected", targetType: "user", targetId: reused.userId, ip: meta.ip });
@@ -234,6 +255,7 @@ export class AuthService {
       data: {
         ...this.tokenColumns(tokens, now, session.absoluteExpiresAt),
         previousRefreshTokenHash: hash,
+        refreshConfirmed: false,
         lastUsedAt: now,
         ...(meta.appVersionCode !== undefined ? { appVersionCode: meta.appVersionCode } : {}),
       },

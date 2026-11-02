@@ -28,11 +28,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -40,13 +36,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -64,8 +56,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.vaultchat.R
 import app.vaultchat.VaultChatApplication
 import app.vaultchat.domain.connection.Connection
-import app.vaultchat.ui.about.AboutApp
-import app.vaultchat.ui.location.LocationSettingsDialog
 import app.vaultchat.ui.about.UpdateBanner
 import app.vaultchat.ui.components.BannerKind
 import app.vaultchat.ui.components.EmptyState
@@ -81,7 +71,6 @@ import app.vaultchat.ui.components.StatusBanner
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
-    onChangePassword: () -> Unit,
     onSignedOut: () -> Unit,
     onPasswordChangeRequired: () -> Unit,
     onOpenInbox: () -> Unit,
@@ -90,10 +79,6 @@ fun HomeScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val updater = (context.applicationContext as VaultChatApplication).container.appUpdater
-    val locationSharing = (context.applicationContext as VaultChatApplication).container.locationSharing
-    val location by locationSharing.state.collectAsStateWithLifecycle()
-    var locationDialog by remember { mutableStateOf(false) }
-    if (locationDialog) LocationSettingsDialog(location, locationSharing) { locationDialog = false }
 
     LifecycleResumeEffect(viewModel) {
         viewModel.start()
@@ -111,13 +96,7 @@ fun HomeScreen(
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
-            Header(
-                username = state.username,
-                onConnect = onOpenInbox,
-                onChangePassword = onChangePassword,
-                onLocation = { locationDialog = true },
-                onLogout = viewModel::logout,
-            )
+            Header(onConnect = onOpenInbox)
             UpdateBanner(updater, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             AskBatteryExemptionOnce()
             if (state.offline) {
@@ -146,19 +125,9 @@ fun HomeScreen(
     }
 }
 
+/** Title and the "+" to connect with someone. No menu (owner request 2026-11-02): no sign-out, no settings. */
 @Composable
-private fun Header(username: String?, onConnect: () -> Unit, onChangePassword: () -> Unit, onLocation: () -> Unit, onLogout: () -> Unit) {
-    var menu by remember { mutableStateOf(false) }
-    var about by remember { mutableStateOf(false) }
-    if (about) {
-        // Version and APK hash live here rather than on the main screen.
-        AlertDialog(
-            onDismissRequest = { about = false },
-            title = { Text(stringResource(R.string.home_about)) },
-            text = { AboutApp() },
-            confirmButton = { TextButton(onClick = { about = false }) { Text(stringResource(R.string.action_close)) } },
-        )
-    }
+private fun Header(onConnect: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 12.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -170,20 +139,6 @@ private fun Header(username: String?, onConnect: () -> Unit, onChangePassword: (
         )
         RoundIconButton(onClick = onConnect) {
             Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.home_connect_new))
-        }
-        Box {
-            RoundIconButton(onClick = { menu = true }) {
-                Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.home_menu))
-            }
-            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                username?.let {
-                    DropdownMenuItem(text = { Text(stringResource(R.string.home_signed_in_as, it)) }, onClick = {}, enabled = false)
-                }
-                DropdownMenuItem(text = { Text(stringResource(R.string.home_change_password)) }, onClick = { menu = false; onChangePassword() })
-                DropdownMenuItem(text = { Text(stringResource(R.string.location_settings)) }, onClick = { menu = false; onLocation() })
-                DropdownMenuItem(text = { Text(stringResource(R.string.home_about)) }, onClick = { menu = false; about = true })
-                DropdownMenuItem(text = { Text(stringResource(R.string.action_log_out)) }, onClick = { menu = false; onLogout() })
-            }
         }
     }
 }

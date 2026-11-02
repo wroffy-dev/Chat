@@ -7,7 +7,9 @@
 > **not** nulled after 24 h. Everything else holds: administrator only, foreground only, no background
 > permission, latest point only (no history), visible indicator on Home, admin views audited and shown to
 > the user, coordinates excluded from logs and backups.
-> Later change (owner, 2026-11-02): the Home indicator line was removed; the status (last sent, last viewed
+> Later change (owner, 2026-11-02): the ⋮ menu was removed too, so there is no in-app "Turn off"; sharing stops
+> only when Android's permission or the phone's location is turned off (the app is then blocked).
+> Earlier change (owner, 2026-11-02): the Home indicator line was removed; the status (last sent, last viewed
 > by the admin, turn off) is in ⋮ → Location sharing.
 >
 > Original status: PROPOSED FEATURE — REQUIRES EXPLICIT APPROVAL BEFORE ANY IMPLEMENTATION (open decision D-06).

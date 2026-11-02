@@ -79,6 +79,8 @@ model Session {
   accessExpiresAt          DateTime  @map("access_expires_at") @db.Timestamptz(3)
   refreshTokenHash         Bytes     @unique @map("refresh_token_hash")
   previousRefreshTokenHash Bytes?    @map("previous_refresh_token_hash")
+  /// False from a refresh until the new access token is first used (lost-answer retry, docs/04 §4).
+  refreshConfirmed         Boolean   @default(true) @map("refresh_confirmed")
   idleExpiresAt            DateTime  @map("idle_expires_at") @db.Timestamptz(3)
   absoluteExpiresAt        DateTime  @map("absolute_expires_at") @db.Timestamptz(3)
   restricted               Boolean   @default(false)
