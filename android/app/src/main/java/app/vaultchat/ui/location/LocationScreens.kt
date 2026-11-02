@@ -167,6 +167,7 @@ fun LocationIndicator(ui: LocationUi, onClick: () -> Unit, modifier: Modifier = 
                 when {
                     ui.sending -> stringResource(R.string.location_indicator_sending)
                     ui.unavailable -> stringResource(R.string.location_indicator_unavailable)
+                    ui.sendError != null -> stringResource(R.string.location_indicator_send_failed, ui.sendError)
                     ui.lastSentAt != null -> stringResource(R.string.location_indicator, ago(ui.lastSentAt))
                     else -> stringResource(R.string.location_indicator_on)
                 },
@@ -195,6 +196,12 @@ fun LocationSettingsDialog(ui: LocationUi, sharing: LocationSharing, onDismiss: 
                     Text(stringResource(R.string.location_off_warning), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
                 }
                 if (failed) Text(stringResource(R.string.location_error_failed), color = MaterialTheme.colorScheme.error)
+                when {
+                    ui.sending -> Text(stringResource(R.string.location_indicator_sending), style = MaterialTheme.typography.bodySmall)
+                    ui.unavailable -> Text(stringResource(R.string.location_indicator_unavailable), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    ui.sendError != null -> Text(stringResource(R.string.location_indicator_send_failed, ui.sendError), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                }
+                TextButton(onClick = { sharing.sendNow() }, enabled = !ui.sending) { Text(stringResource(R.string.location_send_now)) }
             }
         },
         confirmButton = {
