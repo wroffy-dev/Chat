@@ -11,13 +11,20 @@ import android.os.Build
 import android.os.CancellationSignal
 import android.os.Looper
 import androidx.core.content.ContextCompat
+import app.vaultchat.data.location.ConsentDto
 import app.vaultchat.data.location.LocationApi
 import app.vaultchat.data.location.LocationStateDto
 import app.vaultchat.data.network.ApiResult
 import app.vaultchat.domain.location.LocationBlock
 import app.vaultchat.domain.location.LocationGate
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,6 +35,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Instant
+import kotlinx.serialization.json.Json
 import kotlin.coroutines.resume
 
 data class LocationUi(
@@ -40,6 +48,8 @@ data class LocationUi(
     val sending: Boolean = false,
     /** The last attempt to read a position found none (e.g. indoors with GPS only). */
     val unavailable: Boolean = false,
+    /** The position was read but the server did not take it: its error code, or "offline". */
+    val sendError: String? = null,
 )
 
 /**
@@ -80,7 +90,14 @@ class LocationSharing(
     /** Each time the app comes to the front: ask the server, then send a fresh position if allowed. */
     fun onAppOpened() {
         recheck()
-        scope.launch { lock.withLock { syncAndSend() } }
+        scope.launch {
+            lock.withLock { syncAndSend() }
+            // No position yet (e.g. GPS still searching): one more try a little later.
+            if (_state.value.unavailable) {
+                delay(RETRY_MS)
+                lock.withLock { if (_state.value.block == LocationBlock.NONE) send() }
+            }
+        }
     }
 
     /** The user agreed on the consent screen (permission already granted). */
@@ -106,8 +123,24 @@ class LocationSharing(
         }
     }
 
-    /** The server's current consent version, needed on the consent screen; null when offline. */
-    suspend fun consentVersion(): Int? = (api.state() as? ApiResult.Ok)?.value?.currentConsentVersion
+    /** "Send now" from the menu: read and send a position at once. */
+    fun sendNow() {
+        scope.launch { lock.withLock { if (_state.value.block == LocationBlock.NONE) send() } }
+    }
+
+    /**
+     * The consent text to show, always from the server (backend/consents/location-sharing.json). The last
+     * one fetched is kept so the menu can show what was agreed while offline; agreeing needs the server.
+     */
+    suspend fun consent(): ConsentDto? = when (val r = api.consent()) {
+        is ApiResult.Ok -> r.value.also { prefs.edit().putString(CONSENT_CACHE, json.encodeToString(ConsentDto.serializer(), it)).apply() }
+        else -> null
+    }
+
+    /** The last consent text fetched, for showing while offline; null if never fetched. */
+    fun cachedConsent(): ConsentDto? = prefs.getString(CONSENT_CACHE, null)?.let {
+        runCatching { json.decodeFromString(ConsentDto.serializer(), it) }.getOrNull()
+    }
 
     private suspend fun syncAndSend() {
         when (val r = api.state()) {
@@ -119,21 +152,43 @@ class LocationSharing(
 
     private suspend fun send() {
         if (!hasPermission() || !deviceLocationOn()) return
-        _state.value = _state.value.copy(sending = true, unavailable = false)
-        val fix = currentFix()
+        _state.value = _state.value.copy(sending = true, unavailable = false, sendError = null)
+        try {
+            readAndReport()
+        } finally {
+            // "Sending…" never stays on screen, whatever happened.
+            _state.value = _state.value.copy(sending = false)
+        }
+    }
+
+    private suspend fun readAndReport() {
+        // Any failure reading the position (an unexpected provider error included) only marks it
+        // unavailable; it never takes the app down.
+        val fix = try {
+            currentFix()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
         if (fix == null) {
-            _state.value = _state.value.copy(sending = false, unavailable = true)
+            _state.value = _state.value.copy(unavailable = true)
             return
         }
         val captured = Instant.ofEpochMilli(fix.time).let { if (it.isAfter(Instant.now())) Instant.now() else it }
         val accuracy = if (fix.hasAccuracy() && fix.accuracy > 0f) fix.accuracy.toDouble() else 1_000.0
         when (val r = api.report(fix.latitude, fix.longitude, accuracy, captured.toString(), precise())) {
             is ApiResult.Ok -> apply(r.value)
-            // Turned off from another phone, or the explanation changed: ask again.
-            is ApiResult.HttpError -> if (r.code == "SHARING_DISABLED") { cacheSharing(false); recheck() }
-            ApiResult.NetworkError -> Unit
+            is ApiResult.HttpError -> {
+                // Turned off from another phone, or the explanation changed: ask again.
+                if (r.code == "SHARING_DISABLED") {
+                    cacheSharing(false)
+                    recheck()
+                }
+                _state.value = _state.value.copy(sendError = r.code ?: "HTTP_${r.status}")
+            }
+            ApiResult.NetworkError -> _state.value = _state.value.copy(sendError = "offline")
         }
-        _state.value = _state.value.copy(sending = false)
     }
 
     private fun apply(dto: LocationStateDto) {
@@ -155,30 +210,55 @@ class LocationSharing(
         key()?.let { prefs.edit().putBoolean(it, on).apply() }
     }
 
-    /** One position: a recent cached one if any, otherwise a fresh reading (30 s at most). */
+    /**
+     * One position: a cached one under 2 minutes old, else a fresh reading from each enabled provider in
+     * turn (fused, network, GPS, then any other), else the newest cached one under 55 minutes old (the
+     * server takes points up to an hour old). Phones differ in which providers they offer: some list
+     * only GPS when Google's location accuracy is off, and GPS needs a view of the sky.
+     */
     @SuppressLint("MissingPermission") // hasPermission() is checked by every caller.
     private suspend fun currentFix(): Location? {
         val lm = manager ?: return null
         val providers = providers(lm)
-        val recent = providers.mapNotNull { runCatching { lm.getLastKnownLocation(it) }.getOrNull() }
-            .filter { System.currentTimeMillis() - it.time < RECENT_MS }
-            .minByOrNull { if (it.hasAccuracy()) it.accuracy else Float.MAX_VALUE }
-        if (recent != null) return recent
-        for (provider in providers) {
-            val fix = withTimeoutOrNull(FIX_TIMEOUT_MS) { readOnce(lm, provider) }
-            if (fix != null) return fix
+        val cached = (providers + LocationManager.PASSIVE_PROVIDER)
+            .mapNotNull { runCatching { lm.getLastKnownLocation(it) }.getOrNull() }
+        cached.filter { age(it) < RECENT_MS }.minByOrNull { if (it.hasAccuracy()) it.accuracy else Float.MAX_VALUE }?.let { return it }
+        // Every provider at once; the first position wins, and the wait is bounded.
+        val fresh = withTimeoutOrNull(FRESH_TIMEOUT_MS) {
+            coroutineScope {
+                val first = CompletableDeferred<Location?>()
+                val reads = providers.map { provider ->
+                    launch {
+                        val fix = try {
+                            readOnce(lm, provider)
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (_: Exception) {
+                            null
+                        }
+                        if (fix != null) first.complete(fix)
+                    }
+                }
+                launch {
+                    reads.joinAll()
+                    first.complete(null)
+                }
+                first.await().also { coroutineContext.cancelChildren() }
+            }
         }
-        return null
+        return fresh ?: cached.filter { age(it) < FALLBACK_MS }.maxByOrNull { it.time }
     }
 
+    private fun age(l: Location) = System.currentTimeMillis() - l.time
+
     private fun providers(lm: LocationManager): List<String> {
-        val all = lm.getProviders(true)
-        val order = buildList {
+        val enabled = runCatching { lm.getProviders(true) }.getOrDefault(emptyList()).filter { it != LocationManager.PASSIVE_PROVIDER }
+        val preferred = buildList {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) add(LocationManager.FUSED_PROVIDER)
             add(LocationManager.NETWORK_PROVIDER)
-            if (precise()) add(LocationManager.GPS_PROVIDER)
+            add(LocationManager.GPS_PROVIDER)
         }
-        return order.filter { it in all }
+        return preferred.filter { it in enabled } + enabled.filter { it !in preferred }
     }
 
     @SuppressLint("MissingPermission")
@@ -210,8 +290,13 @@ class LocationSharing(
 
     private fun parse(iso: String): Instant? = runCatching { Instant.parse(iso) }.getOrNull()
 
+    private val json = Json { ignoreUnknownKeys = true }
+
     private companion object {
+        const val CONSENT_CACHE = "consent_location_sharing"
         const val RECENT_MS = 2 * 60_000L
-        const val FIX_TIMEOUT_MS = 20_000L
+        const val FALLBACK_MS = 55 * 60_000L
+        const val FRESH_TIMEOUT_MS = 30_000L
+        const val RETRY_MS = 30_000L
     }
 }

@@ -1,4 +1,5 @@
 import { audit } from "../auth/audit.js";
+import { CONSENTS } from "../consents/store.js";
 import { appError } from "../errors.js";
 import type { LocationShare, PrismaClient } from "../generated/prisma/client.js";
 
@@ -9,7 +10,8 @@ import type { LocationShare, PrismaClient } from "../generated/prisma/client.js"
  * its position each time it is opened. Only the latest point is kept, overwritten in place, and it is
  * cleared when the user turns sharing off. Coordinates never go into logs or audit metadata.
  */
-export const LOCATION_CONSENT_VERSION = 1;
+/** The consent's current version, from backend/consents/location-sharing.json (its only source). */
+export const LOCATION_CONSENT_VERSION = CONSENTS["location-sharing"].version;
 
 export type LocationPrecision = "approximate" | "precise";
 

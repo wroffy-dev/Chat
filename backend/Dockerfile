@@ -19,6 +19,8 @@ RUN npm ci
 COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
 RUN npm run build
+# Consent texts are read at start-up (src/consents/store.ts).
+COPY consents ./consents
 
 # Migrations need the Prisma CLI (a dev dependency); run with MIGRATE_DATABASE_URL set. The role
 # privileges (prisma/grants.sql) are re-applied after every migration so new tables get them too.
@@ -35,6 +37,7 @@ WORKDIR /app
 COPY --from=prune /app/package.json ./
 COPY --from=prune /app/node_modules ./node_modules
 COPY --from=prune /app/dist ./dist
+COPY --from=prune /app/consents ./consents
 # Migrations are read at run time by /readyz to detect pending migrations.
 COPY --from=prune /app/prisma/migrations ./prisma/migrations
 # In-app updates: the latest uploaded APK (a volume in production; the root filesystem is read-only).

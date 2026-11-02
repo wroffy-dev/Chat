@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { authOf, requireUser } from "../auth/plugin.js";
 import type { AuthService } from "../auth/service.js";
 import type { LocationPrecision, LocationService } from "../location/service.js";
+import { CONSENTS } from "../consents/store.js";
 
 const stateSchema = {
   type: "object",
@@ -22,6 +23,31 @@ type SharingBody = { enabled: true; consentVersion: number; precision: LocationP
 /** Location sharing with the administrator (docs/11, docs/14 §location; owner decision D-06). */
 export async function locationRoutes(app: FastifyInstance, opts: { auth: AuthService; location: LocationService }) {
   const user = requireUser(opts.auth);
+
+  // The consent text the app shows; it comes only from backend/consents/location-sharing.json.
+  app.get(
+    "/consents/location-sharing",
+    {
+      onRequest: user,
+      schema: {
+        response: {
+          200: {
+            type: "object",
+            additionalProperties: false,
+            required: ["id", "version", "title", "points", "agree"],
+            properties: {
+              id: { type: "string" },
+              version: { type: "integer" },
+              title: { type: "string" },
+              points: { type: "array", items: { type: "string" } },
+              agree: { type: "string" },
+            },
+          },
+        },
+      },
+    },
+    async () => CONSENTS["location-sharing"],
+  );
 
   app.get("/location-sharing", { onRequest: user, schema: { response: { 200: stateSchema } } }, async (request) =>
     opts.location.state(authOf(request).user.id),

@@ -193,10 +193,7 @@
     <string name="location_required_title">Share your location to use Vault</string>
     <string name="location_permission_title">Allow location for Vault</string>
     <string name="location_device_off_title">Turn on your phone\'s location</string>
-    <string name="location_consent_1">Vault sends your location to the administrator each time you open the app.</string>
-    <string name="location_consent_2">Only the latest location is kept. There is no history, and nothing is sent while the app is closed.</string>
-    <string name="location_consent_3">Other Vault users cannot see your location. You can see when the administrator last looked at it.</string>
-    <string name="location_consent_4">You can turn this off in the menu (⋮ → Location sharing), but Vault cannot be used while it is off.</string>
+    <string name="location_consent_loading">Loading what is shared…</string>
     <string name="location_agree">Agree and turn on location</string>
     <string name="location_turning_on">Turning on…</string>
     <string name="location_allow">Allow location</string>
@@ -208,7 +205,9 @@
     <string name="location_indicator">Location shared with the administrator · sent %1$s</string>
     <string name="location_indicator_on">Location shared with the administrator</string>
     <string name="location_indicator_sending">Sending your location to the administrator…</string>
-    <string name="location_indicator_unavailable">Location sharing is on, but your location could not be read just now</string>
+    <string name="location_indicator_unavailable">Location sharing is on, but your location could not be read. Try near a window or outdoors</string>
+    <string name="location_indicator_send_failed">Your location was read but not sent (%1$s). Tap to try again</string>
+    <string name="location_send_now">Send my location now</string>
     <string name="location_settings">Location sharing</string>
     <string name="location_settings_title">Location sharing is on</string>
     <string name="location_last_sent">Last sent: %1$s</string>
