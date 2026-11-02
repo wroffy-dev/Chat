@@ -158,6 +158,9 @@
     <string name="chat_notice_left_while_away">You were away for more than a minute, so you left the chat.</string>
     <string name="chat_notice_rate_limited">You are sending too fast. Wait a moment.</string>
     <string name="about_version">App version %1$d · APK SHA-256: %2$s</string>
+    <string name="about_last_crash">Last crash (stays on this phone; copy it to send to the developer)</string>
+    <string name="about_copy_crash">Copy</string>
+    <string name="about_clear_crash">Clear</string>
     <string name="upgrade_title">Update required</string>
     <string name="upgrade_body">This version of the app is no longer supported. Install the latest version you received from the administrator, then open the app again.</string>
     <string name="upgrade_installed">Installed: version %1$d, APK SHA-256 %2$s</string>
