@@ -10,9 +10,11 @@ import app.vaultchat.domain.call.CallStatus
 import app.vaultchat.domain.realtime.RealtimeSignal
 import app.vaultchat.domain.realtime.RealtimeSignals
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
@@ -42,7 +44,9 @@ fun IncomingCallWatcher(
                         val call = (repo.current() as? CallResult.Ok)?.value
                         if (call != null && !call.isCaller && call.status == CallStatus.RINGING && call.id != announced) {
                             announced = call.id
-                            latest.value(call)
+                            // The scope may run off the main thread; opening the call screen (navigation)
+                            // must happen on it, or the app crashes (owner report 2026-11-03, v134).
+                            withContext(Dispatchers.Main.immediate) { latest.value(call) }
                         }
                         withTimeoutOrNull(if (signals.connected.value) 15_000L else 3_000L) { wake.receive() }
                     }
