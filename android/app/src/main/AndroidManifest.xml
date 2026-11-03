@@ -5,6 +5,8 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Turns the screen on when a call rings while Vault is open with the screen off (MainActivity). -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Camera: used only on the Scan QR screen for now (and later for video calls). -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />

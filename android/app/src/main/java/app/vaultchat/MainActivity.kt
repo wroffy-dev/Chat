@@ -4,6 +4,7 @@ import android.app.KeyguardManager
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -33,7 +34,27 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Held while a call rings with the screen off, so the screen comes on (released when the call screen goes). */
+    private var wakeLock: PowerManager.WakeLock? = null
+
     private fun showOverLockScreen(on: Boolean) {
+        // With the screen off the activity is stopped: setTurnScreenOn only acts when it resumes, and nothing
+        // composes (no ringing, no auto-answer). A wake-up wake lock turns the screen on; Vault was the app in
+        // front, so it comes back over the lock screen (setShowWhenLocked) and the 10 s auto-answer runs.
+        // No notification is used (D-24). Best effort: a phone may ignore it.
+        if (on) {
+            if (wakeLock == null) {
+                runCatching {
+                    @Suppress("DEPRECATION")
+                    wakeLock = getSystemService(PowerManager::class.java)
+                        ?.newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP, "vault:incoming-call")
+                        ?.apply { acquire(60_000L) }
+                }
+            }
+        } else {
+            wakeLock?.let { lock -> runCatching { if (lock.isHeld) lock.release() } }
+            wakeLock = null
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(on)
             setTurnScreenOn(on)
