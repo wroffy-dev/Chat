@@ -10,6 +10,7 @@ import app.vaultchat.domain.call.CallKind
 import app.vaultchat.domain.call.CallRepository
 import app.vaultchat.domain.call.CallResult
 import app.vaultchat.domain.call.CallStatus
+import app.vaultchat.domain.call.VideoQualityPolicy
 import app.vaultchat.domain.call.JoinInfo
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
@@ -56,7 +57,7 @@ fun CallDto.toDomain() = CallInfo(
     peerUsername = peer.username,
 )
 
-fun JoinDto.toDomain() = JoinInfo(callId, livekitUrl, livekitToken, ringTimeoutSeconds)
+fun JoinDto.toDomain() = JoinInfo(callId, livekitUrl, livekitToken, ringTimeoutSeconds, VideoQualityPolicy.parse(maxVideoQuality))
 
 /** Calls API (docs/14-api-contracts.md §6) with the shared token-refreshing caller. */
 class RemoteCallRepository(private val http: HttpJson, private val caller: AuthorizedCaller) : CallRepository {

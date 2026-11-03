@@ -7,7 +7,7 @@ The app shows exactly what the server sends; it carries no copy of the words.
 
 | Consent | File | Version | In force since |
 |---|---|---|---|
-| Location sharing with the administrator (D-06) | `backend/consents/location-sharing.json` | 1 | 2026-11-02 (app v126) |
+| Location sharing with the administrator (D-06) | `backend/consents/location-sharing.json` | 2 | after the backend redeploy following 2026-11-03 (v1: 2026-11-02, app v126) |
 
 File format: `{ "id", "version", "title", "points": [..], "agree" }`. A malformed file stops the server
 at start-up rather than showing a broken text.
@@ -20,3 +20,6 @@ at start-up rather than showing a broken text.
    to the new text; the server records who agreed to which version and when
    (`location_shares.consent_version`, `consented_at`, audit `user.location_sharing_on`).
 3. Update the table above. Earlier texts stay in the git history of the JSON file.
+
+Version history: v1 (2026-11-02) said only the latest point is kept and offered an in-app switch; v2 (2026-11-03)
+says the last 10 points are kept and shown on a map, and that sharing stops only via the phone's location or permission.

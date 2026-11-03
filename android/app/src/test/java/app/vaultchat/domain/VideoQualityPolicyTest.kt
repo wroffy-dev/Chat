@@ -15,4 +15,13 @@ class VideoQualityPolicyTest {
         assertEquals(CaptureQuality.P720, VideoQualityPolicy.choose(true, VideoQualityPolicy.THERMAL_MODERATE, false))
         assertEquals(CaptureQuality.P540, VideoQualityPolicy.choose(true, VideoQualityPolicy.THERMAL_SEVERE, false))
     }
+
+    @Test
+    fun `the admin's setting caps what Auto sends, never raises it`() {
+        assertEquals(CaptureQuality.P720, VideoQualityPolicy.cap(CaptureQuality.P1080, CaptureQuality.P720))
+        assertEquals(CaptureQuality.P1080, VideoQualityPolicy.cap(CaptureQuality.P1080, CaptureQuality.P1080))
+        assertEquals(CaptureQuality.P540, VideoQualityPolicy.cap(CaptureQuality.P540, CaptureQuality.P1080))
+        assertEquals(CaptureQuality.P720, VideoQualityPolicy.parse("720p"))
+        assertEquals(null, VideoQualityPolicy.parse("4k"))
+    }
 }

@@ -63,6 +63,7 @@ class FakeMedia : MediaSession {
     override suspend fun setMicrophoneEnabled(enabled: Boolean) { log += "mic:$enabled" }
     override suspend fun setCameraEnabled(enabled: Boolean) { log += "cam:$enabled" }
     override val autoQuality = CaptureQuality.P1080
+    override fun capQuality(max: CaptureQuality) { log += "cap:$max" }
     override suspend fun setVideoQuality(quality: CaptureQuality, forced: Boolean) { log += "quality:$quality" + if (forced) ":forced" else "" }
     override fun setNoiseReduction(enabled: Boolean) { log += "noise:$enabled" }
     override fun switchCamera() { log += "switch" }
@@ -341,6 +342,16 @@ class CallControllerTest {
         c.toggleNoiseReduction()
         assertTrue(c.state.value.noiseReduction)
         assertEquals(listOf("noise:false", "noise:true"), media.log.filter { it.startsWith("noise:") })
+    }
+
+    @Test
+    fun `the admin's highest video size is applied before the call joins`() = runTest {
+        repo.startResult = CallResult.Ok(JoinInfo("c1", "wss://lk", "tok", 45, maxQuality = CaptureQuality.P720))
+        val c = controller()
+        c.startOutgoing("conn", CallKind.VIDEO, "bob")
+        runCurrent()
+        assertTrue(media.connected)
+        assertEquals("cap:P720", media.log.first { it.startsWith("cap:") })
     }
 
     @Test

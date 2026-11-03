@@ -214,6 +214,14 @@ When bandwidth is insufficient the order of degradation is: lower video layer �
 video paused (UI shows "Video paused — poor connection") → audio continues. Audio is never deliberately
 dropped to keep video.
 
+### Highest size from the Admin Console (2026-11-03, owner decision)
+
+Auto sends what the phone can do (1080p/720p/540p as above) but never more than the Admin Console setting
+`call.max_video_quality` ("Highest video size the apps send in Auto", **720p by default** since 2026-11-03: at 1080p
+the phone encodes three simulcast copies and a call showed the encoder CPU-limited while the receiver got 540p).
+The server sends it with each join (`maxVideoQuality`); the app applies it before the camera starts, so a change
+takes effect from the next call, without an app update.
+
 ### Bitrates and degradation (2026-11-03, owner request)
 
 Encodings use LiveKit's 16:9 sizes at 30 fps with higher ceilings: 360p 0.7, 540p 1.3, 720p 2.5, 1080p 4 Mbps

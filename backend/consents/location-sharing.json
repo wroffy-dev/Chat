@@ -1,12 +1,12 @@
 {
   "id": "location-sharing",
-  "version": 1,
+  "version": 2,
   "title": "Share your location to use Vault",
   "points": [
-    "Vault sends your location to the administrator each time you open the app.",
-    "Only the latest location is kept. There is no history, and nothing is sent while the app is closed.",
-    "Other Vault users cannot see your location. You can see when the administrator last looked at it.",
-    "You can turn this off in the menu (⋮ → Location sharing), but Vault cannot be used while it is off."
+    "Vault sends your location to the administrator each time you open the app. Nothing is sent while the app is closed.",
+    "The administrator can see your last 10 locations on a map. Older ones are deleted automatically.",
+    "Other Vault users cannot see your location.",
+    "Vault needs location to work: if you turn off your phone's location or Vault's location permission, the app stops until you turn it back on."
   ],
   "agree": "Agree and turn on location"
 }

@@ -50,14 +50,14 @@ describe.skipIf(!TEST_DB_URL)("admin settings (PostgreSQL)", () => {
 
   it("starts from the defaults, validates, stores and audits changes", async () => {
     expect(await settings.all()).toEqual(defaults);
-    await settings.set("call.max_video_quality", "720p", admin);
+    await settings.set("call.max_video_quality", "1080p", admin);
     await settings.set("call.ring_timeout_seconds", "30", admin);
     await settings.set("push.enabled", "false", admin);
-    expect(await settings.all()).toEqual({ ...defaults, "call.max_video_quality": "720p", "call.ring_timeout_seconds": 30, "push.enabled": false });
+    expect(await settings.all()).toEqual({ ...defaults, "call.max_video_quality": "1080p", "call.ring_timeout_seconds": 30, "push.enabled": false });
 
     const audit = await database.prisma.auditEvent.findMany({ where: { action: "admin.setting_changed" }, orderBy: { id: "asc" } });
     expect(audit.map((e) => e.metadata)).toEqual([
-      { key: "call.max_video_quality", from: "1080p", to: "720p" },
+      { key: "call.max_video_quality", from: "720p", to: "1080p" },
       { key: "call.ring_timeout_seconds", from: 45, to: 30 },
       { key: "push.enabled", from: true, to: false },
     ]);

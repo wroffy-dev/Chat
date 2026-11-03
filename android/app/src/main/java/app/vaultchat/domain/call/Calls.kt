@@ -14,7 +14,14 @@ data class CallInfo(
     val peerUsername: String,
 )
 
-data class JoinInfo(val callId: String, val livekitUrl: String, val livekitToken: String, val ringTimeoutSeconds: Int)
+data class JoinInfo(
+    val callId: String,
+    val livekitUrl: String,
+    val livekitToken: String,
+    val ringTimeoutSeconds: Int,
+    /** The admin's "highest video size" setting; null if the server sent none or an unknown value. */
+    val maxQuality: CaptureQuality? = null,
+)
 
 enum class CallFailure { NOT_FOUND, IN_PROGRESS, NOT_ACTIVE, MEDIA_UNAVAILABLE, RATE_LIMITED, SESSION_ENDED, NETWORK, UNEXPECTED }
 
@@ -65,6 +72,8 @@ interface MediaSession {
      * size may adapt to the network as in Auto.
      */
     suspend fun setVideoQuality(quality: CaptureQuality, forced: Boolean) = Unit
+    /** Caps the size Auto sends at the admin's setting; called before [connect]. */
+    fun capQuality(max: CaptureQuality) = Unit
     /** True when the on-device noise filter can run on this phone. */
     val noiseReductionAvailable: Boolean get() = false
     /** Turns the noise filter for the sent voice on or off; takes effect on the next 10 ms frame. */
