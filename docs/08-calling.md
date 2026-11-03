@@ -337,6 +337,16 @@ cannot turn a camera on — and it is not covert: the other phone shows "<name> 
 It is sent over a LiveKit reliable data message on the `vaultchat.switch_camera` topic; the receiving
 phone flips its own camera and the sender sees "Switched <name>'s camera".
 
+**Zoom** (owner request 2026-11-03, **Implemented**, to be confirmed on the phones):
+- *Screen zoom*: pinch the big picture to enlarge it (up to 5x), drag to move it, double-tap to go back
+  to 1x. It changes only what this phone shows.
+- *Camera zoom*: the "Zoom" button opens a menu for this phone's camera and for the other person's,
+  each at 1x / 1.5x / 2x / 3x. It zooms the video that is sent, so both phones see it. It is digital:
+  each frame's middle is cropped and enlarged before encoding (`ZoomVideoProcessor`), because LiveKit
+  exposes no camera zoom, so above 1x the picture is softer. Like the camera switch it is not covert:
+  the zoomed person sees "<name> zoomed your camera to 2x". Messages use the `vaultchat.camera_zoom`
+  data topic: `set:<zoom>` asks the receiver to zoom, `is:<zoom>` reports the sender's own level.
+
 When the other person is muted the screen says "<name> is muted" (**Implemented** 2026-10-29). It follows
 the LiveKit server's view of their microphone (published and not muted), so it also confirms a mute
 reached the server.
