@@ -260,8 +260,9 @@ current consent version).
   Stored rounded (5 decimals precise, 2 approximate), replacing the previous point. `409 SHARING_DISABLED`
   when off. 6/min.
 
-Admin Console: the Users page shows each user's sharing state; `GET /admin/users/{id}/location` shows the
-latest point with an OpenStreetMap link, writes audit `admin.location_viewed` and sets
+Admin Console: the Users page shows each user's sharing state; `GET /admin/users/{id}/location[?p=n]` shows the
+last 10 points (newest first) and the selected one (latest by default) on an embedded OpenStreetMap map — the only
+admin page whose CSP allows `frame-src https://www.openstreetmap.org` — writes audit `admin.location_viewed` and sets
 `last_viewed_by_admin_at`.
 
 ## 8. Health

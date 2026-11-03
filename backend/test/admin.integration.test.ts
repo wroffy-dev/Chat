@@ -8,6 +8,7 @@ import { generateTotpSecret, totpCode, totpStep } from "../src/auth/totp.js";
 import { PrismaDatabase } from "../src/db/database.js";
 import { RealtimeHub } from "../src/realtime/hub.js";
 import { defaultSettings, SettingsService } from "../src/settings/service.js";
+import { LOCATION_CONSENT_VERSION, LocationService } from "../src/location/service.js";
 import { resetDatabase, TEST_DB_URL, testConfig } from "./helpers.js";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -42,6 +43,7 @@ describe.skipIf(!TEST_DB_URL)("Admin Console (PostgreSQL)", () => {
     };
     app = buildAdminApp({ config, prisma: database.prisma, database, auth, admin: adminService, media, pushEnabled: true, realtime: new RealtimeHub(),
       settings: new SettingsService(database.prisma, defaultSettings(45), 0),
+      location: new LocationService(database.prisma),
       logger: false });
     await app.ready();
   });
@@ -199,6 +201,24 @@ describe.skipIf(!TEST_DB_URL)("Admin Console (PostgreSQL)", () => {
     const res = await app.inject({ method: "GET", url: "/admin/users", headers: { cookie } });
     expect(res.body).not.toContain("<script>alert(1)</script>");
     expect(res.body).toContain("&lt;script&gt;");
+  });
+
+  it("shows a user's last points on a map page (OpenStreetMap framed only there) and audits the view", async () => {
+    await createAdmin();
+    const { cookie } = await loginCookie();
+    const { user } = await auth.createUser("alice", { type: "system", id: null });
+    const location = new LocationService(database.prisma);
+    await location.setSharing(user.id, { enabled: true, consentVersion: LOCATION_CONSENT_VERSION, precision: "precise" });
+    await location.report(user.id, { lat: 28.6139, lng: 77.209, accuracyM: 12, capturedAt: new Date().toISOString(), precision: "precise" });
+
+    const res = await app.inject({ method: "GET", url: `/admin/users/${user.id}/location`, headers: { cookie } });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain("openstreetmap.org/export/embed.html");
+    expect(res.body).toContain("28.61390, 77.20900");
+    expect(res.headers["content-security-policy"]).toContain("frame-src https://www.openstreetmap.org");
+    const users = await app.inject({ method: "GET", url: "/admin/users", headers: { cookie } });
+    expect(users.headers["content-security-policy"]).not.toContain("frame-src");
+    expect(await database.prisma.auditEvent.count({ where: { action: "admin.location_viewed" } })).toBe(1);
   });
 
   it("logs out and invalidates the cookie", async () => {

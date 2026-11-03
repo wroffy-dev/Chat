@@ -17,7 +17,7 @@ import { safeEqual } from "../auth/tokens.js";
 import { buildLoggerOptions } from "../logger.js";
 import { ADMIN_SESSION_POLICY, AdminLoginError, type AdminContext, type AdminService } from "./service.js";
 import { csrfField, esc, fmt, page } from "./views.js";
-import type { LocationService } from "../location/service.js";
+import { LOCATION_HISTORY, type LocationService } from "../location/service.js";
 
 const COOKIE = "vc_admin";
 
@@ -75,9 +75,11 @@ export function buildAdminApp(deps: AdminAppDeps): FastifyInstance {
     reply.header("X-Content-Type-Options", "nosniff");
     reply.header("X-Frame-Options", "DENY");
     reply.header("Referrer-Policy", "no-referrer");
+    // Only the location page may show a map, framed from openstreetmap.org (owner decision 2026-11-03).
+    const map = request.routeOptions.url === "/admin/users/:id/location" ? " frame-src https://www.openstreetmap.org;" : "";
     reply.header(
       "Content-Security-Policy",
-      "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+      `default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none';${map}`,
     );
   });
 
@@ -240,32 +242,54 @@ export function buildAdminApp(deps: AdminAppDeps): FastifyInstance {
       <tbody>${rows.join("") || `<tr><td colspan="7" class="muted">No users yet.</td></tr>`}</tbody></table>${create}`, nav(request)));
   });
 
-  // The latest shared point. Opening this page is audited and shown to the user in the app (D-06).
-  app.get<{ Params: { id: string } }>(
+  // The latest shared point on a map, with the user's last LOCATION_HISTORY points (D-06). Opening this
+  // page is audited. ?p=<n> puts the n-th newest point on the map instead of the latest.
+  app.get<{ Params: { id: string }; Querystring: { p?: number } }>(
     "/admin/users/:id/location",
-    { preHandler: requireAdmin, schema: { params: idParams } },
+    {
+      preHandler: requireAdmin,
+      schema: {
+        params: idParams,
+        querystring: { type: "object", additionalProperties: false, properties: { p: { type: "integer", minimum: 0, maximum: 99 } } },
+      },
+    },
     async (request, reply) => {
       const user = await prisma.user.findUnique({ where: { id: request.params.id } });
       if (!user || !deps.location) throw new AppError(404, "NOT_FOUND", "User not found.");
-      const s = await deps.location.viewByAdmin(user.id, actor(request).id);
-      const body = s?.enabled && s.latitude != null && s.longitude != null
+      const v = await deps.location.viewByAdmin(user.id, actor(request).id);
+      const points = v?.share.enabled ? v.points : [];
+      const selected = points[Math.min(request.query.p ?? 0, Math.max(points.length - 1, 0))];
+      const base = `/admin/users/${user.id}/location`;
+      const body = selected
         ? (() => {
-            const lat = s.latitude.toFixed(5);
-            const lng = s.longitude.toFixed(5);
-            const osm = `https://www.openstreetmap.org/?mlat=${lat}&amp;mlon=${lng}#map=16/${lat}/${lng}`;
-            return `<table><tbody>
-              <tr><th>Latitude, longitude</th><td><code>${lat}, ${lng}</code></td></tr>
-              <tr><th>Accuracy</th><td>about ${Math.round(s.accuracyM ?? 0)} m (${esc(s.precision ?? "–")})</td></tr>
-              <tr><th>Taken on the phone</th><td>${fmt(s.capturedAt)}</td></tr>
-              <tr><th>Received</th><td>${fmt(s.receivedAt)}</td></tr>
-            </tbody></table>
-            <p><a href="${osm}" target="_blank" rel="noopener noreferrer">Open in OpenStreetMap</a>
-            <span class="muted">(opens an external site)</span></p>`;
+            const lat = selected.latitude.toFixed(5);
+            const lng = selected.longitude.toFixed(5);
+            // About 1 km around a precise point, wider for an approximate one.
+            const d = selected.precision === "precise" ? 0.006 : 0.05;
+            const bbox = [selected.longitude - d, selected.latitude - d, selected.longitude + d, selected.latitude + d].map((n) => n.toFixed(5)).join(",");
+            const embed = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&amp;layer=mapnik&amp;marker=${lat},${lng}`;
+            const osm = (la: string, lo: string) => `https://www.openstreetmap.org/?mlat=${la}&amp;mlon=${lo}#map=16/${la}/${lo}`;
+            const rows = points
+              .map((pt, n) => {
+                const la = pt.latitude.toFixed(5);
+                const lo = pt.longitude.toFixed(5);
+                const here = pt === selected;
+                return `<tr${here ? ' style="font-weight:600"' : ""}><td>${n + 1}</td><td>${fmt(pt.capturedAt)}</td>
+                  <td><code>${la}, ${lo}</code></td><td>${Math.round(pt.accuracyM)} m (${esc(pt.precision)})</td>
+                  <td>${here ? "on the map" : `<a href="${base}?p=${n}">Show on map</a>`} ·
+                  <a href="${osm(la, lo)}" target="_blank" rel="noopener noreferrer">OpenStreetMap</a></td></tr>`;
+              })
+              .join("");
+            return `<iframe title="Map" src="${embed}" style="width:100%;height:420px;border:1px solid #ccc;border-radius:8px"></iframe>
+              <p class="muted">Map tiles load from openstreetmap.org in this browser.</p>
+              <h2>Last ${points.length} location${points.length === 1 ? "" : "s"}</h2>
+              <table><thead><tr><th>#</th><th>Taken on the phone</th><th>Latitude, longitude</th><th>Accuracy</th><th></th></tr></thead>
+              <tbody>${rows}</tbody></table>`;
           })()
         : `<p class="muted">${esc(user.username)} is not sharing a location right now.</p>`;
       return html(reply, page("Location", `<h1>Location of ${esc(user.username)}</h1>${body}
-        <p class="muted">The app sends the location each time it is opened; only the latest one is kept.
-        This view was recorded in the audit log and is shown to the user.</p>
+        <p class="muted">The app sends the location each time it is opened; the last ${LOCATION_HISTORY} are kept and
+        older ones are deleted. This view was recorded in the audit log.</p>
         <p><a href="/admin/users">Back to users</a></p>`, nav(request)));
     },
   );

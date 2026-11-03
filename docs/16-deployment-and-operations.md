@@ -212,7 +212,7 @@ the webhook key name comes from `LIVEKIT_API_KEY`. Keys via `LIVEKIT_KEYS`. Neve
 
 | Item | Proposal |
 |---|---|
-| What | `pg_dump -Fc --exclude-table-data=messages --exclude-table-data=location_shares` (schema of all tables kept) |
+| What | `pg_dump -Fc --exclude-table-data=messages --exclude-table-data=location_shares --exclude-table-data=location_points` (schema of all tables kept) |
 | When | Daily at a quiet hour (UTC time chosen per users' time zone), plus automatically before each migration |
 | Encryption | Pipe through `age` (or `gpg`) with a **public** key; the private key is stored offline only |
 | Where | Offsite S3-compatible bucket, private, with credentials that can write but not list/delete if the provider supports it; plus the latest copy on the VPS |
