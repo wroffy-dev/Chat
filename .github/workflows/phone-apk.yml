@@ -87,6 +87,12 @@ jobs:
           cp app/build/outputs/apk/debug/app-debug.apk out/vaultchat-debug.apk
           sha256sum out/vaultchat-debug.apk | tee out/SHA256.txt
           echo "Version $VERSION_CODE, built for $API_URL" >> out/SHA256.txt
+      # Saved before the in-app upload, so the APK can be installed by hand even if that upload fails.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vaultchat-debug-apk
+          path: android/out/
+          retention-days: 7
       - name: Send to the phones (in-app update)
         if: ${{ inputs.publish }}
         env:
@@ -103,8 +109,3 @@ jobs:
             "${API_URL}api/v1/app/apk?versionCode=$VERSION_CODE"
           echo
           echo "Sent: the phones will offer version $VERSION_CODE"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: vaultchat-debug-apk
-          path: android/out/
-          retention-days: 7
