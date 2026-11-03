@@ -12,6 +12,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import app.vaultchat.AppContainer
 import android.app.Application
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.LifecycleStartEffect
 import kotlinx.coroutines.launch
@@ -113,11 +114,11 @@ fun VaultChatNavHost(container: AppContainer) {
     val backStack by navController.currentBackStackEntryAsState()
     val onCallScreen = backStack?.destination?.route?.contains("CallRoute") == true
     val signedIn = backStack?.destination?.route?.let { r -> listOf("HomeRoute", "InboxRoute", "ShowQrRoute", "ScanQrRoute", "ChatRoute").any { r.contains(it) } } == true
-    // Rings only while the app is open (no push notifications yet).
-    // Live change signals while signed in and the app is in front (calls arrive by push otherwise).
-    LifecycleStartEffect(signedIn) {
+    // Live change signals while signed in. Not tied to the screen's lifecycle, so an incoming call is
+    // still noticed with the screen off while the app is open (owner request 2026-11-03).
+    DisposableEffect(signedIn) {
         val job = if (signedIn) container.applicationScope.launch { container.realtime.run() } else null
-        onStopOrDispose { job?.cancel() }
+        onDispose { job?.cancel() }
     }
     // Location sharing (D-06): sent each time the app comes to the front; the app is blocked while it
     // is off. A call in progress is never covered.
@@ -129,9 +130,19 @@ fun VaultChatNavHost(container: AppContainer) {
     val locationBlocked = signedIn && !onCallScreen && location.block != LocationBlock.NONE
     val scope = rememberCoroutineScope()
 
-    IncomingCallWatcher(container.callRepository, container.realtime, enabled = signedIn && !onCallScreen && !locationBlocked) { call ->
+    IncomingCallWatcher(
+        container.callRepository,
+        container.realtime,
+        container.applicationScope,
+        enabled = signedIn && !onCallScreen && !locationBlocked,
+    ) { call ->
+        // Turn the screen on and show over the lock screen (MainActivity watches this), then open the
+        // ringing call; its 10 s auto-answer then fires even if the screen was off.
+        container.wakeForCall.value = true
         navController.navigate(CallRoute(video = call.kind == CallKind.VIDEO, peerUsername = call.peerUsername, callId = call.id))
     }
+    // Stop keeping the screen awake once the call screen is gone.
+    LaunchedEffect(onCallScreen) { if (!onCallScreen) container.wakeForCall.value = false }
 
     // Register this device for call wake-ups once signed in (no-op when FCM is not configured), and
     // send a chat exit that a crash or lost network kept from reaching the server.

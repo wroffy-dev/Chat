@@ -91,6 +91,13 @@ callee's perceived setup time. The caller's outgoing video is not sent to anyone
 
 ### 4.3 Auto-answer
 
+**Screen off (2026-11-03, owner request).** The incoming-call watcher and the realtime connection run in
+the application scope rather than the screen's lifecycle, so a call is noticed while the screen is off and
+the app is open. The activity then turns the screen on and shows over the lock screen
+(`setShowWhenLocked`/`setTurnScreenOn`), so the 10 s auto-answer below happens in view, not hidden. Deep
+Doze can delay detection; a fully closed app would need push (off per D-24).
+
+
 **Implemented (2026-10-29, owner request; this is a private app of at most ten QR-paired people, D-21).**
 An incoming call that the person does not pick up is answered by the phone itself after
 `AUTO_ANSWER_MS` (10 s), with camera and microphone on. It is not silent: the phone rings (sound and the
