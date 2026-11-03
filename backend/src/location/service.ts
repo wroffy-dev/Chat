@@ -1,7 +1,7 @@
 import { audit } from "../auth/audit.js";
 import { CONSENTS } from "../consents/store.js";
 import { appError } from "../errors.js";
-import type { LocationShare, PrismaClient } from "../generated/prisma/client.js";
+import type { LocationPoint, LocationShare, PrismaClient } from "../generated/prisma/client.js";
 
 /**
  * Location sharing with the administrator (owner decision D-06, 2026-11-02; docs/11).
@@ -12,6 +12,9 @@ import type { LocationShare, PrismaClient } from "../generated/prisma/client.js"
  */
 /** The consent's current version, from backend/consents/location-sharing.json (its only source). */
 export const LOCATION_CONSENT_VERSION = CONSENTS["location-sharing"].version;
+
+/** How many of a user's latest points are kept (owner decision 2026-11-03); older ones are deleted. */
+export const LOCATION_HISTORY = 10;
 
 export type LocationPrecision = "approximate" | "precise";
 
@@ -63,11 +66,14 @@ export class LocationService {
       await audit(this.prisma, { actorType: "user", actorId: userId, action: "user.location_sharing_on", targetType: "user", targetId: userId });
       return toState(row);
     }
-    const row = await this.prisma.locationShare.upsert({
-      where: { userId },
-      create: { userId, enabled: false },
-      update: { enabled: false, latitude: null, longitude: null, accuracyM: null, capturedAt: null, receivedAt: null },
-    });
+    const [row] = await this.prisma.$transaction([
+      this.prisma.locationShare.upsert({
+        where: { userId },
+        create: { userId, enabled: false },
+        update: { enabled: false, latitude: null, longitude: null, accuracyM: null, capturedAt: null, receivedAt: null },
+      }),
+      this.prisma.locationPoint.deleteMany({ where: { userId } }),
+    ]);
     await audit(this.prisma, { actorType: "user", actorId: userId, action: "user.location_sharing_off", targetType: "user", targetId: userId });
     return toState(row);
   }
@@ -84,16 +90,19 @@ export class LocationService {
     }
     // ~1 m for precise, ~1 km for approximate (the user's choice in Android's permission dialog).
     const places = r.precision === "precise" ? 5 : 2;
-    const updated = await this.prisma.locationShare.update({
-      where: { userId },
-      data: {
-        latitude: round(r.lat, places),
-        longitude: round(r.lng, places),
-        accuracyM: r.accuracyM,
-        precision: r.precision,
-        capturedAt: captured,
-        receivedAt: now,
-      },
+    const point = { latitude: round(r.lat, places), longitude: round(r.lng, places), accuracyM: r.accuracyM, precision: r.precision, capturedAt: captured, receivedAt: now };
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const share = await tx.locationShare.update({ where: { userId }, data: point });
+      // The latest point also goes into the short history; only the newest LOCATION_HISTORY are kept.
+      await tx.locationPoint.create({ data: { userId, ...point } });
+      const keep = await tx.locationPoint.findMany({
+        where: { userId },
+        orderBy: [{ capturedAt: "desc" }, { id: "desc" }],
+        take: LOCATION_HISTORY,
+        select: { id: true },
+      });
+      await tx.locationPoint.deleteMany({ where: { userId, id: { notIn: keep.map((k) => k.id) } } });
+      return share;
     });
     return toState(updated);
   }
@@ -105,12 +114,17 @@ export class LocationService {
   }
 
   /** The latest point for the administrator. Each view is audited and shown to the user. */
-  async viewByAdmin(userId: string, adminId: string | null): Promise<LocationShare | null> {
+  async viewByAdmin(userId: string, adminId: string | null): Promise<{ share: LocationShare; points: LocationPoint[] } | null> {
     const row = await this.prisma.locationShare.findUnique({ where: { userId } });
     if (!row) return null;
     const updated = await this.prisma.locationShare.update({ where: { userId }, data: { lastViewedByAdminAt: this.now() } });
+    const points = await this.prisma.locationPoint.findMany({
+      where: { userId },
+      orderBy: [{ capturedAt: "desc" }, { id: "desc" }],
+      take: LOCATION_HISTORY,
+    });
     await audit(this.prisma, { actorType: "admin", actorId: adminId, action: "admin.location_viewed", targetType: "user", targetId: userId });
-    return updated;
+    return { share: updated, points };
   }
 }
 

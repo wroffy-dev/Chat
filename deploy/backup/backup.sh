@@ -27,6 +27,7 @@ trap 'rm -f "$partial"' EXIT
 pg_dump --format=custom --no-owner --no-privileges \
   --exclude-table-data=messages \
   --exclude-table-data=location_shares \
+  --exclude-table-data=location_points \
   | age --encrypt --recipient "$AGE_RECIPIENT" > "$partial"
 
 mv "$partial" "$out"

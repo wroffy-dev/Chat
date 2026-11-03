@@ -50,6 +50,7 @@ model User {
   conversationParticipants   ConversationParticipant[]
   sentMessages               Message[]
   locationShare              LocationShare?
+  locationPoints             LocationPoint[]
 
   @@map("users")
 }
@@ -327,4 +328,22 @@ model LocationShare {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("location_shares")
+}
+
+/// The last ten shared points per user (D-06, consent version 2); older ones are deleted on insert.
+model LocationPoint {
+  id         BigInt   @id @default(autoincrement())
+  userId     String   @map("user_id") @db.Uuid
+  latitude   Float
+  longitude  Float
+  accuracyM  Float    @map("accuracy_m") @db.Real
+  /// "approximate" | "precise" (CHECK in SQL)
+  precision  String
+  capturedAt DateTime @map("captured_at") @db.Timestamptz(3)
+  receivedAt DateTime @map("received_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, capturedAt])
+  @@map("location_points")
 }

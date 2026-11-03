@@ -120,7 +120,8 @@ describe.skipIf(!TEST_DB_URL)("location sharing (PostgreSQL)", () => {
     expect((await call(bob.token, "GET", "/location-sharing")).json().enabled).toBe(false);
 
     const seen = await location.viewByAdmin(alice.id, null);
-    expect(seen?.latitude).toBe(28.61394);
+    expect(seen?.share.latitude).toBe(28.61394);
+    expect(seen?.points).toHaveLength(1);
     const state = (await call(alice.token, "GET", "/location-sharing")).json();
     expect(state.lastViewedByAdminAt).not.toBeNull();
     const events = await database.prisma.auditEvent.findMany({ where: { action: "admin.location_viewed" } });
@@ -137,6 +138,22 @@ describe.skipIf(!TEST_DB_URL)("location sharing (PostgreSQL)", () => {
     expect(c).toMatchObject({ id: "location-sharing", version: LOCATION_CONSENT_VERSION });
     expect(c.points.length).toBeGreaterThan(0);
     expect((await app.inject({ method: "GET", url: "/api/v1/consents/location-sharing" })).statusCode).toBe(401);
+  });
+
+  it("keeps the last 10 points, newest first, and deletes them all when sharing is turned off", async () => {
+    const alice = await signIn("alice");
+    await call(alice.token, "PUT", "/location-sharing", { enabled: true, consentVersion: LOCATION_CONSENT_VERSION, precision: "precise" });
+    const t0 = Date.now() - 30 * 60_000;
+    for (let i = 0; i < 12; i++) {
+      // Through the service: the route allows 6 points a minute.
+      await location.report(alice.id, { lat: 10 + i, lng: 77.2, accuracyM: 10, capturedAt: new Date(t0 + i * 60_000).toISOString(), precision: "precise" });
+    }
+    const seen = await location.viewByAdmin(alice.id, null);
+    expect(seen?.points.map((p) => p.latitude)).toEqual([21, 20, 19, 18, 17, 16, 15, 14, 13, 12]);
+    expect(await database.prisma.locationPoint.count({ where: { userId: alice.id } })).toBe(10);
+
+    await call(alice.token, "PUT", "/location-sharing", { enabled: false });
+    expect(await database.prisma.locationPoint.count({ where: { userId: alice.id } })).toBe(0);
   });
 
   it("refuses anonymous requests", async () => {

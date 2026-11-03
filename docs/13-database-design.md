@@ -45,6 +45,7 @@ column names used in the other docs.
 | `error_events` | Summarised errors for the Admin Console |
 | `app_settings` | Allow-listed admin-editable settings |
 | `location_shares` | Latest shared point per user (D-06, migration `20261102060000_location_shares`) |
+| `location_points` | The last 10 shared points per user (D-06 change 2026-11-03, migration `20261103060000_location_points`) |
 
 Not created, on purpose: `devices` (merged into `sessions`), `roles` (two fixed identity types), rate-limit
 tables (in-memory + `users` columns), location history (prohibited), media/attachments (prohibited),
@@ -261,6 +262,13 @@ Index `(occurred_at DESC)`, `(action, occurred_at DESC)`. Append-only for `vc_ap
 CHECKs: ranges, `accuracy_m` in (0, 100000], `enabled OR (latitude IS NULL AND longitude IS NULL)`.
 Overwritten in place (no history); coordinates nulled when sharing is turned off; not nulled after 24 h
 (owner decision D-06). Backups exclude its data. **Sensitive.**
+
+### 3.14a location_points (Implemented 2026-11-03, D-06)
+
+`id` bigserial PK, `user_id` uuid FK → users (cascade), `latitude`/`longitude` double precision (rounded as in
+`location_shares`), `accuracy_m` real, `precision` text, `captured_at`, `received_at`; index (`user_id`, `captured_at`).
+Each point sent is also inserted here and only the newest 10 per user are kept (older rows deleted in the same
+transaction); all of a user's rows are deleted when sharing is turned off. Backups exclude its data. **Sensitive.**
 
 ### 3.15 app_settings
 
