@@ -1,5 +1,12 @@
 package app.vaultchat.ui.call
 
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import android.app.Activity
 import android.view.accessibility.AccessibilityManager
 import androidx.compose.animation.AnimatedVisibility
@@ -182,6 +189,14 @@ fun CallScreen(
     LaunchedEffect(sentFlips) { if (sentFlips > 0) { flipNotice = sentText; delay(2_500); flipNotice = null } }
     LaunchedEffect(state.cameraFlippedByPeer) { if (state.cameraFlippedByPeer > 0) { flipNotice = receivedText; delay(3_000); flipNotice = null } }
 
+    var selfBig by remember { mutableStateOf(false) }
+    var pipOffset by remember { mutableStateOf(Offset.Zero) }
+    // How far the small picture may be dragged: the screen minus the picture and its margins.
+    val density = LocalDensity.current
+    val config = LocalConfiguration.current
+    val maxPipX = with(density) { (config.screenWidthDp.dp - 112.dp - 32.dp).toPx() }.coerceAtLeast(0f)
+    val maxPipY = with(density) { (config.screenHeightDp.dp - 160.dp - 96.dp).toPx() }.coerceAtLeast(0f)
+
     Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF0E1013), contentColor = Color.White) {
         Box(
             modifier = Modifier.fillMaxSize().pointerInput(Unit) {
@@ -195,26 +210,56 @@ fun CallScreen(
                 }
             },
         ) {
-            if (showVideo) {
-                VideoView(viewModel.media.room, remoteVideo, mirror = false, modifier = Modifier.fillMaxSize())
+            // WhatsApp-style: tap the small picture to swap which one fills the screen; drag it anywhere.
+            val selfShown = kind == CallKind.VIDEO && localVideo != null && state.cameraOn && state.phase != CallPhase.ENDED
+            val selfIsBig = selfBig && showVideo && selfShown
+            val room = viewModel.media.room
+            if (selfIsBig) {
+                VideoView(room, localVideo, mirror = localFront, modifier = Modifier.fillMaxSize())
+            } else if (showVideo) {
+                VideoView(room, remoteVideo, mirror = false, modifier = Modifier.fillMaxSize())
             }
-            if (kind == CallKind.VIDEO && localVideo != null && state.cameraOn && state.phase != CallPhase.ENDED) {
-                VideoView(
-                    viewModel.media.room,
-                    localVideo,
-                    mirror = localFront,
+            val smallTrack = when {
+                selfIsBig -> remoteVideo
+                selfShown -> localVideo
+                else -> null
+            }
+            if (smallTrack != null) {
+                Box(
                     modifier = Modifier
+                        .align(Alignment.TopEnd)
                         .safeDrawingPadding()
                         .padding(16.dp)
+                        .offset { IntOffset(pipOffset.x.roundToInt(), pipOffset.y.roundToInt()) }
                         .size(width = 112.dp, height = 160.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .align(Alignment.TopEnd),
-                )
+                        .clip(RoundedCornerShape(12.dp)),
+                ) {
+                    VideoView(room, smallTrack, mirror = !selfIsBig && localFront, modifier = Modifier.fillMaxSize())
+                    // A transparent layer on top takes the taps and drags (the video view itself does not).
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .pointerInput(Unit) {
+                                detectDragGestures { change, drag ->
+                                    change.consume()
+                                    pipOffset = Offset(
+                                        (pipOffset.x + drag.x).coerceIn(-maxPipX, 0f),
+                                        (pipOffset.y + drag.y).coerceIn(0f, maxPipY),
+                                    )
+                                }
+                            }
+                            .clickable(
+                                enabled = showVideo && selfShown,
+                                onClickLabel = stringResource(R.string.call_swap_video),
+                            ) { selfBig = !selfBig },
+                    )
+                }
             }
 
-            // Debug builds only: live call statistics for the two-phone tests (docs/09).
+            // Debug builds only: live call statistics for the two-phone tests (docs/09). They fade with
+            // the controls after 4 s and come back on a touch.
             val live = liveStats
-            if (BuildConfig.DEBUG && live != null && state.phase in setOf(CallPhase.ACTIVE, CallPhase.RECONNECTING)) {
+            if (BuildConfig.DEBUG && live != null && controlsVisible && state.phase in setOf(CallPhase.ACTIVE, CallPhase.RECONNECTING)) {
                 Text(
                     statsOverlayText(live),
                     style = MaterialTheme.typography.labelSmall,
