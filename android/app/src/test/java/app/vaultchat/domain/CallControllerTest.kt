@@ -123,7 +123,7 @@ class CallControllerTest {
     }
 
     @Test
-    fun `camera zoom: own and peer levels are clamped, sent, and a peer zoom is surfaced`() = runTest {
+    fun `camera zoom - own and peer levels are clamped, sent, and a peer zoom is surfaced`() = runTest {
         val c = controller()
         c.startOutgoing("conn", CallKind.VIDEO, "bob")
         runCurrent()
