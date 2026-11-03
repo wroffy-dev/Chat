@@ -54,7 +54,7 @@ fun rememberApkHash(): String? {
 
 /** Installed version and APK hash, selectable so they can be compared with what the admin published. */
 @Composable
-fun AboutApp(modifier: Modifier = Modifier) {
+fun AboutApp(modifier: Modifier = Modifier, onCleared: () -> Unit = {}) {
     val hash = rememberApkHash()
     val context = LocalContext.current
     var crash by remember { mutableStateOf<String?>(null) }
@@ -76,10 +76,23 @@ fun AboutApp(modifier: Modifier = Modifier) {
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = { clipboard.setText(AnnotatedString(text)) }) { Text(stringResource(R.string.about_copy_crash)) }
-                TextButton(onClick = { CrashLog.clear(context); crash = null }) { Text(stringResource(R.string.about_clear_crash)) }
+                TextButton(onClick = { CrashLog.clear(context); crash = null; onCleared() }) { Text(stringResource(R.string.about_clear_crash)) }
             }
         }
     }
+}
+
+/**
+ * On Home only after a crash (the ⋮ menu with About is gone, owner 2026-11-02): the installed version and
+ * the crash's reason, to copy and send; Clear hides it. Nothing is shown when the app has not crashed.
+ */
+@Composable
+fun LastCrashCard(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    var crash by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) { crash = withContext(Dispatchers.IO) { CrashLog.last(context) } }
+    if (crash == null) return
+    AboutApp(modifier, onCleared = { crash = null })
 }
 
 /** Shown instead of everything else once the server says this build is too old (426). */
