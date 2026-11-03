@@ -24,6 +24,8 @@ fun VideoView(room: Room, track: VideoTrack?, mirror: Boolean, modifier: Modifie
                 renderer = it
             }
         },
+        // Mirroring follows the camera (front ↔ back) and the swap between the big and small views.
+        update = { it.setMirror(mirror) },
         onRelease = { it.release() },
         modifier = modifier,
     )
