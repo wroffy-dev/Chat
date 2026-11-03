@@ -214,6 +214,11 @@ When bandwidth is insufficient the order of degradation is: lower video layer �
 video paused (UI shows "Video paused — poor connection") → audio continues. Audio is never deliberately
 dropped to keep video.
 
+### Auto at most 720p (2026-11-03, owner decision)
+
+Auto never captures above 720p (540p when the phone is very hot): at 1080p the phone encodes three simulcast
+copies and a call showed the encoder CPU-limited while the receiver got 540p. A size picked by hand is unchanged.
+
 ### Bitrates and degradation (2026-11-03, owner request)
 
 Encodings use LiveKit's 16:9 sizes at 30 fps with higher ceilings: 360p 0.7, 540p 1.3, 720p 2.5, 1080p 4 Mbps

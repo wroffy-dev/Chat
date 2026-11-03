@@ -7,9 +7,10 @@ import org.junit.Test
 
 class VideoQualityPolicyTest {
     @Test
-    fun `1080p only on a capable, cool phone without power saving`() {
-        assertEquals(CaptureQuality.P1080, VideoQualityPolicy.choose(true, VideoQualityPolicy.THERMAL_NONE, false))
-        assertEquals(CaptureQuality.P1080, VideoQualityPolicy.choose(true, VideoQualityPolicy.THERMAL_LIGHT, false))
+    fun `Auto sends at most 720p, and 540p on a very hot phone`() {
+        // Capped at 720p even on a phone that could capture 1080p30 (owner, 2026-11-03).
+        assertEquals(CaptureQuality.P720, VideoQualityPolicy.choose(true, VideoQualityPolicy.THERMAL_NONE, false))
+        assertEquals(CaptureQuality.P720, VideoQualityPolicy.choose(true, VideoQualityPolicy.THERMAL_LIGHT, false))
         assertEquals(CaptureQuality.P720, VideoQualityPolicy.choose(false, VideoQualityPolicy.THERMAL_NONE, false))
         assertEquals(CaptureQuality.P720, VideoQualityPolicy.choose(true, VideoQualityPolicy.THERMAL_NONE, true))
         assertEquals(CaptureQuality.P720, VideoQualityPolicy.choose(true, VideoQualityPolicy.THERMAL_MODERATE, false))
