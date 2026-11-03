@@ -264,13 +264,14 @@ fun CallScreen(
                     statsOverlayText(live),
                     style = MaterialTheme.typography.labelSmall,
                     color = Color.White,
+                    // Lower left, above the buttons, so it does not cover the name and status at the top.
                     modifier = Modifier
+                        .align(Alignment.BottomStart)
                         .safeDrawingPadding()
-                        .padding(8.dp)
+                        .padding(start = 8.dp, bottom = 260.dp)
                         .clip(RoundedCornerShape(6.dp))
                         .background(Color.Black.copy(alpha = 0.55f))
-                        .padding(6.dp)
-                        .align(Alignment.TopStart),
+                        .padding(6.dp),
                 )
             }
 

@@ -214,6 +214,13 @@ When bandwidth is insufficient the order of degradation is: lower video layer �
 video paused (UI shows "Video paused — poor connection") → audio continues. Audio is never deliberately
 dropped to keep video.
 
+### Bitrates and degradation (2026-11-03, owner request)
+
+Encodings use LiveKit's 16:9 sizes at 30 fps with higher ceilings: 360p 0.7, 540p 1.3, 720p 2.5, 1080p 4 Mbps
+(LiveKit: 0.45 / 0.8 / 1.7 / 3). In Auto, WebRTC degradation is `BALANCED`; a forced size stays `DISABLED`. A call
+measured on 2026-11-03 had RTT 227 ms between India and the EU-hosted LiveKit, which limits quality more than these
+settings; a media server nearer the users is the larger improvement (**Proposed**, owner to decide).
+
 ### Noise filter (RNNoise)
 
 **Implemented (2026-10-29, owner request); not yet heard on a real call.** On top of WebRTC's own

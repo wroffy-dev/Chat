@@ -16,7 +16,6 @@ import io.livekit.android.room.track.LocalVideoTrackOptions
 import io.livekit.android.room.track.VideoCaptureParameter
 import io.livekit.android.room.track.VideoEncoding
 import io.livekit.android.room.track.VideoPreset
-import io.livekit.android.room.track.VideoPreset169
 import app.vaultchat.domain.call.MediaEvent
 import app.vaultchat.domain.call.MediaSession
 import app.vaultchat.domain.call.RawStat
@@ -82,6 +81,9 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
                 videoEncoding = preset(quality).encoding,
                 simulcast = true,
                 simulcastLayers = layersBelow(quality),
+                // When the network is short, give up a little size and a little frame rate together rather
+                // than all of one (the default keeps 30 fps and shrinks the picture hard).
+                degradationPreference = RtpParameters.DegradationPreference.BALANCED,
             ),
         ),
         LiveKitOverrides(
@@ -258,19 +260,30 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
         }
     }
 
-    private fun preset(q: CaptureQuality) = when (q) {
-        CaptureQuality.P1080 -> VideoPreset169.H1080
-        CaptureQuality.P720 -> VideoPreset169.H720
-        CaptureQuality.P540 -> VideoPreset169.H540
-        CaptureQuality.P360 -> VideoPreset169.H360
+    private fun preset(q: CaptureQuality): VideoPreset = when (q) {
+        CaptureQuality.P1080 -> Sharp.P1080
+        CaptureQuality.P720 -> Sharp.P720
+        CaptureQuality.P540 -> Sharp.P540
+        CaptureQuality.P360 -> Sharp.P360
+    }
+
+    /**
+     * LiveKit's 16:9 sizes at 30 fps with more bits each (owner request 2026-11-03: sharper video). LiveKit
+     * allows 0.45 / 0.8 / 1.7 / 3 Mbps; these are ceilings, so on a weak network WebRTC still sends less.
+     */
+    private enum class Sharp(override val capture: VideoCaptureParameter, override val encoding: VideoEncoding) : VideoPreset {
+        P360(VideoCaptureParameter(640, 360, 30), VideoEncoding(700_000, 30)),
+        P540(VideoCaptureParameter(960, 540, 30), VideoEncoding(1_300_000, 30)),
+        P720(VideoCaptureParameter(1280, 720, 30), VideoEncoding(2_500_000, 30)),
+        P1080(VideoCaptureParameter(1920, 1080, 30), VideoEncoding(4_000_000, 30)),
     }
 
     override val autoQuality: CaptureQuality get() = quality
 
     /** Lower simulcast layers at 30 fps (LiveKit's defaults include 180p at 15 fps). */
     private fun layersBelow(top: CaptureQuality) = when (top) {
-        CaptureQuality.P1080, CaptureQuality.P720 -> listOf(VideoPreset169.H360, VideoPreset169.H540)
-        CaptureQuality.P540 -> listOf(VideoPreset169.H360)
+        CaptureQuality.P1080, CaptureQuality.P720 -> listOf(Sharp.P360, Sharp.P540)
+        CaptureQuality.P540 -> listOf(Sharp.P360)
         CaptureQuality.P360 -> listOf(P180at30)
     }
 
@@ -328,7 +341,7 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
                 simulcast = !forced,
                 simulcastLayers = if (forced) null else layersBelow(quality),
                 source = Track.Source.CAMERA,
-                degradationPreference = if (forced) RtpParameters.DegradationPreference.DISABLED else null,
+                degradationPreference = if (forced) RtpParameters.DegradationPreference.DISABLED else RtpParameters.DegradationPreference.BALANCED,
             ),
         )
         if (published) {
