@@ -56,6 +56,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.vaultchat.R
 import app.vaultchat.VaultChatApplication
 import app.vaultchat.domain.connection.Connection
+import app.vaultchat.ui.about.LastCrashCard
 import app.vaultchat.ui.about.UpdateBanner
 import app.vaultchat.ui.components.BannerKind
 import app.vaultchat.ui.components.EmptyState
@@ -98,6 +99,7 @@ fun HomeScreen(
         Column(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
             Header(onConnect = onOpenInbox)
             UpdateBanner(updater, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+            LastCrashCard(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             AskBatteryExemptionOnce()
             if (state.offline) {
                 StatusBanner(

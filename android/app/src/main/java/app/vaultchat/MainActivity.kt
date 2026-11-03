@@ -23,7 +23,8 @@ class MainActivity : ComponentActivity() {
         // A call ringing while the screen is off (app open) turns the screen on and shows over the lock
         // screen, so the 10 s auto-answer happens in view, not hidden (owner request 2026-11-03).
         lifecycleScope.launch {
-            container.wakeForCall.collect { wake -> showOverLockScreen(wake) }
+            // Best effort: if a phone refuses, the call still opens rather than the app closing.
+            container.wakeForCall.collect { wake -> runCatching { showOverLockScreen(wake) } }
         }
         setContent {
             VaultChatTheme {

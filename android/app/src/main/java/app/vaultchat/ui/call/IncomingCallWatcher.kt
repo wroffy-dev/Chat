@@ -14,7 +14,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
@@ -37,16 +36,16 @@ fun IncomingCallWatcher(
         val jobs = if (!enabled) emptyList() else {
             val wake = Channel<Unit>(Channel.CONFLATED)
             listOf(
-                scope.launch { signals.signals.collect { if (it is RealtimeSignal.CallChanged) wake.trySend(Unit) } },
-                scope.launch {
+                scope.launch(Dispatchers.Main.immediate) { signals.signals.collect { if (it is RealtimeSignal.CallChanged) wake.trySend(Unit) } },
+                // On the main thread, as before the screen-off change: opening the call screen must happen
+                // there, or the app crashes (owner report 2026-11-03, v134). Network calls suspend, not block.
+                scope.launch(Dispatchers.Main.immediate) {
                     var announced: String? = null
                     while (isActive) {
                         val call = (repo.current() as? CallResult.Ok)?.value
                         if (call != null && !call.isCaller && call.status == CallStatus.RINGING && call.id != announced) {
                             announced = call.id
-                            // The scope may run off the main thread; opening the call screen (navigation)
-                            // must happen on it, or the app crashes (owner report 2026-11-03, v134).
-                            withContext(Dispatchers.Main.immediate) { latest.value(call) }
+                            latest.value(call)
                         }
                         withTimeoutOrNull(if (signals.connected.value) 15_000L else 3_000L) { wake.receive() }
                     }
