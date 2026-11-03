@@ -7,7 +7,7 @@ import { AppError } from "../errors.js";
  * refused. The message lifetime may be shortened but never raised above the 24 h of decision D-02.
  */
 export const SETTING_DEFS = {
-  "call.max_video_quality": { kind: "enum", values: ["1080p", "720p", "540p", "360p"], label: "Highest video quality offered to the apps" },
+  "call.max_video_quality": { kind: "enum", values: ["1080p", "720p", "540p", "360p"], label: "Highest video size the apps send in Auto (applies from the next call)" },
   "call.ring_timeout_seconds": { kind: "int", min: 20, max: 90, label: "How long an incoming call rings (seconds)" },
   "chat.unread_backstop_hours": { kind: "int", min: 1, max: 24, label: "Longest a message can exist (hours; D-02 caps it at 24)" },
   "push.enabled": { kind: "bool", label: "Send push notifications (emergency off switch)" },
@@ -32,7 +32,8 @@ export const SETTING_KEYS = Object.keys(SETTING_DEFS) as SettingKey[];
 /** Values in force until the admin changes them. */
 export function defaultSettings(ringTimeoutSeconds: number): Settings {
   return {
-    "call.max_video_quality": "1080p",
+    // 720p by default: at 1080p a phone encodes three copies and a call showed it CPU-limited (2026-11-03).
+    "call.max_video_quality": "720p",
     "call.ring_timeout_seconds": ringTimeoutSeconds,
     "chat.unread_backstop_hours": 24,
     "push.enabled": true,

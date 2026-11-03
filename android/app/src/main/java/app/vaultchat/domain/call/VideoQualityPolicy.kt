@@ -12,8 +12,8 @@ enum class VideoQualityChoice(val capture: CaptureQuality?) {
 }
 
 /**
- * Chooses the camera capture size (docs/08-calling.md §8, §12): at most [AUTO_MAX] (720p); 540p when the
- * phone is very hot. LiveKit's
+ * Chooses the camera capture size (docs/08-calling.md §8, §12) from what the phone can do, capped by the
+ * admin's setting ([cap]). LiveKit's
  * congestion control still lowers the sent resolution on weak networks; the user can also pick a
  * size during the call (QualityAdvisor recommends one).
  */
@@ -24,20 +24,26 @@ object VideoQualityPolicy {
     const val THERMAL_MODERATE = 2
     const val THERMAL_SEVERE = 3
 
-    /**
-     * The largest size Auto sends (owner decision 2026-11-03). At 1080p the phone encodes three simulcast
-     * copies (1080p, 540p, 360p) and a call showed the encoder limited by the CPU, while the other side
-     * received 540p anyway; 720p keeps a steady 30 fps with less work and heat.
-     */
-    val AUTO_MAX = CaptureQuality.P720
+    fun choose(cameraSupports1080p30: Boolean, thermalStatus: Int, powerSaveMode: Boolean): CaptureQuality = when {
+        thermalStatus >= THERMAL_SEVERE -> CaptureQuality.P540
+        thermalStatus >= THERMAL_MODERATE || powerSaveMode || !cameraSupports1080p30 -> CaptureQuality.P720
+        else -> CaptureQuality.P1080
+    }
 
-    fun choose(cameraSupports1080p30: Boolean, thermalStatus: Int, powerSaveMode: Boolean): CaptureQuality {
-        val capable = when {
-            thermalStatus >= THERMAL_SEVERE -> CaptureQuality.P540
-            thermalStatus >= THERMAL_MODERATE || powerSaveMode || !cameraSupports1080p30 -> CaptureQuality.P720
-            else -> CaptureQuality.P1080
-        }
-        // Lower ordinal = larger size; never above AUTO_MAX.
-        return if (capable.ordinal < AUTO_MAX.ordinal) AUTO_MAX else capable
+    /**
+     * What Auto sends: what the phone can do, but never above the admin's "highest video size" setting
+     * (Admin Console → Settings, `call.max_video_quality`; 720p by default since 2026-11-03).
+     */
+    fun cap(capable: CaptureQuality, max: CaptureQuality): CaptureQuality =
+        // Lower ordinal = larger size.
+        if (capable.ordinal < max.ordinal) max else capable
+
+    /** "1080p" / "720p" / "540p" / "360p" from the server; null for anything else. */
+    fun parse(value: String?): CaptureQuality? = when (value) {
+        "1080p" -> CaptureQuality.P1080
+        "720p" -> CaptureQuality.P720
+        "540p" -> CaptureQuality.P540
+        "360p" -> CaptureQuality.P360
+        else -> null
     }
 }

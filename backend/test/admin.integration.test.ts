@@ -306,7 +306,7 @@ describe.skipIf(!TEST_DB_URL)("Admin Console (PostgreSQL)", () => {
     const { cookie, csrf } = await loginCookie();
     const page = (await app.inject({ method: "GET", url: "/admin/settings", headers: { cookie } })).body;
     expect(page).toContain("call.ring_timeout_seconds");
-    expect(page).toContain('<option selected>1080p</option>');
+    expect(page).toContain('<option selected>720p</option>');
 
     expect((await post("/admin/settings", cookie, { csrf, key: "call.ring_timeout_seconds", value: "30" })).statusCode).toBe(303);
     expect((await app.inject({ method: "GET", url: "/admin/settings", headers: { cookie } })).body).toContain('value="30"');

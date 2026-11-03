@@ -65,7 +65,10 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
 
     // Adaptive stream: receive only the resolution actually shown. Dynacast: stop encoding layers
     // nobody watches. Both are off by default in the SDK (docs/08-calling.md §8).
-    val quality: CaptureQuality = chooseQuality(appContext)
+    /** What this phone can send; [capQuality] then limits it to the admin's setting. */
+    private val capable: CaptureQuality = chooseQuality(appContext)
+    var quality: CaptureQuality = capable
+        private set
 
     private val audio = HandoverAudioHandler(AudioSwitchHandler(appContext))
     private val denoiser = RnNoiseProcessor()
@@ -77,14 +80,7 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
             dynacast = true,
             videoTrackCaptureDefaults = LocalVideoTrackOptions(captureParams = preset(quality).capture),
             // Simulcast lets the server drop to a lower layer instantly when the receiver's network weakens.
-            videoTrackPublishDefaults = VideoTrackPublishDefaults(
-                videoEncoding = preset(quality).encoding,
-                simulcast = true,
-                simulcastLayers = layersBelow(quality),
-                // When the network is short, give up a little size and a little frame rate together rather
-                // than all of one (the default keeps 30 fps and shrinks the picture hard).
-                degradationPreference = RtpParameters.DegradationPreference.BALANCED,
-            ),
+            videoTrackPublishDefaults = publishDefaults(quality),
         ),
         LiveKitOverrides(
             audioOptions = AudioOptions(
@@ -279,6 +275,22 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
     }
 
     override val autoQuality: CaptureQuality get() = quality
+
+    /** Applies the admin's "highest video size" before the camera starts (Admin Console → Settings). */
+    override fun capQuality(max: CaptureQuality) {
+        quality = VideoQualityPolicy.cap(capable, max)
+        room.videoTrackCaptureDefaults = LocalVideoTrackOptions(captureParams = preset(quality).capture)
+        room.videoTrackPublishDefaults = publishDefaults(quality)
+    }
+
+    private fun publishDefaults(q: CaptureQuality) = VideoTrackPublishDefaults(
+        videoEncoding = preset(q).encoding,
+        simulcast = true,
+        simulcastLayers = layersBelow(q),
+        // When the network is short, give up a little size and a little frame rate together rather
+        // than all of one (the default keeps 30 fps and shrinks the picture hard).
+        degradationPreference = RtpParameters.DegradationPreference.BALANCED,
+    )
 
     /** Lower simulcast layers at 30 fps (LiveKit's defaults include 180p at 15 fps). */
     private fun layersBelow(top: CaptureQuality) = when (top) {

@@ -268,6 +268,7 @@ class CallController(
     // ---------------------------------------------------------------------------------------------
 
     private suspend fun joinMedia(join: JoinInfo, kind: CallKind): Boolean = try {
+        join.maxQuality?.let(media::capQuality)
         media.connect(join.livekitUrl, join.livekitToken, video = kind == CallKind.VIDEO, micOn = _state.value.micOn, cameraOn = _state.value.cameraOn)
         media.setSpeakerphone(_state.value.speakerOn)
         true
