@@ -102,10 +102,21 @@ jobs:
             echo "Not sent to the phones: needs VAULTCHAT_APP_UPLOAD_TOKEN and the fixed test key"
             exit 0
           fi
+          ls -l out/vaultchat-debug.apk
+          # Size and time are printed so a proxy timeout (the upload cut at a fixed number of seconds) is visible.
+          status=0
           curl -sS --fail-with-body -X PUT \
             -H "Authorization: Bearer $UPLOAD_TOKEN" \
             -H "Content-Type: application/vnd.android.package-archive" \
             --data-binary @out/vaultchat-debug.apk \
-            "${API_URL}api/v1/app/apk?versionCode=$VERSION_CODE"
-          echo
-          echo "Sent: the phones will offer version $VERSION_CODE"
+            -w '\nsent %{size_upload} bytes in %{time_total} s (%{speed_upload} bytes/s), HTTP %{http_code}\n' \
+            "${API_URL}api/v1/app/apk?versionCode=$VERSION_CODE" || status=$?
+          # The answer can be lost even when the server stored the file; ask the server what it now offers.
+          offered=$(curl -sS "${API_URL}api/v1/app/version" | sed -n 's/.*"latestVersionCode":\([0-9]*\).*/\1/p')
+          echo "The server offers version ${offered:-unknown}"
+          if [ "$offered" = "$VERSION_CODE" ]; then
+            echo "Sent: the phones will offer version $VERSION_CODE"
+          else
+            echo "::error::Not sent: the server still offers ${offered:-unknown}, not $VERSION_CODE (upload exit $status). Install the APK artifact by hand."
+            exit 1
+          fi
