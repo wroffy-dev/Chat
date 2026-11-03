@@ -69,6 +69,8 @@ class FakeMedia : MediaSession {
     override fun switchCamera() { log += "switch" }
     var peerSwitchRequests = 0
     override suspend fun requestPeerSwitchCamera() { peerSwitchRequests++; log += "switch-peer" }
+    override fun setCameraZoom(zoom: Float) { log += "zoom:$zoom" }
+    override suspend fun requestPeerCameraZoom(zoom: Float) { log += "zoom-peer:$zoom" }
     override fun setSpeakerphone(enabled: Boolean) { log += "speaker:$enabled" }
     override fun disconnect() {
         connected = false
@@ -118,6 +120,45 @@ class CallControllerTest {
         media.events.emit(MediaEvent.CameraSwitchedByPeer)
         runCurrent()
         assertEquals(1, c.state.value.cameraFlippedByPeer)
+    }
+
+    @Test
+    fun `camera zoom: own and peer levels are clamped, sent, and a peer zoom is surfaced`() = runTest {
+        val c = controller()
+        c.startOutgoing("conn", CallKind.VIDEO, "bob")
+        runCurrent()
+
+        c.setMyCameraZoom(2f)
+        assertEquals(2f, c.state.value.cameraZoom)
+        c.setMyCameraZoom(9f) // above the largest level
+        assertEquals(CallController.MAX_CAMERA_ZOOM, c.state.value.cameraZoom)
+        c.setPeerCameraZoom(1.5f)
+        runCurrent()
+        assertEquals(1.5f, c.state.value.peerCameraZoom)
+        assertEquals(listOf("zoom:2.0", "zoom:3.0", "zoom-peer:1.5"), media.log.filter { it.startsWith("zoom") })
+
+        // The other side zoomed our camera: state follows and the UI gets a bumped counter for a notice.
+        media.events.emit(MediaEvent.CameraZoomedByPeer(2f))
+        runCurrent()
+        assertEquals(2f, c.state.value.cameraZoom)
+        assertEquals(1, c.state.value.cameraZoomedByPeer)
+        // Their own report of their zoom updates what our menu shows, without a notice.
+        media.events.emit(MediaEvent.PeerCameraZoom(1f))
+        runCurrent()
+        assertEquals(1f, c.state.value.peerCameraZoom)
+        assertEquals(1, c.state.value.cameraZoomedByPeer)
+    }
+
+    @Test
+    fun `camera zoom does nothing on a voice call`() = runTest {
+        val c = controller()
+        c.startOutgoing("conn", CallKind.VOICE, "bob")
+        runCurrent()
+        c.setMyCameraZoom(2f)
+        c.setPeerCameraZoom(2f)
+        runCurrent()
+        assertEquals(1f, c.state.value.cameraZoom)
+        assertTrue(media.log.none { it.startsWith("zoom") })
     }
 
     @Test

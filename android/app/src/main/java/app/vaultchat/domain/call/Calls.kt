@@ -51,6 +51,10 @@ sealed interface MediaEvent {
     data class RemoteMicrophone(val on: Boolean) : MediaEvent
     /** The other person asked, during the call, to flip this phone's camera (front/back). */
     data object CameraSwitchedByPeer : MediaEvent
+    /** The other person set this phone's camera zoom during the call (owner request 2026-11-03). */
+    data class CameraZoomedByPeer(val zoom: Float) : MediaEvent
+    /** The other person's camera zoom, as their phone reports it after each change. */
+    data class PeerCameraZoom(val zoom: Float) : MediaEvent
     /** The media connection is gone for good (server closed the room, or could not reconnect). */
     data object Disconnected : MediaEvent
 }
@@ -85,6 +89,13 @@ interface MediaSession {
      * A no-op where the media layer cannot send it (e.g. the test fake).
      */
     suspend fun requestPeerSwitchCamera() = Unit
+    /**
+     * Zooms the video this phone sends (digital zoom: the middle of the picture, enlarged), 1 = none.
+     * The other phone is told the new level. A no-op where unsupported (e.g. the test fake).
+     */
+    fun setCameraZoom(zoom: Float) = Unit
+    /** Asks the other person's phone to zoom its camera to [zoom]; like the camera switch, they see a notice. */
+    suspend fun requestPeerCameraZoom(zoom: Float) = Unit
     fun setSpeakerphone(enabled: Boolean)
     /** Releases camera, microphone and the connection. Safe to call more than once. */
     fun disconnect()
