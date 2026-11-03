@@ -85,6 +85,9 @@ class AppContainer(context: Context) {
     /** Set when the user taps an incoming-call notification; the navigation host consumes it. */
     val pendingIncomingCallId = MutableStateFlow<String?>(null)
 
+    /** Set true when a call rings while the app is open; MainActivity then turns the screen on. */
+    val wakeForCall = MutableStateFlow(false)
+
     val permissionPreferences = PermissionPreferences(appContext)
 
     /** Android's call framework for calls; null unless the build enables it (docs/08-calling.md §10). */
