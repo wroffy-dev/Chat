@@ -57,6 +57,10 @@ import app.vaultchat.R
 import app.vaultchat.VaultChatApplication
 import app.vaultchat.domain.connection.Connection
 import app.vaultchat.ui.about.LastCrashCard
+import app.vaultchat.domain.permissions.PermissionStatus
+import app.vaultchat.domain.permissions.AppPermission
+import app.vaultchat.ui.permissions.rememberPermissionRequest
+import app.vaultchat.platform.push.Push
 import app.vaultchat.ui.about.UpdateBanner
 import app.vaultchat.ui.components.BannerKind
 import app.vaultchat.ui.components.EmptyState
@@ -101,6 +105,7 @@ fun HomeScreen(
             UpdateBanner(updater, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             LastCrashCard(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             AskBatteryExemptionOnce()
+            AskNotificationPermissionOnce()
             if (state.offline) {
                 StatusBanner(
                     kind = BannerKind.WARNING,
@@ -174,6 +179,21 @@ private fun AskBatteryExemptionOnce() {
             context.startActivity(ask)
         } catch (_: ActivityNotFoundException) {
         }
+    }
+}
+
+/**
+ * Android 13+: the incoming-call notification needs the notification permission (D-24 as changed by the
+ * owner on 2026-11-12: calls only). Asked once, and only in builds that can receive pushes.
+ */
+@Composable
+private fun AskNotificationPermissionOnce() {
+    if (!Push.CALL_NOTIFICATIONS || !Push.configured) return
+    val context = LocalContext.current
+    val prefs = (context.applicationContext as VaultChatApplication).container.permissionPreferences
+    val request = rememberPermissionRequest(AppPermission.NOTIFICATIONS, prefs)
+    LaunchedEffect(Unit) {
+        if (request.status != PermissionStatus.Granted && !prefs.wasRequested(AppPermission.NOTIFICATIONS)) request.request()
     }
 }
 

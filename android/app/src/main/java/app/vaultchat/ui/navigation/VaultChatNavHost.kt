@@ -17,6 +17,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.LifecycleStartEffect
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.vaultchat.domain.call.CallResult
 import app.vaultchat.platform.push.Push
@@ -141,8 +143,17 @@ fun VaultChatNavHost(container: AppContainer) {
         container.wakeForCall.value = true
         navController.navigate(CallRoute(video = call.kind == CallKind.VIDEO, peerUsername = call.peerUsername, callId = call.id))
     }
-    // Stop keeping the screen awake once the call screen is gone.
-    LaunchedEffect(onCallScreen) { if (!onCallScreen) container.wakeForCall.value = false }
+    // Stop keeping the screen awake once the call screen is gone. Not before it was shown: a call opened
+    // from the notification sets the wake first and reaches the call screen a moment later.
+    var wasOnCallScreen by remember { mutableStateOf(false) }
+    LaunchedEffect(onCallScreen) {
+        if (onCallScreen) {
+            wasOnCallScreen = true
+        } else if (wasOnCallScreen) {
+            wasOnCallScreen = false
+            container.wakeForCall.value = false
+        }
+    }
 
     // Register this device for call wake-ups once signed in (no-op when FCM is not configured), and
     // send a chat exit that a crash or lost network kept from reaching the server.
@@ -160,9 +171,12 @@ fun VaultChatNavHost(container: AppContainer) {
         if (!signedIn) return@LaunchedEffect
         container.pendingIncomingCallId.value = null
         Push.cancelIncomingCall(context)
-        val call = (container.callRepository.get(id) as? CallResult.Ok)?.value ?: return@LaunchedEffect
-        if (call.status == CallStatus.RINGING && !call.isCaller && !onCallScreen) {
+        val call = (container.callRepository.get(id) as? CallResult.Ok)?.value
+        if (call != null && call.status == CallStatus.RINGING && !call.isCaller && !onCallScreen) {
             navController.navigate(CallRoute(video = call.kind == CallKind.VIDEO, peerUsername = call.peerUsername, callId = call.id))
+        } else if (!onCallScreen) {
+            // The call is over (or could not be read): do not stay over the lock screen.
+            container.wakeForCall.value = false
         }
     }
 

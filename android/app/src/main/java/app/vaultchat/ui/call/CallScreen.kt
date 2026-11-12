@@ -144,6 +144,10 @@ fun CallScreen(
         }
     }
 
+    // The push for this call can arrive after this screen opened; its notification goes once the call is
+    // answered, declined or over.
+    LaunchedEffect(state.phase) { if (state.phase != CallPhase.RINGING_IN) Push.cancelIncomingCall(context) }
+
     // Keep connected calls alive in the background: the foreground service is started here, while
     // the app is visible, as Android 14+ requires for camera and microphone services.
     val inCall = state.phase == CallPhase.CONNECTING || state.phase == CallPhase.ACTIVE || state.phase == CallPhase.RECONNECTING

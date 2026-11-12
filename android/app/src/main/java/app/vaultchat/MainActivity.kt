@@ -68,6 +68,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        Push.appInFront = true
+    }
+
+    override fun onStop() {
+        Push.appInFront = false
+        super.onStop()
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleIncomingCallIntent(intent)
@@ -77,6 +87,10 @@ class MainActivity : ComponentActivity() {
     private fun handleIncomingCallIntent(intent: Intent?) {
         val callId = intent?.getStringExtra(Push.EXTRA_INCOMING_CALL_ID) ?: return
         intent.removeExtra(Push.EXTRA_INCOMING_CALL_ID)
-        (application as VaultChatApplication).container.pendingIncomingCallId.value = callId
+        val container = (application as VaultChatApplication).container
+        container.pendingIncomingCallId.value = callId
+        // Opened by the call notification, possibly on a locked, dark phone: come up over the lock screen
+        // right away, so the call screen can open and ring. Only for a signed-in phone.
+        if (container.authRepository.currentUser() != null) container.wakeForCall.value = true
     }
 }

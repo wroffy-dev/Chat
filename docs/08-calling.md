@@ -95,7 +95,8 @@ callee's perceived setup time. The caller's outgoing video is not sent to anyone
 the application scope rather than the screen's lifecycle, so a call is noticed while the screen is off and
 the app is open. The activity then turns the screen on and shows over the lock screen
 (`setShowWhenLocked`/`setTurnScreenOn`), so the 10 s auto-answer below happens in view, not hidden. Deep
-Doze can delay detection; a fully closed app would need push (off per D-24).
+Doze can delay detection. With the app fully closed, the call arrives by push and its full-screen
+notification opens the call screen (D-24 as changed on 2026-11-12; needs Firebase, docs/10).
 
 
 **Implemented (2026-10-29, owner request; this is a private app of at most ten QR-paired people, D-21).**
