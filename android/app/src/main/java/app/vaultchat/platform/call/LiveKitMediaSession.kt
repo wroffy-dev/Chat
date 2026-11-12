@@ -295,7 +295,7 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
                 simulcast = true,
                 simulcastLayers = layersBelow(quality),
                 source = Track.Source.CAMERA,
-                degradationPreference = RtpParameters.DegradationPreference.BALANCED,
+                degradationPreference = AUTO_DEGRADATION,
             ),
         )
         if (!published) {
@@ -360,16 +360,25 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
         videoEncoding = preset(q).encoding,
         simulcast = true,
         simulcastLayers = layersBelow(q),
-        // When the network is short, give up a little size and a little frame rate together rather
-        // than all of one (the default keeps 30 fps and shrinks the picture hard).
-        degradationPreference = RtpParameters.DegradationPreference.BALANCED,
+        // When the network is short, keep the frame rate and shrink the picture (see AUTO_DEGRADATION).
+        degradationPreference = AUTO_DEGRADATION,
     )
 
-    /** Lower simulcast layers at 30 fps (LiveKit's defaults include 180p at 15 fps). */
-    private fun layersBelow(top: CaptureQuality) = when (top) {
-        CaptureQuality.P1080, CaptureQuality.P720 -> listOf(Sharp.P360, Sharp.P540)
-        CaptureQuality.P540 -> listOf(Sharp.P360)
+    /**
+     * Lower simulcast layers, all at 30 fps (LiveKit's own 180p runs at 15 fps). Since 2026-11-12 (owner:
+     * better on a weak network, hold the frame rate) the ladder always reaches down to a light 180p layer,
+     * so on a poor connection the server and WebRTC can fall back to a small picture that still moves at
+     * 30 fps, instead of a larger one that stutters. Before: 360p + 540p under 720p, nothing below 360p.
+     */
+    private fun layersBelow(top: CaptureQuality): List<VideoPreset> = when (top) {
+        CaptureQuality.P1080, CaptureQuality.P720, CaptureQuality.P540 -> listOf(P180at30, Low360)
         CaptureQuality.P360 -> listOf(P180at30)
+    }
+
+    /** 360p as a lower layer: lighter than the 0.7 Mbps used when 360p is the top size. */
+    private object Low360 : VideoPreset {
+        override val capture = VideoCaptureParameter(640, 360, 30)
+        override val encoding = VideoEncoding(450_000, 30)
     }
 
     /** 180p at 30 fps: LiveKit's own 180p and 216p presets run at 15 fps. */
@@ -426,7 +435,7 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
                 simulcast = !forced,
                 simulcastLayers = if (forced) null else layersBelow(quality),
                 source = Track.Source.CAMERA,
-                degradationPreference = if (forced) RtpParameters.DegradationPreference.DISABLED else RtpParameters.DegradationPreference.BALANCED,
+                degradationPreference = if (forced) RtpParameters.DegradationPreference.DISABLED else AUTO_DEGRADATION,
             ),
         )
         if (published) {
@@ -477,6 +486,13 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
  * investigated; the button is hidden and audio goes straight through, as before.
  */
 private const val NOISE_FILTER = false
+
+/**
+ * What Auto gives up first when the network or the phone cannot keep up: picture size, not smoothness
+ * (owner request 2026-11-12: do not fall below 25 fps quickly). WebRTC keeps the frame rate and sends a
+ * smaller picture. From 2026-11-03 to then it was BALANCED, which lowered both together.
+ */
+private val AUTO_DEGRADATION = RtpParameters.DegradationPreference.MAINTAIN_FRAMERATE
 
 /** Highest camera zoom (digital); matches CallController.MAX_CAMERA_ZOOM. */
 private const val MAX_ZOOM = 3f

@@ -233,7 +233,7 @@ takes effect from the next call, without an app update.
 ### Bitrates and degradation (2026-11-03, owner request)
 
 Encodings use LiveKit's 16:9 sizes at 30 fps with higher ceilings: 360p 0.7, 540p 1.3, 720p 2.5, 1080p 4 Mbps
-(LiveKit: 0.45 / 0.8 / 1.7 / 3). In Auto, WebRTC degradation is `BALANCED`; a forced size stays `DISABLED`. A call
+(LiveKit: 0.45 / 0.8 / 1.7 / 3). In Auto, WebRTC degradation is `MAINTAIN_FRAMERATE` since 2026-11-12 (owner: do not fall below 25 fps quickly; it was `BALANCED` from 2026-11-03), so a weak network shrinks the picture before it slows it, and the simulcast ladder always reaches down to 180p at 30 fps / 0.2 Mbps (180p + 360p at 0.45 Mbps under 540p, 720p and 1080p; before: 360p + 540p). A forced size stays `DISABLED`. No frame rate can be guaranteed on a very poor connection. A call
 measured on 2026-11-03 had RTT 227 ms between India and the EU-hosted LiveKit, which limits quality more than these
 settings; a media server nearer the users is the larger improvement (**Proposed**, owner to decide).
 
