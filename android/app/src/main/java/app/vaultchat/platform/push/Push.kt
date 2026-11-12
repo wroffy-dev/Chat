@@ -16,6 +16,7 @@ import androidx.core.content.ContextCompat
 import app.vaultchat.BuildConfig
 import app.vaultchat.MainActivity
 import app.vaultchat.R
+import app.vaultchat.platform.call.TalkPlayer
 import app.vaultchat.VaultChatApplication
 import app.vaultchat.data.push.PushTokenApi
 import com.google.firebase.FirebaseApp
@@ -191,7 +192,7 @@ object Push {
     }
 }
 
-/** Receives FCM data messages: {t: "call" | "call_end", id} and {t: "msg"}. */
+/** Receives FCM data messages: {t: "call" | "talk" | "call_end", id} and {t: "msg"}. */
 class VaultChatMessagingService : FirebaseMessagingService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -199,13 +200,17 @@ class VaultChatMessagingService : FirebaseMessagingService() {
         val id = message.data["id"]
         when (message.data["t"]) {
             "call" -> if (id != null) Push.showIncomingCall(applicationContext, id)
+            // Walkie-talkie (D-26): played aloud at once, no notification to tap.
+            "talk" -> if (id != null && container().authRepository.currentUser() != null) TalkPlayer.play(applicationContext, id)
             "call_end" -> Push.cancelIncomingCall(applicationContext)
             "msg" -> Push.showNewMessage(applicationContext)
         }
     }
 
+    private fun container() = (application as VaultChatApplication).container
+
     override fun onNewToken(token: String) {
-        val container = (application as VaultChatApplication).container
+        val container = container()
         // Only a signed-in session can own a token; otherwise it is registered at next login.
         if (container.authRepository.currentUser() != null) {
             scope.launch { container.pushTokenApi.register(token) }

@@ -28,8 +28,8 @@ class RecordingGateway implements MediaGateway {
   async deleteRoom(name: string) {
     this.deleted.push(name);
   }
-  joinToken(identity: string, displayName: string, room: string) {
-    return this.real.joinToken(identity, displayName, room);
+  joinToken(identity: string, displayName: string, room: string, listenOnly?: boolean) {
+    return this.real.joinToken(identity, displayName, room, listenOnly);
   }
   verifyWebhook(body: string, auth: string | undefined): Promise<MediaWebhookEvent> {
     return this.real.verifyWebhook(body, auth);
@@ -204,6 +204,46 @@ describe.skipIf(!TEST_DB_URL)("calls (PostgreSQL)", () => {
     // A new call can start afterwards.
     clockMs = null;
     expect((await call(alice.token, "POST", "/calls", { connectionId, kind: "video" })).statusCode).toBe(201);
+  });
+
+  it("walkie-talkie (D-26): only the caller can speak, and the server ends it after the limit", async () => {
+    const { alice, bob, connectionId } = await connectedPair();
+    const start = await call(alice.token, "POST", "/calls", { connectionId, kind: "talk" });
+    expect(start.statusCode).toBe(201);
+    const s = start.json();
+    expect(jwtPayload(s.livekitToken).video).toMatchObject({ canPublish: true, canSubscribe: true });
+    expect((await call(bob.token, "GET", "/calls/current")).json().call).toMatchObject({ kind: "talk", status: "ringing", role: "callee" });
+
+    // The listening phone's token cannot publish a microphone, a camera or data.
+    const listener = jwtPayload((await call(bob.token, "POST", `/calls/${s.callId}/accept`)).json().livekitToken).video;
+    expect(listener).toMatchObject({ roomJoin: true, canSubscribe: true });
+    expect(listener.canPublish).toBeFalsy();
+    expect(listener.canPublishData).toBeFalsy();
+    expect(listener.canPublishSources ?? []).toEqual([]);
+
+    // Still within the 10 s (plus the time to connect): left alone.
+    clockMs = Date.now() + 12_000;
+    await calls.sweep();
+    expect((await call(alice.token, "GET", `/calls/${s.callId}`)).json().status).toBe("accepted");
+    // Past it: ended by the server and the room closed.
+    clockMs = Date.now() + 19_000;
+    await calls.sweep();
+    expect((await call(alice.token, "GET", `/calls/${s.callId}`)).json()).toMatchObject({ status: "ended", endReason: "talk_limit" });
+    expect(media.deleted).toContain(media.created[0]);
+  });
+
+  it("walkie-talkie: given up when the other phone does not join in time; ordinary calls keep their ring time", async () => {
+    const { alice, connectionId } = await connectedPair();
+    const s = (await call(alice.token, "POST", "/calls", { connectionId, kind: "talk" })).json();
+    clockMs = Date.now() + 26_000;
+    await calls.sweep();
+    expect((await call(alice.token, "GET", `/calls/${s.callId}`)).json()).toMatchObject({ status: "missed", endReason: "timeout" });
+
+    clockMs = null;
+    const v = (await call(alice.token, "POST", "/calls", { connectionId, kind: "voice" })).json();
+    clockMs = Date.now() + 26_000;
+    await calls.sweep();
+    expect((await call(alice.token, "GET", `/calls/${v.callId}`)).json().status).toBe("ringing");
   });
 
   it("fails accepted calls that nobody joins within 30 seconds", async () => {

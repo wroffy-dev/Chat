@@ -22,6 +22,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.vaultchat.domain.call.CallResult
 import app.vaultchat.platform.push.Push
+import app.vaultchat.platform.call.TalkPlayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.currentBackStackEntryAsState
 import app.vaultchat.domain.call.CallInfo
@@ -30,6 +31,7 @@ import app.vaultchat.domain.call.CallStatus
 import app.vaultchat.domain.chat.flushPendingLeave
 import app.vaultchat.ui.about.UpgradeRequiredScreen
 import app.vaultchat.ui.call.CallScreen
+import app.vaultchat.ui.call.TalkDialog
 import app.vaultchat.ui.chat.ChatScreen
 import app.vaultchat.ui.chat.ChatViewModel
 import app.vaultchat.ui.call.CallViewModel
@@ -138,6 +140,11 @@ fun VaultChatNavHost(container: AppContainer) {
         container.applicationScope,
         enabled = signedIn && !onCallScreen && !locationBlocked,
     ) { call ->
+        // A walkie-talkie message is played aloud at once; no call screen, no ringing (D-26).
+        if (call.kind == CallKind.TALK) {
+            TalkPlayer.play(context, call.id)
+            return@IncomingCallWatcher
+        }
         // Turn the screen on and show over the lock screen (MainActivity watches this), then open the
         // ringing call; its 10 s auto-answer then fires even if the screen was off.
         container.wakeForCall.value = true
@@ -234,7 +241,20 @@ fun VaultChatNavHost(container: AppContainer) {
                     }
                 },
             )
+            // Walkie-talkie (D-26): a short dialog over the chat while the message is sent.
+            var talking by remember { mutableStateOf(false) }
+            if (talking) {
+                TalkDialog(
+                    repo = container.callRepository,
+                    scope = container.applicationScope,
+                    connectionId = route.connectionId,
+                    peerUsername = route.peerUsername,
+                    permissionPreferences = container.permissionPreferences,
+                    onClose = { talking = false },
+                )
+            }
             ChatScreen(
+                onTalk = { talking = true },
                 viewModel = viewModel,
                 myUserId = me.id,
                 peerUsername = route.peerUsername,

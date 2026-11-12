@@ -51,7 +51,11 @@ data class CurrentCallDto(val call: CallDto? = null)
 
 fun CallDto.toDomain() = CallInfo(
     id = id,
-    kind = if (kind == "voice") CallKind.VOICE else CallKind.VIDEO,
+    kind = when (kind) {
+        "voice" -> CallKind.VOICE
+        "talk" -> CallKind.TALK
+        else -> CallKind.VIDEO
+    },
     status = CallStatus.valueOf(status.uppercase()),
     isCaller = role == "caller",
     peerUsername = peer.username,
@@ -104,7 +108,7 @@ class RemoteCallRepository(private val http: HttpJson, private val caller: Autho
         ApiResult.NetworkError -> CallResult.Failure(CallFailure.NETWORK)
         is ApiResult.HttpError -> CallResult.Failure(
             when {
-                code == "CALL_IN_PROGRESS" -> CallFailure.IN_PROGRESS
+                code == "CALL_IN_PROGRESS" || code == "PEER_BUSY" -> CallFailure.IN_PROGRESS
                 code == "CALL_NOT_ACTIVE" -> CallFailure.NOT_ACTIVE
                 code == "MEDIA_UNAVAILABLE" -> CallFailure.MEDIA_UNAVAILABLE
                 status == 404 -> CallFailure.NOT_FOUND

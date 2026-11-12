@@ -352,6 +352,24 @@ When the other person is muted the screen says "<name> is muted" (**Implemented*
 the LiveKit server's view of their microphone (published and not muted), so it also confirms a mute
 reached the server.
 
+## 10a. Walkie-talkie (D-26, 2026-11-12, **Implemented**, not yet tried on the phones)
+
+A third kind of call, `talk`: live one-way audio of at most 10 s, never recorded or stored.
+
+- **Speaking:** the mic button in a chat opens a small dialog. The app starts a `talk` call and joins the
+  room with the microphone on. It shows "Reaching <name>'s phone…" until the other phone has joined, then
+  "Speak now · 10 s" counting down; it ends at 0, on Stop, or when the dialog is closed (`TalkSender`).
+  If the other phone does not join within 22 s nothing is sent.
+- **Listening:** the other phone learns of it from the live signal or the 3 s poll (app open, screen on
+  or off) or from the FCM `talk` push (app closed). `TalkPlayer` accepts the call, joins with a
+  listen-only token (the server refuses any publishing), plays it on the loudspeaker as call audio, which
+  a silenced ringer does not mute, at 80 % call volume or more (put back afterwards), and leaves when the
+  speaker is done or after 25 s. `TalkPlaybackService` (foreground, `mediaPlayback`) keeps the app alive
+  meanwhile. No call screen, no ringing, nothing to tap.
+- **Limits on the server:** 25 s to be accepted, then ended 10 s (plus 8 s to connect) after the accept.
+  A person already in a call is busy.
+- Not possible: a phone that is switched off, has no internet, or (app closed) has no Firebase push.
+
 ## 11. Call statistics and diagnostics
 
 Collected in memory during the call (every 2 s from WebRTC stats via the SDK) and summarised at the end.

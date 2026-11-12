@@ -2,7 +2,8 @@ package app.vaultchat.domain.call
 
 import kotlinx.coroutines.flow.Flow
 
-enum class CallKind { VIDEO, VOICE }
+/** [TALK] is the walkie-talkie: live one-way audio of at most 10 s (D-26); see Talk.kt. */
+enum class CallKind { VIDEO, VOICE, TALK }
 
 enum class CallStatus { RINGING, ACCEPTED, ACTIVE, ENDED, DECLINED, CANCELLED, MISSED, FAILED }
 
