@@ -17,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import app.vaultchat.data.push.PushTokenApi
 import app.vaultchat.data.app.AppVersionApi
+import app.vaultchat.ui.call.CallSession
 import app.vaultchat.data.app.ApkDownloader
 import app.vaultchat.platform.update.AppUpdater
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -87,6 +88,15 @@ class AppContainer(context: Context) {
 
     /** Set true when a call rings while the app is open; MainActivity then turns the screen on. */
     val wakeForCall = MutableStateFlow(false)
+
+    /** The call in progress, if any. It outlives the call screen so the call can be minimised. */
+    val activeCall = MutableStateFlow<CallSession?>(null)
+
+    /** Ends [session] and forgets it (the call screen was closed for good, or the call ended while minimised). */
+    fun endCall(session: CallSession) {
+        session.dispose()
+        if (activeCall.value === session) activeCall.value = null
+    }
 
     val permissionPreferences = PermissionPreferences(appContext)
 
