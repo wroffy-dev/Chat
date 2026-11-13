@@ -50,6 +50,18 @@ class AuthorizedCaller(private val api: AuthApi, private val store: TokenStore) 
 
     suspend fun load(): StoredSession? = withContext(Dispatchers.IO) { store.load() }
 
+    /**
+     * Changes the stored session under the refresh lock. A read-then-save outside it could write back
+     * tokens that a refresh had just replaced; the phone would then present a rotated refresh token,
+     * which the server treats as stolen and ends the session (owner report 2026-11-12: repeated logouts).
+     */
+    suspend fun update(change: (StoredSession) -> StoredSession) {
+        refreshLock.withLock {
+            val current = load() ?: return
+            save(change(current))
+        }
+    }
+
     suspend fun clear() = withContext(Dispatchers.IO) { store.clear() }
 
     suspend fun save(session: StoredSession) = withContext(Dispatchers.IO) { store.save(session) }

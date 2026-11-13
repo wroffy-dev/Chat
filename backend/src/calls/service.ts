@@ -8,12 +8,20 @@ import type { SettingsService } from "../settings/service.js";
 
 const SECOND = 1000;
 
-export type CallKind = "video" | "voice";
+/** "talk" is the walkie-talkie (D-26): live one-way audio from the caller, at most [TALK_MAX_MS]. */
+export type CallKind = "video" | "voice" | "talk";
 export type EndReason = "hangup" | "network_lost" | "error";
 const LIVE = ["ringing", "accepted", "active"] as const;
 
 /** Caller and callee must join within this time after acceptance, or the call fails (docs/08 §4.1). */
 export const JOIN_TIMEOUT_MS = 30 * SECOND;
+
+/** Walkie-talkie: how long the other phone has to wake up and join before the message is given up. */
+export const TALK_WAIT_MS = 25 * SECOND;
+/** Walkie-talkie: longest a message may last (D-26: 10 s), counted from when the other phone accepted. */
+export const TALK_MAX_MS = 10 * SECOND;
+/** Time for both phones to connect after the accept, before the 10 s are over for the server. */
+const TALK_CONNECT_GRACE_MS = 8 * SECOND;
 
 export interface CallView {
   id: string;
@@ -57,7 +65,7 @@ export class CallService {
   }
 
   /** Fire-and-forget push; failures are logged inside PushService and never affect the call. */
-  private notify(userId: string, payload: { t: "call" | "call_end"; id: string }) {
+  private notify(userId: string, payload: { t: "call" | "talk" | "call_end"; id: string }) {
     if (!this.push) return;
     const push = this.push;
     void this.ringSeconds()
@@ -84,7 +92,7 @@ export class CallService {
 
     const room = `call_${randomUUID()}`;
     try {
-      await media.createRoom(room, (await this.ringSeconds()) + 30);
+      await media.createRoom(room, kind === "talk" ? (TALK_WAIT_MS + TALK_MAX_MS) / SECOND + 30 : (await this.ringSeconds()) + 30);
     } catch {
       throw appError(503, "MEDIA_UNAVAILABLE");
     }
@@ -103,7 +111,7 @@ export class CallService {
       }
       throw err;
     }
-    this.notify(calleeUserId, { t: "call", id: call.id });
+    this.notify(calleeUserId, { t: kind === "talk" ? "talk" : "call", id: call.id });
     this.changed(call);
     return this.joinInfo(call, userId);
   }
@@ -203,19 +211,26 @@ export class CallService {
     const now = this.now().getTime();
     const ringingBefore = new Date(now - (await this.ringSeconds()) * SECOND);
     const acceptedBefore = new Date(now - JOIN_TIMEOUT_MS);
+    const talk = { kind: "talk" };
+    const notTalk = { kind: { not: "talk" } };
     const stale = await this.prisma.call.findMany({
       where: {
         OR: [
-          { status: "ringing", createdAt: { lt: ringingBefore } },
-          { status: "accepted", acceptedAt: { lt: acceptedBefore } },
+          { ...notTalk, status: "ringing", createdAt: { lt: ringingBefore } },
+          { ...notTalk, status: "accepted", acceptedAt: { lt: acceptedBefore } },
+          // Walkie-talkie: a short wait for the other phone, then at most 10 s of sound (D-26). The apps
+          // stop by themselves; this is the server's own limit.
+          { ...talk, status: "ringing", createdAt: { lt: new Date(now - TALK_WAIT_MS) } },
+          { ...talk, status: { in: ["accepted", "active"] }, acceptedAt: { lt: new Date(now - TALK_MAX_MS - TALK_CONNECT_GRACE_MS) } },
         ],
       },
     });
     for (const call of stale) {
       const missed = call.status === "ringing";
+      const overLimit = call.kind === "talk" && !missed;
       const r = await this.prisma.call.updateMany({
         where: { id: call.id, status: call.status },
-        data: { status: missed ? "missed" : "failed", endReason: "timeout", endedAt: new Date(now) },
+        data: { status: missed ? "missed" : overLimit ? "ended" : "failed", endReason: overLimit ? "talk_limit" : "timeout", endedAt: new Date(now) },
       });
       if (r.count === 1) {
         this.changed(call);
@@ -254,7 +269,8 @@ export class CallService {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
     let livekitToken: string;
     try {
-      livekitToken = await media.joinToken(userId, user.username, call.livekitRoom);
+      // In a walkie-talkie message only the caller speaks: the other phone gets a listen-only token.
+      livekitToken = await media.joinToken(userId, user.username, call.livekitRoom, call.kind === "talk" && call.calleeUserId === userId);
     } catch {
       throw appError(503, "MEDIA_UNAVAILABLE");
     }

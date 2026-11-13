@@ -19,6 +19,7 @@
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
     <!-- Self-managed calls in Android's call framework (only used when the build enables it). -->
     <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
@@ -60,6 +61,12 @@
         <receiver
             android:name=".platform.update.UpdateInstallReceiver"
             android:exported="false" />
+
+        <!-- Plays an incoming walkie-talkie message (D-26); it captures nothing. -->
+        <service
+            android:name=".platform.call.TalkPlaybackService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
 
         <service
             android:name=".platform.call.CallForegroundService"

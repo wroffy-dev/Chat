@@ -95,7 +95,8 @@ callee's perceived setup time. The caller's outgoing video is not sent to anyone
 the application scope rather than the screen's lifecycle, so a call is noticed while the screen is off and
 the app is open. The activity then turns the screen on and shows over the lock screen
 (`setShowWhenLocked`/`setTurnScreenOn`), so the 10 s auto-answer below happens in view, not hidden. Deep
-Doze can delay detection; a fully closed app would need push (off per D-24).
+Doze can delay detection. With the app fully closed, the call arrives by push and its full-screen
+notification opens the call screen (D-24 as changed on 2026-11-12; needs Firebase, docs/10).
 
 
 **Implemented (2026-10-29, owner request; this is a private app of at most ten QR-paired people, D-21).**
@@ -232,7 +233,7 @@ takes effect from the next call, without an app update.
 ### Bitrates and degradation (2026-11-03, owner request)
 
 Encodings use LiveKit's 16:9 sizes at 30 fps with higher ceilings: 360p 0.7, 540p 1.3, 720p 2.5, 1080p 4 Mbps
-(LiveKit: 0.45 / 0.8 / 1.7 / 3). In Auto, WebRTC degradation is `BALANCED`; a forced size stays `DISABLED`. A call
+(LiveKit: 0.45 / 0.8 / 1.7 / 3). In Auto, WebRTC degradation is `MAINTAIN_FRAMERATE` since 2026-11-12 (owner: do not fall below 25 fps quickly; it was `BALANCED` from 2026-11-03), so a weak network shrinks the picture before it slows it, and the simulcast ladder always reaches down to 180p at 30 fps / 0.2 Mbps (180p + 360p at 0.45 Mbps under 540p, 720p and 1080p; before: 360p + 540p). A forced size stays `DISABLED`. No frame rate can be guaranteed on a very poor connection. A call
 measured on 2026-11-03 had RTT 227 ms between India and the EU-hosted LiveKit, which limits quality more than these
 settings; a media server nearer the users is the larger improvement (**Proposed**, owner to decide).
 
@@ -337,9 +338,37 @@ cannot turn a camera on — and it is not covert: the other phone shows "<name> 
 It is sent over a LiveKit reliable data message on the `vaultchat.switch_camera` topic; the receiving
 phone flips its own camera and the sender sees "Switched <name>'s camera".
 
+**Zoom** (owner request 2026-11-03, **Implemented**, to be confirmed on the phones):
+- *Screen zoom*: pinch the big picture to enlarge it (up to 5x), drag to move it, double-tap to go back
+  to 1x. It changes only what this phone shows.
+- *Camera zoom*: the "Zoom" button opens a menu for this phone's camera and for the other person's,
+  each at 1x / 1.5x / 2x / 3x. It zooms the video that is sent, so both phones see it. It is digital:
+  each frame's middle is cropped and enlarged before encoding (`ZoomVideoProcessor`), because LiveKit
+  exposes no camera zoom, so above 1x the picture is softer. Like the camera switch it is not covert:
+  the zoomed person sees "<name> zoomed your camera to 2x". Messages use the `vaultchat.camera_zoom`
+  data topic: `set:<zoom>` asks the receiver to zoom, `is:<zoom>` reports the sender's own level.
+
 When the other person is muted the screen says "<name> is muted" (**Implemented** 2026-10-29). It follows
 the LiveKit server's view of their microphone (published and not muted), so it also confirms a mute
 reached the server.
+
+## 10a. Walkie-talkie (D-26, 2026-11-12, **Implemented**, not yet tried on the phones)
+
+A third kind of call, `talk`: live one-way audio of at most 10 s, never recorded or stored.
+
+- **Speaking:** the mic button in a chat opens a small dialog. The app starts a `talk` call and joins the
+  room with the microphone on. It shows "Reaching <name>'s phone…" until the other phone has joined, then
+  "Speak now · 10 s" counting down; it ends at 0, on Stop, or when the dialog is closed (`TalkSender`).
+  If the other phone does not join within 22 s nothing is sent.
+- **Listening:** the other phone learns of it from the live signal or the 3 s poll (app open, screen on
+  or off) or from the FCM `talk` push (app closed). `TalkPlayer` accepts the call, joins with a
+  listen-only token (the server refuses any publishing), plays it on the loudspeaker as call audio, which
+  a silenced ringer does not mute, at 80 % call volume or more (put back afterwards), and leaves when the
+  speaker is done or after 25 s. `TalkPlaybackService` (foreground, `mediaPlayback`) keeps the app alive
+  meanwhile. No call screen, no ringing, nothing to tap.
+- **Limits on the server:** 25 s to be accepted, then ended 10 s (plus 8 s to connect) after the accept.
+  A person already in a call is busy.
+- Not possible: a phone that is switched off, has no internet, or (app closed) has no Firebase push.
 
 ## 11. Call statistics and diagnostics
 

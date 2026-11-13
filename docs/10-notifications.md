@@ -1,8 +1,12 @@
 # 10 — Notifications (Firebase Cloud Messaging)
 
-> **D-24 (2026-10-29): notifications are switched off.** The app posts none and registers no push token
-> (`Push.NOTIFICATIONS_ENABLED = false`), so calls ring only while the app is open. The design below is
-> kept for a later change of mind.
+> **D-24 as changed on 2026-11-12: incoming calls only.** `Push.CALL_NOTIFICATIONS = true`: the app
+> registers a push token, and a call's wake-up push shows the full-screen call notification, so a call
+> rings with the app closed. `Push.MESSAGE_NOTIFICATIONS = false` and the server's chat service is given
+> no push service, so messages send no push and show no notification; the message parts below are kept
+> for a later change of mind. While Vault is on screen the push shows nothing (the app notices the call
+> itself). Needs a Firebase project (android/README.md "Push notifications"); **not yet tried on the
+> phones**.
 
 Status: **Implemented for calls and new messages** (see docs/IMPLEMENTATION_PLAN.md, calling slice 2 and chat slice 1); not yet exercised against a real Firebase project. Firebase facts remain **to be verified** against current Firebase documentation (`firebase.google.com` was not reachable from the build environment).
 

@@ -7,7 +7,7 @@ export interface MediaGateway {
   createRoom(name: string, emptyTimeoutSeconds: number): Promise<void>;
   deleteRoom(name: string): Promise<void>;
   /** Room-scoped, short-lived join token (docs/08-calling.md §6). */
-  joinToken(identity: string, displayName: string, room: string): Promise<string>;
+  joinToken(identity: string, displayName: string, room: string, listenOnly?: boolean): Promise<string>;
   /** Verifies a webhook's signature and returns the event, or throws. */
   verifyWebhook(body: string, authHeader: string | undefined): Promise<MediaWebhookEvent>;
   /** Throws if the media server's API cannot be reached (Admin Console health). */
@@ -50,7 +50,7 @@ export class LiveKitGateway implements MediaGateway {
     await this.rooms.listRooms();
   }
 
-  async joinToken(identity: string, displayName: string, room: string): Promise<string> {
+  async joinToken(identity: string, displayName: string, room: string, listenOnly = false): Promise<string> {
     const token = new AccessToken(this.apiKey, this.apiSecret, { identity, name: displayName, ttl: JOIN_TOKEN_TTL_SECONDS });
     // Least privilege: join this one room, publish camera and microphone only, no screen share, no
     // room creation or admin. Data messages are allowed for in-call controls only ("switch their
@@ -58,10 +58,11 @@ export class LiveKitGateway implements MediaGateway {
     token.addGrant({
       roomJoin: true,
       room,
-      canPublish: true,
+      // Walkie-talkie (D-26): the listening phone can never send its microphone, camera or data.
+      canPublish: !listenOnly,
       canSubscribe: true,
-      canPublishData: true,
-      canPublishSources: [TrackSource.CAMERA, TrackSource.MICROPHONE],
+      canPublishData: !listenOnly,
+      canPublishSources: listenOnly ? [] : [TrackSource.CAMERA, TrackSource.MICROPHONE],
       canUpdateOwnMetadata: false,
       roomCreate: false,
       roomAdmin: false,

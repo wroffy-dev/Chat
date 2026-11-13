@@ -109,6 +109,8 @@ fun ChatScreen(
     onBack: () -> Unit,
     onSessionEnded: () -> Unit,
     onCall: (video: Boolean) -> Unit,
+    /** Opens the walkie-talkie for this chat (D-26). */
+    onTalk: () -> Unit = {},
 ) {
     val controller = viewModel.controller
     val state by controller.state.collectAsStateWithLifecycle()
@@ -177,6 +179,7 @@ fun ChatScreen(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f).padding(start = 12.dp).semantics { heading() },
                     )
+                    CallButton(AppIcons.Mic, stringResource(R.string.talk_button)) { onTalk() }
                     CallButton(AppIcons.Videocam, stringResource(R.string.home_video_call)) { onCall(true) }
                     CallButton(Icons.Filled.Call, stringResource(R.string.home_voice_call)) { onCall(false) }
                 }

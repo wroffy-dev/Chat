@@ -57,11 +57,12 @@ class RemoteAuthRepository(
         }
 
     override suspend fun me(): MeResult {
-        val session = caller.load() ?: return MeResult.SessionEnded
+        caller.load() ?: return MeResult.SessionEnded
         return when (val r = caller.call { token -> api.me(token) }) {
             is ApiResult.Ok -> {
                 val user = SessionUser(r.value.id, r.value.username, r.value.mustChangePassword)
-                (caller.load() ?: session).let { caller.save(it.copy(user = user)) }
+                // Only the user part changes, and never over tokens a concurrent refresh just saved.
+                caller.update { it.copy(user = user) }
                 MeResult.Success(user, r.value.connection?.toDomain())
             }
             is ApiResult.HttpError -> when {

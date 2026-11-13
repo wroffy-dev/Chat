@@ -1,6 +1,13 @@
 package app.vaultchat.ui.call
 
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.graphics.graphicsLayer
+import app.vaultchat.domain.call.CallController
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalConfiguration
@@ -137,6 +144,10 @@ fun CallScreen(
         }
     }
 
+    // The push for this call can arrive after this screen opened; its notification goes once the call is
+    // answered, declined or over.
+    LaunchedEffect(state.phase) { if (state.phase != CallPhase.RINGING_IN) Push.cancelIncomingCall(context) }
+
     // Keep connected calls alive in the background: the foreground service is started here, while
     // the app is visible, as Android 14+ requires for camera and microphone services.
     val inCall = state.phase == CallPhase.CONNECTING || state.phase == CallPhase.ACTIVE || state.phase == CallPhase.RECONNECTING
@@ -154,7 +165,8 @@ fun CallScreen(
     // The Switch menu is a separate popup window whose touches never reach this screen, so the
     // controls (and the menu with them) must not fade while it is open.
     var switchMenuOpen by remember { mutableStateOf(false) }
-    val autoHide = kind == CallKind.VIDEO && state.phase == CallPhase.ACTIVE && !switchMenuOpen &&
+    var zoomMenuOpen by remember { mutableStateOf(false) }
+    val autoHide = kind == CallKind.VIDEO && state.phase == CallPhase.ACTIVE && !switchMenuOpen && !zoomMenuOpen &&
         accessibility?.isTouchExplorationEnabled != true
     var controlsVisible by remember { mutableStateOf(true) }
     var lastTouch by remember { mutableIntStateOf(0) }
@@ -188,6 +200,12 @@ fun CallScreen(
     var flipNotice by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(sentFlips) { if (sentFlips > 0) { flipNotice = sentText; delay(2_500); flipNotice = null } }
     LaunchedEffect(state.cameraFlippedByPeer) { if (state.cameraFlippedByPeer > 0) { flipNotice = receivedText; delay(3_000); flipNotice = null } }
+    // The same kind of notice for camera zoom, both ways (owner request 2026-11-03).
+    var sentZooms by remember { mutableIntStateOf(0) }
+    val sentZoomText = stringResource(R.string.call_zoomed_their_camera, peerName, zoomLabel(state.peerCameraZoom))
+    val receivedZoomText = stringResource(R.string.call_peer_zoomed_your_camera, peerName, zoomLabel(state.cameraZoom))
+    LaunchedEffect(sentZooms) { if (sentZooms > 0) { flipNotice = sentZoomText; delay(2_500); flipNotice = null } }
+    LaunchedEffect(state.cameraZoomedByPeer) { if (state.cameraZoomedByPeer > 0) { flipNotice = receivedZoomText; delay(3_000); flipNotice = null } }
 
     var selfBig by remember { mutableStateOf(false) }
     var pipOffset by remember { mutableStateOf(Offset.Zero) }
@@ -214,10 +232,39 @@ fun CallScreen(
             val selfShown = kind == CallKind.VIDEO && localVideo != null && state.cameraOn && state.phase != CallPhase.ENDED
             val selfIsBig = selfBig && showVideo && selfShown
             val room = viewModel.media.room
+            // Screen zoom (this phone only): pinch the big picture to enlarge it, drag to move, double-tap to
+            // reset (owner request 2026-11-03). It starts again at 1x when the pictures are swapped.
+            var viewZoom by remember(selfIsBig) { mutableFloatStateOf(1f) }
+            var viewPan by remember(selfIsBig) { mutableStateOf(Offset.Zero) }
+            val zoomedView = Modifier.fillMaxSize().graphicsLayer {
+                scaleX = viewZoom
+                scaleY = viewZoom
+                translationX = viewPan.x
+                translationY = viewPan.y
+            }
             if (selfIsBig) {
-                VideoView(room, localVideo, mirror = localFront, modifier = Modifier.fillMaxSize())
+                VideoView(room, localVideo, mirror = localFront, modifier = zoomedView)
             } else if (showVideo) {
-                VideoView(room, remoteVideo, mirror = false, modifier = Modifier.fillMaxSize())
+                VideoView(room, remoteVideo, mirror = false, modifier = zoomedView)
+            }
+            if (showVideo) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(selfIsBig) {
+                            detectTransformGestures { _, pan, zoomChange, _ ->
+                                val z = (viewZoom * zoomChange).coerceIn(1f, MAX_SCREEN_ZOOM)
+                                // Keep the enlarged picture covering the screen: no empty edges.
+                                val maxX = size.width * (z - 1f) / 2f
+                                val maxY = size.height * (z - 1f) / 2f
+                                viewZoom = z
+                                viewPan = Offset((viewPan.x + pan.x).coerceIn(-maxX, maxX), (viewPan.y + pan.y).coerceIn(-maxY, maxY))
+                            }
+                        }
+                        .pointerInput(selfIsBig) {
+                            detectTapGestures(onDoubleTap = { viewZoom = 1f; viewPan = Offset.Zero })
+                        },
+                )
             }
             val smallTrack = when {
                 selfIsBig -> remoteVideo
@@ -391,6 +438,11 @@ fun CallScreen(
                         peerVideoPresent = showVideo,
                         onSwitchPeerCamera = { viewModel.controller.switchPeerCamera(); sentFlips++ },
                         onSwitchMenuOpen = { switchMenuOpen = it },
+                        myZoom = state.cameraZoom,
+                        peerZoom = state.peerCameraZoom,
+                        onMyZoom = viewModel.controller::setMyCameraZoom,
+                        onPeerZoom = { viewModel.controller.setPeerCameraZoom(it); sentZooms++ },
+                        onZoomMenuOpen = { zoomMenuOpen = it },
                         micOn = state.micOn,
                         cameraOn = state.cameraOn,
                         speakerOn = state.speakerOn,
@@ -413,6 +465,64 @@ fun CallScreen(
 }
 
 private const val CONTROLS_HIDE_MS = 4_000L
+
+/** Largest screen (view) zoom; the camera zoom has its own levels in [CallController]. */
+private const val MAX_SCREEN_ZOOM = 5f
+
+/** "1x", "1.5x", "2x". */
+private fun zoomLabel(zoom: Float): String =
+    if (zoom % 1f == 0f) "${zoom.toInt()}x" else "${"%.1f".format(java.util.Locale.ROOT, zoom)}x"
+
+/**
+ * Camera zoom (owner request 2026-11-03): one menu for this phone's camera and the other person's,
+ * like Switch. It zooms the video that is sent, so both phones see it; the other person is told.
+ */
+@Composable
+private fun ZoomControl(
+    myCameraOn: Boolean,
+    peerVideoPresent: Boolean,
+    myZoom: Float,
+    peerZoom: Float,
+    onMyZoom: (Float) -> Unit,
+    onPeerZoom: (Float) -> Unit,
+    onOpenChange: (Boolean) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    LaunchedEffect(expanded) { onOpenChange(expanded) }
+    DisposableEffect(Unit) { onDispose { onOpenChange(false) } }
+    Box {
+        FilledTonalButton(onClick = { expanded = true }, enabled = myCameraOn || peerVideoPresent) {
+            Text(stringResource(R.string.call_zoom_button, zoomLabel(myZoom), zoomLabel(peerZoom)))
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            ZoomRow(stringResource(R.string.call_zoom_my_camera), myZoom, enabled = myCameraOn) { expanded = false; onMyZoom(it) }
+            HorizontalDivider()
+            ZoomRow(stringResource(R.string.call_zoom_their_camera), peerZoom, enabled = peerVideoPresent) { expanded = false; onPeerZoom(it) }
+        }
+    }
+}
+
+@Composable
+private fun ZoomRow(title: String, current: Float, enabled: Boolean, onPick: (Float) -> Unit) {
+    Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
+        Text(title, style = MaterialTheme.typography.labelLarge)
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            CallController.CAMERA_ZOOM_LEVELS.forEach { level ->
+                val selected = kotlin.math.abs(level - current) < 0.01f
+                TextButton(
+                    onClick = { onPick(level) },
+                    enabled = enabled && !selected,
+                    modifier = Modifier.semantics { if (selected) stateDescription = "selected" },
+                ) {
+                    Text(
+                        zoomLabel(level),
+                        style = if (selected) MaterialTheme.typography.labelLarge else MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun MutedPill(text: String, modifier: Modifier = Modifier) {
@@ -529,6 +639,11 @@ private fun Controls(
     peerVideoPresent: Boolean,
     onSwitchPeerCamera: () -> Unit,
     onSwitchMenuOpen: (Boolean) -> Unit,
+    myZoom: Float,
+    peerZoom: Float,
+    onMyZoom: (Float) -> Unit,
+    onPeerZoom: (Float) -> Unit,
+    onZoomMenuOpen: (Boolean) -> Unit,
     micOn: Boolean,
     cameraOn: Boolean,
     speakerOn: Boolean,
@@ -547,6 +662,17 @@ private fun Controls(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(28.dp),
     ) {
+        if (kind == CallKind.VIDEO) {
+            ZoomControl(
+                myCameraOn = cameraOn,
+                peerVideoPresent = peerVideoPresent,
+                myZoom = myZoom,
+                peerZoom = peerZoom,
+                onMyZoom = onMyZoom,
+                onPeerZoom = onPeerZoom,
+                onOpenChange = onZoomMenuOpen,
+            )
+        }
         // Four buttons in a video call spread evenly, so they still fit a narrow (360 dp) phone.
         Row(
             modifier = Modifier.fillMaxWidth(),

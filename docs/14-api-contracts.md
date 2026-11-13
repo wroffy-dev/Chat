@@ -207,7 +207,10 @@ security control (a request without the header is not refused).
 All routes require the caller to be the caller or callee of `{id}` (else `404`).
 
 ### POST /calls
-- **Request:** `{ "connectionId": uuid, "kind": "video"|"voice" }`
+- **Request:** `{ "connectionId": uuid, "kind": "video"|"voice"|"talk" }`. `talk` is the walkie-talkie
+  (D-26): the callee is woken by a `talk` push or signal, accepts by itself and gets a listen-only token;
+  the server gives up after 25 s without an accept and ends it 10 s (plus 8 s to connect) after the accept
+  (`endReason: "talk_limit"`).
 - **Response 201:** `{ "callId", "status": "ringing", "livekitUrl": "wss://rtc.<domain>", "livekitToken", "maxVideoQuality", "ringTimeoutSeconds" }`
 - **Errors:** `404` (not a member of the connection), `409 CALL_IN_PROGRESS` (this pair, or the caller, already has a live call; the app then reads `GET /calls/current`), `409 PEER_BUSY` (the other person is in a call with someone else, D-21), `503 MEDIA_UNAVAILABLE` (LiveKit not configured or unreachable).
 - **Side effects:** creates LiveKit room (max 2), call row; WS `call.incoming` + FCM `call` to callee. **Audit:** none (calls table is the record).

@@ -53,6 +53,12 @@ data class CallState(
     val remoteMicOn: Boolean = true,
     /** Bumped each time the other person flips this phone's camera, so the UI can show a brief notice. */
     val cameraFlippedByPeer: Int = 0,
+    /** Zoom of the video this phone sends (1 = none); either person can change it. */
+    val cameraZoom: Float = 1f,
+    /** Zoom of the video the other phone sends, as last reported or requested. */
+    val peerCameraZoom: Float = 1f,
+    /** Bumped each time the other person zooms this phone's camera, so the UI can show a brief notice. */
+    val cameraZoomedByPeer: Int = 0,
 )
 
 /**
@@ -79,6 +85,12 @@ class CallController(
         const val JOIN_GIVE_UP_MS = 30_000L
         /** An unanswered incoming call is answered by the phone itself after this long (owner request). */
         const val AUTO_ANSWER_MS = 10_000L
+
+        /** Camera zoom levels offered in a video call (digital zoom of the sent picture). */
+        val CAMERA_ZOOM_LEVELS = listOf(1f, 1.5f, 2f, 3f)
+        const val MAX_CAMERA_ZOOM = 3f
+
+        fun clampZoom(zoom: Float): Float = if (zoom.isNaN()) 1f else zoom.coerceIn(1f, MAX_CAMERA_ZOOM)
         /** How often call statistics are sampled while media flows (docs/08 §11). */
         const val STATS_INTERVAL_MS = 2_000L
     }
@@ -253,6 +265,28 @@ class CallController(
         }
     }
 
+    /** Zooms this phone's own sent video (owner request 2026-11-03). */
+    fun setMyCameraZoom(zoom: Float) {
+        if (_state.value.kind != CallKind.VIDEO) return
+        val z = clampZoom(zoom)
+        _state.update { it.copy(cameraZoom = z) }
+        media.setCameraZoom(z)
+    }
+
+    /** Asks the other phone to zoom its camera; they are shown that it happened. */
+    fun setPeerCameraZoom(zoom: Float) {
+        if (_state.value.kind != CallKind.VIDEO) return
+        val z = clampZoom(zoom)
+        _state.update { it.copy(peerCameraZoom = z) }
+        scope.launch {
+            try {
+                media.requestPeerCameraZoom(z)
+            } catch (_: Exception) {
+                // Nothing reaches the peer if the connection is down; the choice simply does nothing.
+            }
+        }
+    }
+
     fun toggleSpeaker() {
         val on = !_state.value.speakerOn
         _state.update { it.copy(speakerOn = on) }
@@ -301,6 +335,10 @@ class CallController(
                     }
                     is MediaEvent.RemoteMicrophone -> _state.update { it.copy(remoteMicOn = e.on) }
                     MediaEvent.CameraSwitchedByPeer -> _state.update { it.copy(cameraFlippedByPeer = it.cameraFlippedByPeer + 1) }
+                    is MediaEvent.CameraZoomedByPeer -> _state.update {
+                        it.copy(cameraZoom = clampZoom(e.zoom), cameraZoomedByPeer = it.cameraZoomedByPeer + 1)
+                    }
+                    is MediaEvent.PeerCameraZoom -> _state.update { it.copy(peerCameraZoom = clampZoom(e.zoom)) }
                     MediaEvent.Disconnected -> if (_state.value.phase != CallPhase.ENDED) {
                         finish(CallEndReason.NETWORK_LOST, notifyServer = true, serverReason = "network_lost")
                     }

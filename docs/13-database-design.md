@@ -223,7 +223,7 @@ Backups: data excluded. Never logged.
 | `id` | uuid PK | no | |
 | `connection_id` | uuid FK | no | |
 | `caller_user_id`, `callee_user_id` | uuid FK | no | |
-| `kind` | text | no | `video` \| `voice` |
+| `kind` | text | no | `video` \| `voice` \| `talk` (walkie-talkie, D-26; migration `20261112060000_talk_calls`) |
 | `livekit_room` | text | no | UNIQUE, `call_<random uuid>` |
 | `status` | text | no | `ringing`, `accepted`, `active`, `ended`, `declined`, `cancelled`, `missed`, `failed` |
 | `end_reason` | text | yes | `hangup`, `remote_hangup`, `network_lost`, `room_finished`, `timeout`, `error`, `server_restart` |

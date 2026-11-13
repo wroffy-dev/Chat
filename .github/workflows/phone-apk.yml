@@ -114,6 +114,12 @@ jobs:
           # The answer can be lost even when the server stored the file; ask the server what it now offers.
           offered=$(curl -sS "${API_URL}api/v1/app/version" | sed -n 's/.*"latestVersionCode":\([0-9]*\).*/\1/p')
           echo "The server offers version ${offered:-unknown}"
+          # Repeated here, at the end of the log, so it is easy to find: whether this build can receive pushes.
+          if [ -n "$FCM_PROJECT_ID" ] && [ -n "$FCM_APP_ID" ] && [ -n "$FCM_API_KEY" ] && [ -n "$FCM_SENDER_ID" ]; then
+            echo "Push in this build: on"
+          else
+            echo "Push in this build: off (the VAULTCHAT_FCM_* repository variables are not all set)"
+          fi
           if [ "$offered" = "$VERSION_CODE" ]; then
             echo "Sent: the phones will offer version $VERSION_CODE"
           else

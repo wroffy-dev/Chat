@@ -75,7 +75,7 @@ export async function callRoutes(app: FastifyInstance, opts: { auth: AuthService
   const user = requireUser(auth);
   const MINUTE = 60_000;
 
-  app.post<{ Body: { connectionId: string; kind: "video" | "voice" } }>(
+  app.post<{ Body: { connectionId: string; kind: "video" | "voice" | "talk" } }>(
     "/calls",
     {
       onRequest: user,
@@ -85,7 +85,7 @@ export async function callRoutes(app: FastifyInstance, opts: { auth: AuthService
           type: "object",
           additionalProperties: false,
           required: ["connectionId", "kind"],
-          properties: { connectionId: { type: "string", pattern: UUID }, kind: { type: "string", enum: ["video", "voice"] } },
+          properties: { connectionId: { type: "string", pattern: UUID }, kind: { type: "string", enum: ["video", "voice", "talk"] } },
         },
         response: { 201: joinSchema },
       },

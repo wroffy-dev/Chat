@@ -199,7 +199,7 @@ model Call {
   connectionId String    @map("connection_id") @db.Uuid
   callerUserId String    @map("caller_user_id") @db.Uuid
   calleeUserId String    @map("callee_user_id") @db.Uuid
-  /// "video" | "voice" (CHECK in SQL)
+  /// "video" | "voice" | "talk" (CHECK in SQL)
   kind         String
   livekitRoom  String    @unique @map("livekit_room")
   /// ringing | accepted | active | ended | declined | cancelled | missed | failed (CHECK in SQL)

@@ -58,6 +58,8 @@ import kotlinx.coroutines.sync.Mutex
  * any LiveKit secret. Camera and microphone are only captured between [connect] and [disconnect].
  */
 private const val TOPIC_SWITCH_CAMERA = "vaultchat.switch_camera"
+/** Camera zoom: "set:<zoom>" asks the receiver to zoom its camera, "is:<zoom>" reports the sender's zoom. */
+private const val TOPIC_CAMERA_ZOOM = "vaultchat.camera_zoom"
 private val SWITCH_CAMERA_PAYLOAD = ByteArray(0)
 
 class LiveKitMediaSession(appContext: Context) : MediaSession {
@@ -105,6 +107,12 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
 
     private var released = false
 
+    /** Zoom of the sent camera video; read by [ZoomVideoProcessor] on every frame. */
+    @Volatile private var zoom = 1f
+
+    /** Every camera track gets the zoom processor, so the zoom survives flips and size changes. */
+    private fun zoomProcessor() = ZoomVideoProcessor { zoom }
+
     init {
         scope.launch {
             room.events.events.collect { e ->
@@ -127,7 +135,9 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
                     }
                     is RoomEvent.TrackSubscribed -> (e.track as? VideoTrack)?.let { _remoteVideo.value = it }
                     is RoomEvent.TrackUnsubscribed -> if (e.track == _remoteVideo.value) _remoteVideo.value = null
-                    is RoomEvent.DataReceived -> if (e.topic == TOPIC_SWITCH_CAMERA) {
+                    is RoomEvent.DataReceived -> if (e.topic == TOPIC_CAMERA_ZOOM) {
+                        onZoomMessage(e.data.decodeToString())
+                    } else if (e.topic == TOPIC_SWITCH_CAMERA) {
                         // The other person asked to flip our camera. Only a camera that is on: a flip
                         // restarts capture, so on a turned-off camera it would switch it back on.
                         // Its own coroutine: the event stream keeps flowing while the camera reopens.
@@ -169,7 +179,13 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
 
     override suspend fun setCameraEnabled(enabled: Boolean) {
         if (!joined) return
-        room.localParticipant.setCameraEnabled(enabled)
+        val camera = room.localParticipant.getTrackPublication(Track.Source.CAMERA)
+        if (enabled && camera == null) {
+            // The first camera track is ours, not LiveKit's default, so it carries the zoom processor.
+            publishOwnCamera()
+        } else {
+            room.localParticipant.setCameraEnabled(enabled)
+        }
         val wanted = pending
         if (enabled && wanted != null) {
             pending = null
@@ -233,6 +249,63 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
         room.localParticipant.publishData(SWITCH_CAMERA_PAYLOAD, DataPublishReliability.RELIABLE, topic = TOPIC_SWITCH_CAMERA)
     }
 
+    override fun setCameraZoom(zoom: Float) {
+        this.zoom = zoom.coerceIn(1f, MAX_ZOOM)
+        // Tell the other phone, so its Zoom menu shows the level this camera is at.
+        val level = this.zoom
+        scope.launch { sendZoom("is", level) }
+    }
+
+    override suspend fun requestPeerCameraZoom(zoom: Float) = sendZoom("set", zoom.coerceIn(1f, MAX_ZOOM))
+
+    private suspend fun sendZoom(kind: String, level: Float) {
+        if (!joined) return
+        try {
+            room.localParticipant.publishData("$kind:$level".encodeToByteArray(), DataPublishReliability.RELIABLE, topic = TOPIC_CAMERA_ZOOM)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Throwable) {
+            // Not delivered when the connection is down; the zoom itself still applies here.
+        }
+    }
+
+    private suspend fun onZoomMessage(text: String) {
+        val kind = text.substringBefore(':')
+        val level = text.substringAfter(':').toFloatOrNull()?.takeIf { !it.isNaN() }?.coerceIn(1f, MAX_ZOOM) ?: return
+        when (kind) {
+            "set" -> {
+                setCameraZoom(level)
+                _events.emit(MediaEvent.CameraZoomedByPeer(level))
+            }
+            "is" -> _events.emit(MediaEvent.PeerCameraZoom(level))
+        }
+    }
+
+    /** Publishes the camera the first time it is turned on, with the zoom processor (Auto size). */
+    private suspend fun publishOwnCamera() {
+        val p = preset(quality)
+        val participant = room.localParticipant
+        // The capture defaults already carry this call's size (set at creation and by capQuality).
+        val track = participant.createVideoTrack(videoProcessor = zoomProcessor())
+        track.startCapture()
+        val published = participant.publishVideoTrack(
+            track,
+            VideoTrackPublishOptions(
+                videoEncoding = p.encoding,
+                simulcast = true,
+                simulcastLayers = layersBelow(quality),
+                source = Track.Source.CAMERA,
+                degradationPreference = AUTO_DEGRADATION,
+            ),
+        )
+        if (!published) {
+            track.stopCapture()
+            track.dispose()
+            // Fall back to LiveKit's own camera track (no zoom) rather than no video.
+            participant.setCameraEnabled(true)
+        }
+    }
+
     /** The other person's microphone: on only while it is published and not muted. */
     private suspend fun emitRemoteMicrophone() {
         val peer = room.remoteParticipants.values.firstOrNull() ?: return
@@ -287,16 +360,25 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
         videoEncoding = preset(q).encoding,
         simulcast = true,
         simulcastLayers = layersBelow(q),
-        // When the network is short, give up a little size and a little frame rate together rather
-        // than all of one (the default keeps 30 fps and shrinks the picture hard).
-        degradationPreference = RtpParameters.DegradationPreference.BALANCED,
+        // When the network is short, keep the frame rate and shrink the picture (see AUTO_DEGRADATION).
+        degradationPreference = AUTO_DEGRADATION,
     )
 
-    /** Lower simulcast layers at 30 fps (LiveKit's defaults include 180p at 15 fps). */
-    private fun layersBelow(top: CaptureQuality) = when (top) {
-        CaptureQuality.P1080, CaptureQuality.P720 -> listOf(Sharp.P360, Sharp.P540)
-        CaptureQuality.P540 -> listOf(Sharp.P360)
+    /**
+     * Lower simulcast layers, all at 30 fps (LiveKit's own 180p runs at 15 fps). Since 2026-11-12 (owner:
+     * better on a weak network, hold the frame rate) the ladder always reaches down to a light 180p layer,
+     * so on a poor connection the server and WebRTC can fall back to a small picture that still moves at
+     * 30 fps, instead of a larger one that stutters. Before: 360p + 540p under 720p, nothing below 360p.
+     */
+    private fun layersBelow(top: CaptureQuality): List<VideoPreset> = when (top) {
+        CaptureQuality.P1080, CaptureQuality.P720, CaptureQuality.P540 -> listOf(P180at30, Low360)
         CaptureQuality.P360 -> listOf(P180at30)
+    }
+
+    /** 360p as a lower layer: lighter than the 0.7 Mbps used when 360p is the top size. */
+    private object Low360 : VideoPreset {
+        override val capture = VideoCaptureParameter(640, 360, 30)
+        override val encoding = VideoEncoding(450_000, 30)
     }
 
     /** 180p at 30 fps: LiveKit's own 180p and 216p presets run at 15 fps. */
@@ -342,7 +424,7 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
         } else {
             old.options.copy(captureParams = p.capture, deviceId = null, position = position)
         }
-        val fresh = participant.createVideoTrack(options = options)
+        val fresh = participant.createVideoTrack(options = options, videoProcessor = zoomProcessor())
         participant.unpublishTrack(old)
         _localVideo.value = null
         fresh.startCapture()
@@ -353,7 +435,7 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
                 simulcast = !forced,
                 simulcastLayers = if (forced) null else layersBelow(quality),
                 source = Track.Source.CAMERA,
-                degradationPreference = if (forced) RtpParameters.DegradationPreference.DISABLED else RtpParameters.DegradationPreference.BALANCED,
+                degradationPreference = if (forced) RtpParameters.DegradationPreference.DISABLED else AUTO_DEGRADATION,
             ),
         )
         if (published) {
@@ -404,6 +486,16 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
  * investigated; the button is hidden and audio goes straight through, as before.
  */
 private const val NOISE_FILTER = false
+
+/**
+ * What Auto gives up first when the network or the phone cannot keep up: picture size, not smoothness
+ * (owner request 2026-11-12: do not fall below 25 fps quickly). WebRTC keeps the frame rate and sends a
+ * smaller picture. From 2026-11-03 to then it was BALANCED, which lowered both together.
+ */
+private val AUTO_DEGRADATION = RtpParameters.DegradationPreference.MAINTAIN_FRAMERATE
+
+/** Highest camera zoom (digital); matches CallController.MAX_CAMERA_ZOOM. */
+private const val MAX_ZOOM = 3f
 
 /** Device capability check for 1080p capture (docs/08-calling.md §8). */
 private fun chooseQuality(context: Context): CaptureQuality {
