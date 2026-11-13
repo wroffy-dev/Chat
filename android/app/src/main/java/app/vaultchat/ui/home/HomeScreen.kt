@@ -39,6 +39,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -106,6 +111,7 @@ fun HomeScreen(
             LastCrashCard(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             AskBatteryExemptionOnce()
             AskNotificationPermissionOnce()
+            AskFullScreenCallsOnce()
             if (state.offline) {
                 StatusBanner(
                     kind = BannerKind.WARNING,
@@ -195,6 +201,45 @@ private fun AskNotificationPermissionOnce() {
     LaunchedEffect(Unit) {
         if (request.status != PermissionStatus.Granted && !prefs.wasRequested(AppPermission.NOTIFICATIONS)) request.request()
     }
+}
+
+/**
+ * Incoming calls full screen (owner request 2026-11-13). Explained once, then Android's own settings page
+ * is opened: "Display over other apps" (the call opens full screen while the phone is in use) and, on
+ * Android 14+ when it is off, "full-screen notifications" (locked or dark phone).
+ */
+@Composable
+private fun AskFullScreenCallsOnce() {
+    if (!Push.CALL_NOTIFICATIONS || !Push.configured) return
+    val context = LocalContext.current
+    val prefs = (context.applicationContext as VaultChatApplication).container.permissionPreferences
+    var show by remember {
+        mutableStateOf(!prefs.fullScreenCallsAsked() && (!Push.canOpenOverOtherApps(context) || !Push.canUseFullScreenCalls(context)))
+    }
+    if (!show) return
+    fun open(action: String) {
+        try {
+            context.startActivity(Intent(action, Uri.parse("package:${context.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (_: ActivityNotFoundException) {
+            // The phone has no such page; the setting stays reachable in Android's app settings.
+        }
+    }
+    AlertDialog(
+        onDismissRequest = { prefs.markFullScreenCallsAsked(); show = false },
+        title = { Text(stringResource(R.string.full_screen_calls_title)) },
+        text = { Text(stringResource(R.string.full_screen_calls_body)) },
+        confirmButton = {
+            TextButton(onClick = {
+                prefs.markFullScreenCallsAsked()
+                show = false
+                if (!Push.canUseFullScreenCalls(context)) open("android.settings.MANAGE_APP_USE_FULL_SCREEN_INTENT")
+                if (!Push.canOpenOverOtherApps(context)) open(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+            }) { Text(stringResource(R.string.full_screen_calls_open)) }
+        },
+        dismissButton = {
+            TextButton(onClick = { prefs.markFullScreenCallsAsked(); show = false }) { Text(stringResource(R.string.full_screen_calls_later)) }
+        },
+    )
 }
 
 @Composable

@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.Person
@@ -38,8 +39,11 @@ object Push {
      */
     const val CALL_NOTIFICATIONS = true
 
-    /** D-24 (owner, 2026-10-29), unchanged: no notification for new messages. */
-    const val MESSAGE_NOTIFICATIONS = false
+    /**
+     * D-24 as changed by the owner on 2026-11-13: a new message is announced too, as "New message" only
+     * (no sender, no text). Not while the person is in that chat, and at most one a minute (server).
+     */
+    const val MESSAGE_NOTIFICATIONS = true
 
     /**
      * Vault is on screen (set by MainActivity). The app then notices the call itself, so the push shows no
@@ -127,7 +131,8 @@ object Push {
 
     /** "New message" only: no sender, no text, no preview (docs/07 §4, docs/10 §2). */
     fun showNewMessage(context: Context) {
-        if (!MESSAGE_NOTIFICATIONS) return
+        // Nothing while Vault is on screen: the chat list already shows the unread message.
+        if (!MESSAGE_NOTIFICATIONS || appInFront) return
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
@@ -185,7 +190,19 @@ object Push {
             .setContentIntent(openPending)
             .build()
         NotificationManagerCompat.from(context).notify(INCOMING_NOTIFICATION_ID, notification)
+        // Owner request 2026-11-13: the call opens full screen, not as a small pop-up. Android shows the
+        // full-screen notification only on a locked or dark phone; while the phone is in use it allows an
+        // app to open its own screen only with "Display over other apps", so with that the call is opened
+        // directly. Without it (or if the phone refuses) the notification above remains.
+        if (canOpenOverOtherApps(context)) runCatching { context.startActivity(open) }
     }
+
+    /** "Display over other apps" is granted (needed to open the call screen while the phone is in use). */
+    fun canOpenOverOtherApps(context: Context): Boolean = Settings.canDrawOverlays(context)
+
+    /** Android 14+ can withhold full-screen notifications from an app; true when Vault may use them. */
+    fun canUseFullScreenCalls(context: Context): Boolean =
+        Build.VERSION.SDK_INT < 34 || context.getSystemService(NotificationManager::class.java).canUseFullScreenIntent()
 
     fun cancelIncomingCall(context: Context) {
         NotificationManagerCompat.from(context).cancel(INCOMING_NOTIFICATION_ID)

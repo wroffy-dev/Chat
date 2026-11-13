@@ -2,10 +2,11 @@
 
 > **D-24 as changed on 2026-11-12: incoming calls only.** `Push.CALL_NOTIFICATIONS = true`: the app
 > registers a push token, and a call's wake-up push shows the full-screen call notification, so a call
-> rings with the app closed. `Push.MESSAGE_NOTIFICATIONS = false` and the server's chat service is given
-> no push service, so messages send no push and show no notification; the message parts below are kept
-> for a later change of mind. While Vault is on screen the push shows nothing (the app notices the call
-> itself). Needs a Firebase project (android/README.md "Push notifications"); **not yet tried on the
+> rings with the app closed. **Changed again on 2026-11-13:** messages are announced too
+> (`Push.MESSAGE_NOTIFICATIONS = true`, the server's chat service has the push service again): "New
+> message" only, no sender or text. With "Display over other apps" granted (asked once on Home) the call
+> push also opens the call screen directly, so a call is full screen while the phone is in use; Android
+> alone shows only a pop-up then. While Vault is on screen the pushes show nothing. Needs a Firebase project (android/README.md "Push notifications"); **not yet tried on the
 > phones**.
 
 Status: **Implemented for calls and new messages** (see docs/IMPLEMENTATION_PLAN.md, calling slice 2 and chat slice 1); not yet exercised against a real Firebase project. Firebase facts remain **to be verified** against current Firebase documentation (`firebase.google.com` was not reachable from the build environment).
