@@ -35,7 +35,14 @@ enum class ChatNotice {
 enum class OutgoingStatus { SENDING, FAILED }
 
 /** A message on its way to the server. [epoch] is the one it was composed in, kept for retries. */
-data class Outgoing(val clientMessageId: String, val text: String, val epoch: Long, val status: OutgoingStatus)
+data class Outgoing(
+    val clientMessageId: String,
+    val text: String,
+    val epoch: Long,
+    val status: OutgoingStatus,
+    /** The message this one replies to, if any. */
+    val replyToId: String? = null,
+)
 
 data class ChatState(
     val phase: ChatPhase = ChatPhase.ENTERING,
@@ -46,6 +53,8 @@ data class ChatState(
     val restoredDraft: String? = null,
     /** Reactions by message id (D-25), as the server last reported them plus this user's pending change. */
     val reactions: Map<String, List<Reaction>> = emptyMap(),
+    /** The other person is typing right now (shown for a few seconds after their last signal). */
+    val peerTyping: Boolean = false,
 )
 
 /**
@@ -77,6 +86,10 @@ class ChatController(
 ) {
     companion object {
         const val POLL_MS = 2_000L
+        /** "typing…" stays this long after the other person's last signal. */
+        const val TYPING_SHOWN_MS = 5_000L
+        /** While typing, a signal is sent at most this often. */
+        const val TYPING_SEND_MS = 3_000L
         /** Fallback polling while live signals are connected. */
         const val SIGNALLED_POLL_MS = 10_000L
     }
@@ -104,7 +117,13 @@ class ChatController(
         if (loop != null) return
         signalJob = signals?.let { live ->
             scope.launch {
-                live.signals.collect { if (it is RealtimeSignal.ChatChanged && it.conversationId == conversationId) wake.trySend(Unit) }
+                live.signals.collect {
+                    if (it is RealtimeSignal.ChatChanged && it.conversationId == conversationId) {
+                        wake.trySend(Unit)
+                    } else if (it is RealtimeSignal.ChatTyping && it.conversationId == conversationId) {
+                        showPeerTyping()
+                    }
+                }
             }
         }
         loop = scope.launch {
@@ -147,15 +166,36 @@ class ChatController(
         if (displayed && !was && _state.value.phase == ChatPhase.OPEN) scope.launch { syncLock.withLock { markReadIfVisible() } }
     }
 
+    private var typingShown: Job? = null
+    private var typingSentAtMs = 0L
+
+    private fun showPeerTyping() {
+        _state.update { it.copy(peerTyping = true) }
+        typingShown?.cancel()
+        typingShown = scope.launch {
+            delay(TYPING_SHOWN_MS)
+            _state.update { it.copy(peerTyping = false) }
+        }
+    }
+
+    /** Call while the person types: tells the other phone "typing…", at most every [TYPING_SEND_MS]. */
+    fun typing() {
+        if (_state.value.phase != ChatPhase.OPEN) return
+        val now = nowMs()
+        if (now - typingSentAtMs < TYPING_SEND_MS) return
+        typingSentAtMs = now
+        scope.launch { repo.typing(conversationId) }
+    }
+
     /** Queues [raw] for sending. Returns true when accepted, so the UI can clear its input. */
-    fun send(raw: String): Boolean {
+    fun send(raw: String, replyToId: String? = null): Boolean {
         val text = ChatText.normalize(raw) ?: return false
         if (ChatText.tooLong(text)) {
             _state.update { it.copy(notice = ChatNotice.TOO_LONG) }
             return false
         }
         if (_state.value.phase != ChatPhase.OPEN) return false
-        val out = Outgoing(newId(), text, epoch, OutgoingStatus.SENDING)
+        val out = Outgoing(newId(), text, epoch, OutgoingStatus.SENDING, replyToId)
         _state.update { it.copy(outgoing = it.outgoing + out) }
         scope.launch { deliver(out) }
         return true
@@ -271,7 +311,9 @@ class ChatController(
                     s.copy(messages = page.items.sortedBy { it.seq }, notice = if (lost) ChatNotice.CLEARED else s.notice)
                 }
             } else {
-                _state.update { s -> s.copy(messages = merge(s.messages, page.items)) }
+                // Their message arrived: they are no longer "typing".
+                val fromPeer = page.items.any { it.senderId != myUserId }
+                _state.update { s -> s.copy(messages = merge(s.messages, page.items), peerTyping = s.peerTyping && !fromPeer) }
             }
             _state.update { s -> s.copy(reactions = page.reactions.groupBy { it.messageId }) }
             syncedSeq = maxOf(if (page.cleared) 0 else syncedSeq, page.items.maxOfOrNull { it.seq } ?: 0)
@@ -289,9 +331,9 @@ class ChatController(
     }
 
     private suspend fun deliver(out: Outgoing) {
-        when (val r = repo.send(conversationId, out.clientMessageId, out.epoch, out.text)) {
+        when (val r = repo.send(conversationId, out.clientMessageId, out.epoch, out.text, out.replyToId)) {
             is ChatResult.Ok -> _state.update { s ->
-                val sent = ChatMessage(r.value.id, r.value.seq, myUserId, out.text, r.value.createdAtEpochMs)
+                val sent = ChatMessage(r.value.id, r.value.seq, myUserId, out.text, r.value.createdAtEpochMs, replyToId = out.replyToId)
                 s.copy(outgoing = s.outgoing.without(out), messages = merge(s.messages, listOf(sent)))
             }
             is ChatResult.Failure -> when (r.reason) {

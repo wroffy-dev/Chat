@@ -7,7 +7,16 @@ data class ChatMessage(
     val senderId: String,
     val text: String,
     val createdAtEpochMs: Long,
+    val kind: MessageKind = MessageKind.TEXT,
+    /** The message this one replies to; null when it is no reply or that message is gone. */
+    val replyToId: String? = null,
 )
+
+/**
+ * [MISSED_CALL] is a line the server writes when a call was not answered (owner request 2026-11-13): its
+ * sender is the caller and its text is "video" or "voice". It is deleted like any message (D-01, D-02).
+ */
+enum class MessageKind { TEXT, MISSED_CALL }
 
 /** One person's emoji on one message (D-25). Deleted with its message, like the message itself. */
 data class Reaction(val messageId: String, val userId: String, val emoji: String)
@@ -53,7 +62,9 @@ interface ChatRepository {
     suspend fun heartbeat(conversationId: String, leaseId: String): ChatResult<Unit>
     suspend fun leave(conversationId: String, leaveId: String): ChatResult<Unit>
     suspend fun history(conversationId: String, afterSeq: Long, epoch: Long?): ChatResult<HistoryPage>
-    suspend fun send(conversationId: String, clientMessageId: String, epoch: Long, text: String): ChatResult<SentMessage>
+    suspend fun send(conversationId: String, clientMessageId: String, epoch: Long, text: String, replyToId: String? = null): ChatResult<SentMessage>
+    /** Tells the other person's open app "typing…"; nothing is stored. */
+    suspend fun typing(conversationId: String): ChatResult<Unit> = ChatResult.Ok(Unit)
     suspend fun markRead(conversationId: String, seq: Long): ChatResult<Unit>
     /** Sets this user's reaction on a message, or removes it when [emoji] is null (D-25). */
     suspend fun react(conversationId: String, messageId: String, emoji: String?): ChatResult<Unit>
