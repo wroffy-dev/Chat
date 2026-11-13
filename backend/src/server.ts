@@ -48,9 +48,8 @@ async function main() {
   const hub = new RealtimeHub();
   const connections = new ConnectionService(database.prisma, undefined, hub);
   const calls = new CallService(database.prisma, media, config.CALL_RING_TIMEOUT_SECONDS, undefined, push, hub, settings);
-  // No push for messages (D-24 as changed on 2026-11-12: only incoming calls are announced), so the chat
-  // service gets no push service and Google is told nothing about messages.
-  const chat = new ChatService(database.prisma, undefined, null, hub, settings);
+  // Messages send a content-free "new message" push again (D-24 as changed by the owner on 2026-11-13).
+  const chat = new ChatService(database.prisma, undefined, push, hub, settings);
   const updates = config.APP_UPDATES_DIR
     ? {
         store: new AppUpdateStore(config.APP_UPDATES_DIR),

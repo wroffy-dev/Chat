@@ -45,7 +45,15 @@ class PermissionPreferences(context: Context) {
         prefs.edit().putBoolean(BATTERY_EXEMPTION, true).apply()
     }
 
+    /** Whether the "show calls full screen" explanation was already shown once. */
+    fun fullScreenCallsAsked(): Boolean = prefs.getBoolean(FULL_SCREEN_CALLS, false)
+
+    fun markFullScreenCallsAsked() {
+        prefs.edit().putBoolean(FULL_SCREEN_CALLS, true).apply()
+    }
+
     private companion object {
+        const val FULL_SCREEN_CALLS = "full_screen_calls"
         const val BATTERY_EXEMPTION = "battery_exemption"
     }
 }
