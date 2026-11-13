@@ -11,13 +11,15 @@ const SEQ = { type: "integer", minimum: 0, maximum: Number.MAX_SAFE_INTEGER } as
 const messageSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["id", "seq", "senderId", "text", "createdAt"],
+  required: ["id", "seq", "senderId", "text", "createdAt", "kind", "replyToId"],
   properties: {
     id: { type: "string" },
     seq: { type: "integer" },
     senderId: { type: "string" },
     text: { type: "string" },
     createdAt: { type: "string", format: "date-time" },
+    kind: { type: "string" },
+    replyToId: { type: ["string", "null"] },
   },
 } as const;
 
@@ -143,7 +145,22 @@ export async function chatRoutes(app: FastifyInstance, opts: { auth: AuthService
     },
   );
 
-  app.post<{ Params: { id: string }; Body: { clientMessageId: string; epoch: number; text: string } }>(
+  // "Typing…": relayed to the other person's open app; nothing is stored.
+  app.post<{ Params: { id: string } }>(
+    "/conversations/:id/typing",
+    {
+      onRequest: user,
+      bodyLimit: 1_024,
+      config: { rateLimit: { max: 40, timeWindow: MINUTE } },
+      schema: { params: idParams, body: { type: "object", additionalProperties: false, properties: {} }, response: { 204: { type: "null" } } },
+    },
+    async (request, reply) => {
+      await chat.typing(authOf(request).user.id, request.params.id);
+      return reply.status(204).send();
+    },
+  );
+
+  app.post<{ Params: { id: string }; Body: { clientMessageId: string; epoch: number; text: string; replyToId?: string } }>(
     "/conversations/:id/messages",
     {
       onRequest: user,
@@ -155,7 +172,12 @@ export async function chatRoutes(app: FastifyInstance, opts: { auth: AuthService
           type: "object",
           additionalProperties: false,
           required: ["clientMessageId", "epoch", "text"],
-          properties: { clientMessageId: { type: "string", pattern: UUID }, epoch: SEQ, text: { type: "string", minLength: 1 } },
+          properties: {
+            clientMessageId: { type: "string", pattern: UUID },
+            epoch: SEQ,
+            text: { type: "string", minLength: 1 },
+            replyToId: { type: "string", pattern: UUID },
+          },
         },
         response: { 200: sentSchema, 201: sentSchema },
       },

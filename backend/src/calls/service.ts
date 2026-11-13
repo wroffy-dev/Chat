@@ -55,6 +55,21 @@ export class CallService {
     private readonly settings: SettingsService | null = null,
   ) {}
 
+  /**
+   * Called when a video or voice call ends unanswered (ring timeout, or the caller gave up while it
+   * rang), so the chat can show a "Missed call" line. Set by the server; never for the walkie-talkie.
+   */
+  onMissed: ((call: { connectionId: string; callerUserId: string; kind: "video" | "voice" }) => void) | null = null;
+
+  private missed(call: Call) {
+    if (call.kind !== "video" && call.kind !== "voice") return;
+    try {
+      this.onMissed?.({ connectionId: call.connectionId, callerUserId: call.callerUserId, kind: call.kind });
+    } catch {
+      // The chat line is best effort.
+    }
+  }
+
   private async ringSeconds(): Promise<number> {
     return this.settings ? this.settings.get("call.ring_timeout_seconds") : this.ringTimeoutSeconds;
   }
@@ -150,6 +165,7 @@ export class CallService {
     this.changed(call);
     await this.closeRoom(call);
     this.notify(call.calleeUserId, { t: "call_end", id: call.id });
+    this.missed(call);
   }
 
   /** Either participant hangs up. Idempotent: ending an already-ended call is a no-op. */
@@ -165,6 +181,8 @@ export class CallService {
     if (updated.count === 1) {
       this.changed(call);
       await this.closeRoom(call);
+      // The caller hung up while it still rang: a missed call for the other person.
+      if (call.status === "ringing" && call.callerUserId === userId) this.missed(call);
     }
   }
 
@@ -235,7 +253,10 @@ export class CallService {
       if (r.count === 1) {
         this.changed(call);
         await this.closeRoom(call);
-        if (missed) this.notify(call.calleeUserId, { t: "call_end", id: call.id });
+        if (missed) {
+          this.notify(call.calleeUserId, { t: "call_end", id: call.id });
+          this.missed(call);
+        }
       }
     }
     return stale.length;
