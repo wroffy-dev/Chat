@@ -126,6 +126,21 @@ fun CallScreen(
 
     LaunchedEffect(permissionsReady) { if (permissionsReady || incoming) onStart() }
 
+    // An incoming call on a phone that has not allowed the microphone or camera yet: ask as soon as it
+    // rings (once each), not only when Accept is tapped, so the 10 s auto-answer has them.
+    var askedMic by remember { mutableStateOf(false) }
+    var askedCamera by remember { mutableStateOf(false) }
+    LaunchedEffect(incoming, mic.status, camera.status) {
+        if (!incoming) return@LaunchedEffect
+        if (mic.status != PermissionStatus.Granted && !askedMic) {
+            askedMic = true
+            mic.request()
+        } else if (needsCamera && camera.status != PermissionStatus.Granted && !askedCamera && (mic.status == PermissionStatus.Granted || askedMic)) {
+            askedCamera = true
+            camera.request()
+        }
+    }
+
     // Keep the screen on for the whole call.
     val view = LocalView.current
     DisposableEffect(view) {
