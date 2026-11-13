@@ -102,7 +102,7 @@ import app.vaultchat.ui.permissions.rememberPermissionRequest
  */
 @Composable
 fun CallScreen(
-    viewModel: CallViewModel,
+    viewModel: CallSession,
     permissionPreferences: PermissionPreferences,
     kind: CallKind,
     incoming: Boolean,
@@ -110,6 +110,8 @@ fun CallScreen(
     onClose: () -> Unit,
     /** Starts a new call to the same person from the ended screen; null when that is not possible. */
     onCallAgain: (() -> Unit)? = null,
+    /** Leaves the call screen while the call goes on in a small floating picture; null hides the button. */
+    onMinimize: (() -> Unit)? = null,
 ) {
     val state by viewModel.controller.state.collectAsStateWithLifecycle()
     val peerMuted = state.remotePresent && !state.remoteMicOn && state.phase != CallPhase.ENDED
@@ -369,6 +371,13 @@ fun CallScreen(
                     Spacer(Modifier.width(6.dp))
                     Text(stringResource(R.string.call_muted), style = MaterialTheme.typography.labelLarge)
                 }
+            }
+            // Minimise (owner request 2026-11-13): back to the chat with the call still running.
+            if (onMinimize != null && controlsVisible && state.phase in setOf(CallPhase.ACTIVE, CallPhase.RECONNECTING, CallPhase.CONNECTING)) {
+                FilledTonalButton(
+                    onClick = onMinimize,
+                    modifier = Modifier.align(Alignment.TopStart).safeDrawingPadding().padding(12.dp),
+                ) { Text(stringResource(R.string.call_minimize)) }
             }
             AnimatedVisibility(visible = controlsVisible, enter = fadeIn(), exit = fadeOut()) {
             Column(

@@ -207,6 +207,8 @@ Row is locked `FOR UPDATE` by every send and clear ([07 §3](07-chat-and-disappe
 | `sender_user_id` | uuid FK | no | |
 | `client_message_id` | uuid | no | |
 | `body` | text | no | `CHECK (char_length(body) BETWEEN 1 AND 4000)`. **Sensitive** |
+| `kind` | text | no | `text` \| `missed_call` (default `text`; a missed call is written by the server, its `body` is `video` or `voice`; migration `20261113060000_message_kind_reply`) |
+| `reply_to_id` | uuid | yes | The message this one replies to; FK to `messages.id`, `ON DELETE SET NULL` |
 | `created_at` | timestamptz | no | |
 | `sender_reaction` | text | yes | D-25: the sender's one emoji on their own message. `CHECK (char_length BETWEEN 1 AND 32)`; the API accepts exactly one RGI emoji. **Sensitive** |
 | `recipient_reaction` | text | yes | D-25: the other participant's one emoji. Same rules |

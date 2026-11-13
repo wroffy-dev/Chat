@@ -6,6 +6,7 @@ import app.vaultchat.data.network.ApiResult
 import app.vaultchat.data.network.HttpJson
 import app.vaultchat.domain.chat.ChatFailure
 import app.vaultchat.domain.chat.ChatMessage
+import app.vaultchat.domain.chat.MessageKind
 import app.vaultchat.domain.chat.ChatRepository
 import app.vaultchat.domain.chat.ChatResult
 import app.vaultchat.domain.chat.EnterInfo
@@ -28,7 +29,16 @@ data class LeaveBody(val leaveId: String)
 data class LeaveDto(val epoch: Long)
 
 @Serializable
-data class MessageDto(val id: String, val seq: Long, val senderId: String, val text: String, val createdAt: String)
+data class MessageDto(
+    val id: String,
+    val seq: Long,
+    val senderId: String,
+    val text: String,
+    val createdAt: String,
+    // Absent from servers older than 2026-11-13.
+    val kind: String = "text",
+    val replyToId: String? = null,
+)
 
 @Serializable
 data class ReactionDto(val messageId: String, val userId: String, val emoji: String)
@@ -47,7 +57,7 @@ data class HistoryDto(
 data class ReactionBody(val emoji: String)
 
 @Serializable
-data class SendBody(val clientMessageId: String, val epoch: Long, val text: String)
+data class SendBody(val clientMessageId: String, val epoch: Long, val text: String, val replyToId: String? = null)
 
 @Serializable
 data class SentDto(val id: String, val seq: Long, val epoch: Long, val createdAt: String)
@@ -55,7 +65,11 @@ data class SentDto(val id: String, val seq: Long, val epoch: Long, val createdAt
 @Serializable
 data class ReadBody(val seq: Long)
 
-fun MessageDto.toDomain() = ChatMessage(id, seq, senderId, text, Instant.parse(createdAt).toEpochMilli())
+fun MessageDto.toDomain() = ChatMessage(
+    id, seq, senderId, text, Instant.parse(createdAt).toEpochMilli(),
+    kind = if (kind == "missed_call") MessageKind.MISSED_CALL else MessageKind.TEXT,
+    replyToId = replyToId,
+)
 
 /** Chat API (docs/14-api-contracts.md §5) with the shared token-refreshing caller. */
 class RemoteChatRepository(private val http: HttpJson, private val caller: AuthorizedCaller) : ChatRepository {
@@ -80,9 +94,13 @@ class RemoteChatRepository(private val http: HttpJson, private val caller: Autho
         HistoryPage(h.epoch, h.cleared, h.items.map { m -> m.toDomain() }, h.hasMore, h.reactions.map { Reaction(it.messageId, it.userId, it.emoji) })
     }
 
-    override suspend fun send(conversationId: String, clientMessageId: String, epoch: Long, text: String) = caller.call {
-        http.post("${base(conversationId)}/messages", SendBody(clientMessageId, epoch, text), SendBody.serializer(), SentDto.serializer(), it)
+    override suspend fun send(conversationId: String, clientMessageId: String, epoch: Long, text: String, replyToId: String?) = caller.call {
+        http.post("${base(conversationId)}/messages", SendBody(clientMessageId, epoch, text, replyToId), SendBody.serializer(), SentDto.serializer(), it)
     }.map { SentMessage(it.id, it.seq, it.epoch, Instant.parse(it.createdAt).toEpochMilli()) }
+
+    override suspend fun typing(conversationId: String) = caller.call<Unit> {
+        http.post<EmptyBody, Unit>("${base(conversationId)}/typing", EmptyBody(), EmptyBody.serializer(), null, it)
+    }.map { }
 
     override suspend fun markRead(conversationId: String, seq: Long) = caller.call<Unit> {
         http.post<ReadBody, Unit>("${base(conversationId)}/read", ReadBody(seq), ReadBody.serializer(), null, it)

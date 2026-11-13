@@ -13,6 +13,7 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import app.vaultchat.domain.chat.EmojiText
 import app.vaultchat.domain.chat.QUICK_REACTIONS
+import app.vaultchat.domain.chat.MessageKind
 import app.vaultchat.domain.chat.Reaction
 import android.app.Activity
 import android.content.Context
@@ -154,6 +155,9 @@ fun ChatScreen(
 
     // Held in memory only: not rememberSaveable, so a draft never lands in saved instance state.
     var draft by remember { mutableStateOf("") }
+    // The message being replied to (owner request 2026-11-13); dropped if it disappears from the chat.
+    var replyTo by remember { mutableStateOf<ChatMessage?>(null) }
+    LaunchedEffect(state.messages) { if (replyTo != null && state.messages.none { it.id == replyTo?.id }) replyTo = null }
     LaunchedEffect(state.restoredDraft) {
         state.restoredDraft?.let {
             if (draft.isBlank()) draft = it
@@ -172,13 +176,22 @@ fun ChatScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                     }
                     InitialsAvatar(peerUsername, size = 40.dp)
-                    Text(
-                        peerUsername,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f).padding(start = 12.dp).semantics { heading() },
-                    )
+                    Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
+                        Text(
+                            peerUsername,
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.semantics { heading() },
+                        )
+                        if (state.peerTyping) {
+                            Text(
+                                stringResource(R.string.chat_typing),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
                     CallButton(AppIcons.Mic, stringResource(R.string.talk_button)) { onTalk() }
                     CallButton(AppIcons.Videocam, stringResource(R.string.home_video_call)) { onCall(true) }
                     CallButton(Icons.Filled.Call, stringResource(R.string.home_voice_call)) { onCall(false) }
@@ -205,6 +218,9 @@ fun ChatScreen(
                     outgoing = state.outgoing,
                     reactions = state.reactions,
                     onReact = controller::react,
+                    onReply = { replyTo = it },
+                    onCallBack = onCall,
+                    peerUsername = peerUsername,
                     myUserId = myUserId,
                     onRetry = controller::retry,
                     onDiscard = controller::discard,
@@ -221,6 +237,24 @@ fun ChatScreen(
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
+            replyTo?.let { target ->
+                Surface(color = MaterialTheme.colorScheme.surface) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                stringResource(R.string.chat_replying_to, if (target.senderId == myUserId) stringResource(R.string.chat_you) else peerUsername),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            Text(target.text, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        TextButton(onClick = { replyTo = null }) { Text(stringResource(R.string.action_cancel)) }
+                    }
+                }
+            }
             Surface(color = MaterialTheme.colorScheme.surface) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
@@ -229,14 +263,22 @@ fun ChatScreen(
                 ) {
                     PrivateTextInput(
                         value = draft,
-                        onValueChange = { draft = it },
+                        onValueChange = {
+                            draft = it
+                            if (it.isNotBlank()) controller.typing()
+                        },
                         hint = stringResource(R.string.chat_input_hint),
                         enabled = state.phase == ChatPhase.OPEN,
                         modifier = Modifier.weight(1f),
                     )
                     val canSend = state.phase == ChatPhase.OPEN && draft.isNotBlank() && !tooLong
                     FilledIconButton(
-                        onClick = { if (controller.send(draft)) draft = "" },
+                        onClick = {
+                            if (controller.send(draft, replyTo?.id)) {
+                                draft = ""
+                                replyTo = null
+                            }
+                        },
                         enabled = canSend,
                         colors = IconButtonDefaults.filledIconButtonColors(
                             disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -308,6 +350,9 @@ private fun MessageList(
     outgoing: List<Outgoing>,
     reactions: Map<String, List<Reaction>>,
     onReact: (messageId: String, emoji: String) -> Unit,
+    onReply: (ChatMessage) -> Unit,
+    onCallBack: (video: Boolean) -> Unit,
+    peerUsername: String,
     myUserId: String,
     onRetry: (String) -> Unit,
     onDiscard: (String) -> Unit,
@@ -336,9 +381,20 @@ private fun MessageList(
     ) {
         items(messages, key = { it.id }) { m ->
             val mine = m.senderId == myUserId
+            if (m.kind == MessageKind.MISSED_CALL) {
+                MissedCallLine(m, mine = mine, onCallBack = onCallBack)
+                return@items
+            }
             val onThis = reactions[m.id].orEmpty()
+            val quoted = m.replyToId?.let { id -> messages.find { it.id == id } }
             var picking by remember { mutableStateOf(false) }
             Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
+                if (quoted != null) {
+                    QuotedMessage(
+                        who = if (quoted.senderId == myUserId) stringResource(R.string.chat_you) else peerUsername,
+                        text = if (quoted.kind == MessageKind.MISSED_CALL) stringResource(R.string.chat_missed_call_short) else quoted.text,
+                    )
+                }
                 Box {
                     Bubble(m.text, mine = mine, onLongPress = { picking = true })
                     if (picking) {
@@ -350,6 +406,10 @@ private fun MessageList(
                                 onReact(m.id, emoji)
                             },
                             onDismiss = { picking = false },
+                            onReply = {
+                                picking = false
+                                onReply(m)
+                            },
                         )
                     }
                 }
@@ -380,6 +440,61 @@ private fun MessageList(
                     }
                 }
             }
+        }
+    }
+}
+
+/** The message a reply answers, shown small above its bubble: who wrote it and its first line. */
+@Composable
+private fun QuotedMessage(who: String, text: String) {
+    Column(
+        modifier = Modifier
+            .widthIn(max = 290.dp)
+            .padding(bottom = 2.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+    ) {
+        Text(who, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+        Text(text, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/**
+ * A call that was not answered, as a centred line in the chat (owner request 2026-11-13). The person who
+ * missed it can tap it to call back; the caller sees "No answer".
+ */
+@Composable
+private fun MissedCallLine(m: ChatMessage, mine: Boolean, onCallBack: (video: Boolean) -> Unit) {
+    val video = m.text == "video"
+    val time = DateUtils.formatDateTime(LocalContext.current, m.createdAtEpochMs, DateUtils.FORMAT_SHOW_TIME)
+    val label = stringResource(
+        when {
+            mine && video -> R.string.chat_no_answer_video
+            mine -> R.string.chat_no_answer_voice
+            video -> R.string.chat_missed_video
+            else -> R.string.chat_missed_voice
+        },
+        time,
+    )
+    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .clip(RoundedCornerShape(50))
+                .background(MaterialTheme.colorScheme.surface)
+                .then(if (mine) Modifier else Modifier.clickable(onClickLabel = stringResource(R.string.chat_call_back)) { onCallBack(video) })
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+        ) {
+            Icon(
+                if (video) AppIcons.Videocam else Icons.Filled.Call,
+                contentDescription = null,
+                tint = if (mine) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(16.dp),
+            )
+            Text(label, style = MaterialTheme.typography.labelMedium)
+            if (!mine) Text(stringResource(R.string.chat_call_back), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
         }
     }
 }
@@ -429,7 +544,7 @@ private fun Bubble(text: String, mine: Boolean, faded: Boolean = false, onLongPr
  * chosen is ringed; picking it again removes it.
  */
 @Composable
-private fun ReactionPicker(chosen: String?, alignEnd: Boolean, onPick: (String) -> Unit, onDismiss: () -> Unit) {
+private fun ReactionPicker(chosen: String?, alignEnd: Boolean, onPick: (String) -> Unit, onDismiss: () -> Unit, onReply: () -> Unit) {
     val lift = with(LocalDensity.current) { 56.dp.roundToPx() }
     Popup(
         alignment = if (alignEnd) Alignment.TopEnd else Alignment.TopStart,
@@ -449,6 +564,7 @@ private fun ReactionPicker(chosen: String?, alignEnd: Boolean, onPick: (String) 
                         contentAlignment = Alignment.Center,
                     ) { Text(emoji, fontSize = 26.sp) }
                 }
+                TextButton(onClick = onReply) { Text(stringResource(R.string.chat_reply)) }
             }
         }
     }

@@ -27,14 +27,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.currentBackStackEntryAsState
 import app.vaultchat.domain.call.CallInfo
 import app.vaultchat.domain.call.CallKind
+import app.vaultchat.domain.call.CallPhase
 import app.vaultchat.domain.call.CallStatus
 import app.vaultchat.domain.chat.flushPendingLeave
 import app.vaultchat.ui.about.UpgradeRequiredScreen
 import app.vaultchat.ui.call.CallScreen
+import app.vaultchat.ui.call.CallEntryGuard
+import app.vaultchat.ui.call.CallSession
+import app.vaultchat.ui.call.MiniCall
 import app.vaultchat.ui.call.TalkDialog
 import app.vaultchat.ui.chat.ChatScreen
 import app.vaultchat.ui.chat.ChatViewModel
-import app.vaultchat.ui.call.CallViewModel
 import app.vaultchat.ui.call.IncomingCallWatcher
 import app.vaultchat.ui.connect.InboxScreen
 import app.vaultchat.ui.connect.InboxViewModel
@@ -266,22 +269,34 @@ fun VaultChatNavHost(container: AppContainer) {
         composable<CallRoute> { entry ->
             val route = entry.toRoute<CallRoute>()
             val kind = if (route.video) CallKind.VIDEO else CallKind.VOICE
-            val viewModel: CallViewModel = viewModel(
-                factory = viewModelFactory {
-                    initializer { CallViewModel(context.applicationContext as Application, container.callRepository, container.realtime, container.systemCalls) }
-                },
-            )
+            // The call lives in the app, not in this screen, so it can be minimised and come back.
+            val callSession = remember {
+                // A call that is still running (coming back from the small picture) is shown again; an ended
+                // one is not reused ("Call again" opens this screen before the old one is cleared).
+                container.activeCall.value?.takeIf { it.controller.state.value.phase != CallPhase.ENDED }
+                    ?: CallSession(context.applicationContext as Application, container.callRepository, container.realtime, container.systemCalls)
+                        .also { container.activeCall.value = it }
+            }
+            LaunchedEffect(callSession) { callSession.minimized = false }
+            // When this screen is gone for good (Close, Back, sign-out) the call ends, unless it was minimised.
+            val guard: CallEntryGuard = viewModel()
+            guard.onGone = { if (!guard.keepCall) container.endCall(callSession) }
             CallScreen(
-                viewModel = viewModel,
+                onMinimize = {
+                    guard.keepCall = true
+                    callSession.minimized = true
+                    navController.popBackStack()
+                },
+                viewModel = callSession,
                 permissionPreferences = container.permissionPreferences,
                 kind = kind,
                 incoming = route.callId != null,
                 onStart = {
                     val callId = route.callId
                     if (callId != null) {
-                        viewModel.showIncoming(CallInfo(callId, kind, CallStatus.RINGING, isCaller = false, peerUsername = route.peerUsername))
+                        callSession.showIncoming(CallInfo(callId, kind, CallStatus.RINGING, isCaller = false, peerUsername = route.peerUsername))
                     } else if (route.connectionId != null) {
-                        viewModel.startOutgoing(route.connectionId, kind, route.peerUsername)
+                        callSession.startOutgoing(route.connectionId, kind, route.peerUsername)
                     }
                 },
                 onClose = { navController.popBackStack() },
@@ -327,6 +342,17 @@ fun VaultChatNavHost(container: AppContainer) {
                 onConnected = { navController.replaceAll(HomeRoute) },
                 onSessionEnded = { navController.replaceAll(LoginRoute) },
                 onBack = { navController.popBackStack() },
+            )
+        }
+    }
+    // A minimised call: a small floating picture over whatever screen is shown; tap it to go back.
+    val activeCall by container.activeCall.collectAsStateWithLifecycle()
+    activeCall?.let { session ->
+        if (session.minimized && !onCallScreen) {
+            MiniCall(
+                session = session,
+                onOpen = { video, peer -> navController.navigate(CallRoute(video = video, peerUsername = peer)) },
+                onEnded = { container.endCall(session) },
             )
         }
     }

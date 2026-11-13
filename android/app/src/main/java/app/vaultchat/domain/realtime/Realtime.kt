@@ -10,6 +10,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 /** "Something changed" signals from the server (docs/14 §10). IDs only: details are re-read over the API. */
 sealed interface RealtimeSignal {
     data class ChatChanged(val conversationId: String) : RealtimeSignal
+    /** The other person is typing in this conversation right now. */
+    data class ChatTyping(val conversationId: String) : RealtimeSignal
     data class CallChanged(val callId: String) : RealtimeSignal
     /** A pairing request was made, answered, withdrawn or superseded. */
     data class ConnectionChanged(val requestId: String) : RealtimeSignal

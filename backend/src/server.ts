@@ -50,6 +50,10 @@ async function main() {
   const calls = new CallService(database.prisma, media, config.CALL_RING_TIMEOUT_SECONDS, undefined, push, hub, settings);
   // Messages send a content-free "new message" push again (D-24 as changed by the owner on 2026-11-13).
   const chat = new ChatService(database.prisma, undefined, push, hub, settings);
+  // An unanswered call leaves a "Missed call" line in the pair's chat (owner request 2026-11-13).
+  calls.onMissed = (call) => {
+    void chat.recordMissedCall(call.connectionId, call.callerUserId, call.kind).catch(() => logPush("missed-call line not written"));
+  };
   const updates = config.APP_UPDATES_DIR
     ? {
         store: new AppUpdateStore(config.APP_UPDATES_DIR),
