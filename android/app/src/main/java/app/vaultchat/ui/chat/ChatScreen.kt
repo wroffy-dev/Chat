@@ -112,6 +112,10 @@ fun ChatScreen(
     onCall: (video: Boolean) -> Unit,
     /** Opens the walkie-talkie for this chat (D-26). */
     onTalk: () -> Unit = {},
+    /** Snaps (D-27): take one for this person; how many of theirs wait; open them. */
+    onSnap: () -> Unit = {},
+    waitingSnaps: Int = 0,
+    onOpenSnaps: () -> Unit = {},
 ) {
     val controller = viewModel.controller
     val state by controller.state.collectAsStateWithLifecycle()
@@ -192,12 +196,27 @@ fun ChatScreen(
                             )
                         }
                     }
+                    CallButton(AppIcons.PhotoCamera, stringResource(R.string.snap_button)) { onSnap() }
                     CallButton(AppIcons.Mic, stringResource(R.string.talk_button)) { onTalk() }
                     CallButton(AppIcons.Videocam, stringResource(R.string.home_video_call)) { onCall(true) }
                     CallButton(Icons.Filled.Call, stringResource(R.string.home_voice_call)) { onCall(false) }
                 }
             }
             DeletionRule()
+            if (waitingSnaps > 0) {
+                Surface(
+                    color = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).clickable(onClick = onOpenSnaps),
+                ) {
+                    Text(
+                        if (waitingSnaps == 1) stringResource(R.string.snap_waiting, peerUsername) else stringResource(R.string.snap_waiting_more, waitingSnaps, peerUsername),
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    )
+                }
+            }
             noticeText(state.notice)?.let { (kind, text) ->
                 StatusBanner(
                     kind = kind,

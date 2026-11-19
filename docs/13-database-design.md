@@ -333,3 +333,15 @@ Retention is enforced by `RetentionService` (backend), run at startup and hourly
 Details in [16 §11](16-deployment-and-operations.md#11-backups-and-restore). Summary:
 daily `pg_dump` (custom format) with `--exclude-table-data=messages --exclude-table-data=location_shares`,
 encrypted, uploaded offsite; only the last 24 hours of backups kept (D-12); monthly restore test into a scratch database.
+
+
+## Snaps (D-27, migration `20261119060000_snaps`)
+
+`snaps`: one row per snap waiting to be opened. `id` uuid, `connection_id` → connections (cascade),
+`sender_user_id` and `recipient_user_id` → users (cascade), `kind` `photo` | `video` (CHECK), `size_bytes`,
+`created_at`. The media file is `SNAPS_DIR/<id>.snap`, never in the database; the row and the file are deleted
+when the snap is opened or after 24 h.
+
+`snap_streaks`: one row per connection. `connection_id` (PK, cascade), `count`, `last_mutual_day`,
+`user_a_day`, `user_b_day` (India-time `YYYY-MM-DD`). The streak shown is `count` while `last_mutual_day` is
+today or yesterday, else 0.

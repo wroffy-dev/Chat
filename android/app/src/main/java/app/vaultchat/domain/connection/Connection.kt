@@ -9,6 +9,10 @@ data class Connection(
     val sinceEpochMs: Long,
     val unreadCount: Int = 0,
     val lastMessageAtEpochMs: Long? = null,
+    /** Snap streak in days (D-27); 0 when none. */
+    val streak: Int = 0,
+    /** Snaps from this person waiting to be opened. */
+    val pendingSnaps: Int = 0,
 )
 
 enum class RequestDirection { INCOMING, OUTGOING }

@@ -17,6 +17,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import app.vaultchat.data.push.PushTokenApi
 import app.vaultchat.data.app.AppVersionApi
+import app.vaultchat.data.snap.RemoteSnapRepository
+import app.vaultchat.domain.snap.SnapRepository
 import app.vaultchat.ui.call.CallSession
 import app.vaultchat.data.app.ApkDownloader
 import app.vaultchat.platform.update.AppUpdater
@@ -68,6 +70,9 @@ class AppContainer(context: Context) {
     val appVersionApi = AppVersionApi(httpJson)
 
     val chatRepository: ChatRepository = RemoteChatRepository(httpJson, caller)
+
+    /** Snaps (D-27). */
+    val snapRepository: SnapRepository = RemoteSnapRepository(BuildConfig.API_BASE_URL, http, caller)
 
     /** Live change signals; run by the navigation host while signed in and in front. */
     val realtime = RealtimeClient(BuildConfig.API_BASE_URL, http, caller)

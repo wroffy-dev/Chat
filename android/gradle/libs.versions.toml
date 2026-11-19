@@ -38,6 +38,8 @@ zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" 
 camerax-camera2 = { group = "androidx.camera", name = "camera-camera2", version.ref = "camerax" }
 camerax-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "camerax" }
 camerax-view = { group = "androidx.camera", name = "camera-view", version.ref = "camerax" }
+# Video recording for snaps (D-27): part of the same CameraX release already in use.
+camerax-video = { group = "androidx.camera", name = "camera-video", version.ref = "camerax" }
 core-telecom = { group = "androidx.core", name = "core-telecom", version.ref = "coreTelecom" }
 livekit-android = { group = "io.livekit", name = "livekit-android", version.ref = "livekit" }
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }

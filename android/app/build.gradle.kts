@@ -173,6 +173,7 @@ dependencies {
     implementation(libs.camerax.camera2)
     implementation(libs.camerax.lifecycle)
     implementation(libs.camerax.view)
+    implementation(libs.camerax.video)
     // WebRTC calls through the self-hosted LiveKit SFU (docs/08-calling.md).
     implementation(libs.livekit.android)
     // Self-managed calls in Android's telecom framework; used only when SYSTEM_CALLS is on.

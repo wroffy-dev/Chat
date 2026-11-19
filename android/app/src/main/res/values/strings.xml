@@ -136,6 +136,23 @@
     <string name="chat_no_answer_voice">Voice call · no answer · %1$s</string>
     <string name="chat_missed_call_short">Missed call</string>
     <string name="chat_call_back">Call back</string>
+    <string name="snap_button">Snap</string>
+    <string name="snap_hint">Tap for a photo · hold for a video (up to %1$d s)</string>
+    <string name="snap_send">Send to %1$s</string>
+    <string name="snap_retake">Retake</string>
+    <string name="snap_sending">Sending…</string>
+    <string name="snap_sent">Snap sent</string>
+    <string name="snap_sent_streak">Snap sent · 🔥 %1$d</string>
+    <string name="snap_failed">Could not send the snap. Try again.</string>
+    <string name="snap_too_large">This video is too large to send.</string>
+    <string name="snap_flip">Flip camera</string>
+    <string name="snap_needs_camera">Vault needs the camera to take a snap.</string>
+    <string name="snap_waiting">📸 %1$s sent you a snap · tap to view</string>
+    <string name="snap_waiting_more">📸 %1$d snaps from %2$s · tap to view</string>
+    <string name="snap_opening">Opening…</string>
+    <string name="snap_gone">This snap is no longer available.</string>
+    <string name="snap_replay">Replay</string>
+    <string name="snap_tap_to_close">Tap to close</string>
     <string name="talk_button">Walkie-talkie</string>
     <string name="talk_title">Talk to %1$s</string>
     <string name="talk_connecting">Reaching %1$s\'s phone…</string>
@@ -201,6 +218,10 @@
     <string name="home_no_matches">No chats match.</string>
     <string name="home_tap_to_chat">Tap to chat</string>
     <string name="home_yesterday">Yesterday</string>
+    <plurals name="home_new_snaps">
+        <item quantity="one">📸 New snap</item>
+        <item quantity="other">📸 %1$d new snaps</item>
+    </plurals>
     <plurals name="home_new_messages">
         <item quantity="one">%1$d new message</item>
         <item quantity="other">%1$d new messages</item>
