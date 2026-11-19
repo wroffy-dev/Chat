@@ -392,8 +392,12 @@ private fun MessageList(
 ) {
     val listState = rememberLazyListState()
     val total = messages.size + outgoing.size
+    // Opening a chat jumps straight to the newest message; only new messages after that scroll smoothly.
+    var placed by remember { mutableStateOf(false) }
     LaunchedEffect(total) {
-        if (total > 0) listState.animateScrollToItem(total - 1)
+        if (total == 0) return@LaunchedEffect
+        if (placed) listState.animateScrollToItem(total - 1) else listState.scrollToItem(total - 1)
+        placed = true
     }
     if (total == 0) {
         Box(modifier = modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {

@@ -270,6 +270,7 @@ private fun CaptureView(
         ).setMirrorMode(MirrorMode.MIRROR_MODE_ON_FRONT_ONLY).build()
     }
     var recording by remember { mutableStateOf<Recording?>(null) }
+    var taking by remember { mutableStateOf(false) }
     var secondsLeft by remember { mutableIntStateOf(SnapRules.MAX_VIDEO_SECONDS) }
     val scope = rememberCoroutineScope()
 
@@ -333,17 +334,29 @@ private fun CaptureView(
                     .pointerInput(Unit) {
                         detectTapGestures(
                             onTap = {
+                                // One photo at a time; a second tap while it is being made does nothing.
+                                if (taking) return@detectTapGestures
+                                taking = true
+                                val mirror = front
                                 imageCapture.takePicture(ContextCompat.getMainExecutor(context), object : ImageCapture.OnImageCapturedCallback() {
                                     override fun onCaptureSuccess(image: ImageProxy) {
-                                        val rotation = image.imageInfo.rotationDegrees
-                                        val raw = image.toBitmap()
-                                        image.close()
+                                        // Decoding a full-resolution photo takes a moment: off the main thread, so
+                                        // the camera screen never freezes (owner, 2026-11-19: smoother UI).
                                         scope.launch {
-                                            val photo = withContext(Dispatchers.Default) { toUprightJpeg(raw, rotation, mirror = front) }
+                                            val photo = withContext(Dispatchers.Default) {
+                                                try {
+                                                    toUprightJpeg(image.toBitmap(), image.imageInfo.rotationDegrees, mirror)
+                                                } finally {
+                                                    image.close()
+                                                }
+                                            }
+                                            taking = false
                                             onPhoto(photo)
                                         }
                                     }
-                                    override fun onError(exception: ImageCaptureException) = Unit
+                                    override fun onError(exception: ImageCaptureException) {
+                                        taking = false
+                                    }
                                 })
                             },
                             onLongPress = { startVideo() },
