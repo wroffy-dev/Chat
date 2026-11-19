@@ -39,6 +39,10 @@ export interface MessageView {
   senderId: string;
   text: string;
   createdAt: Date;
+  /** "text", or "missed_call" (then `text` is "video" or "voice" and `senderId` is the caller). */
+  kind: string;
+  /** The message this one replies to, while it still exists. */
+  replyToId: string | null;
 }
 
 /** One person's reaction on one message (D-25). */
@@ -175,7 +179,11 @@ export class ChatService {
     return { epoch };
   }
 
-  async send(userId: string, conversationId: string, input: { clientMessageId: string; epoch: number; text: string }): Promise<SentView> {
+  async send(
+    userId: string,
+    conversationId: string,
+    input: { clientMessageId: string; epoch: number; text: string; replyToId?: string },
+  ): Promise<SentView> {
     const body = normalizeText(input.text);
     const now = this.now();
     const result = await this.prisma.$transaction(async (tx) => {
@@ -192,9 +200,16 @@ export class ChatService {
       if (BigInt(input.epoch) !== conv.clear_epoch) throw appError(409, "CONVERSATION_CLEARED");
       this.limitSends(userId, now);
 
+      // A reply points at a message of this conversation that still exists; otherwise it is a plain message.
+      const replyTo = input.replyToId
+        ? await tx.message.findFirst({ where: { id: input.replyToId, conversationId }, select: { id: true } })
+        : null;
       const seq = conv.last_seq + 1n;
       const message = await tx.message.create({
-        data: { conversationId, seq, epoch: conv.clear_epoch, senderUserId: userId, clientMessageId: input.clientMessageId, body, createdAt: now },
+        data: {
+          conversationId, seq, epoch: conv.clear_epoch, senderUserId: userId, clientMessageId: input.clientMessageId, body, createdAt: now,
+          replyToId: replyTo?.id ?? null,
+        },
       });
       await tx.conversation.update({ where: { id: conversationId }, data: { lastSeq: seq } });
       return { id: message.id, seq: Number(seq), epoch: Number(conv.clear_epoch), createdAt: message.createdAt, created: true };
@@ -208,6 +223,40 @@ export class ChatService {
       void this.notifyPeer(userId, conversationId, now).catch(() => undefined);
     }
     return result;
+  }
+
+  /**
+   * "Typing…" (owner request 2026-11-13): tells the other participant's open app, and nothing else.
+   * Nothing is stored; the app shows it for a few seconds.
+   */
+  async typing(userId: string, conversationId: string): Promise<void> {
+    const peers = await this.prisma.conversationParticipant.findMany({ where: { conversationId }, select: { userId: true } });
+    if (!peers.some((p) => p.userId === userId)) throw appError(404, "NOT_FOUND");
+    this.events?.publish(peers.map((p) => p.userId).filter((id) => id !== userId), { type: "chat.typing", conversationId });
+  }
+
+  /**
+   * Writes a "Missed call" line into the pair's chat (owner request 2026-11-13): a message of kind
+   * `missed_call` from the caller, its body "video" or "voice". It follows the same deletion rules as
+   * any message (D-01, D-02). Best effort: a failure never affects the call.
+   */
+  async recordMissedCall(connectionId: string, callerUserId: string, kind: "video" | "voice"): Promise<void> {
+    const conversation = await this.prisma.conversation.findUnique({ where: { connectionId }, select: { id: true } });
+    if (!conversation) return;
+    const now = this.now();
+    await this.prisma.$transaction(async (tx) => {
+      const conv = await this.lockConversation(tx, conversation.id);
+      const seq = conv.last_seq + 1n;
+      await tx.message.create({
+        data: {
+          conversationId: conversation.id, seq, epoch: conv.clear_epoch, senderUserId: callerUserId,
+          clientMessageId: randomUUID(), body: kind, kind: "missed_call", createdAt: now,
+        },
+      });
+      await tx.conversation.update({ where: { id: conversation.id }, data: { lastSeq: seq } });
+    });
+    this.changed(conversation.id);
+    void this.notifyPeer(callerUserId, conversation.id, now).catch(() => undefined);
   }
 
   /** Messages after `afterSeq`. If `epoch` is stale the caller must drop its state; items then start at 0. */
@@ -229,7 +278,9 @@ export class ChatService {
           epoch,
           cleared,
           hasMore: rows.length > limit,
-          items: rows.slice(0, limit).map((m) => ({ id: m.id, seq: Number(m.seq), senderId: m.senderUserId, text: m.body, createdAt: m.createdAt })),
+          items: rows.slice(0, limit).map((m) => ({
+            id: m.id, seq: Number(m.seq), senderId: m.senderUserId, text: m.body, createdAt: m.createdAt, kind: m.kind, replyToId: m.replyToId,
+          })),
           reactions: await this.reactionsOf(tx, conversationId),
         };
       },

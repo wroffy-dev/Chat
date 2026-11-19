@@ -72,7 +72,11 @@ class FakeChatRepo : ChatRepository {
         }
     }
 
-    override suspend fun send(conversationId: String, clientMessageId: String, epoch: Long, text: String): ChatResult<SentMessage> {
+    val replies = mutableListOf<String?>()
+    var typings = 0
+    override suspend fun typing(conversationId: String): ChatResult<Unit> { typings++; return ChatResult.Ok(Unit) }
+    override suspend fun send(conversationId: String, clientMessageId: String, epoch: Long, text: String, replyToId: String?): ChatResult<SentMessage> {
+        replies += replyToId
         sends += Triple(clientMessageId, epoch, text)
         sendFailure?.let { return ChatResult.Failure(it) }
         if (epoch != this.epoch) return ChatResult.Failure(ChatFailure.CLEARED)
@@ -320,6 +324,55 @@ class ChatControllerTest {
         val polls = repo.log.size
         advanceTimeBy(60_000)
         assertEquals("nothing runs after leaving", polls, repo.log.size)
+    }
+
+    @Test
+    fun `typing is shown for a few seconds, ends with their message, and is sent sparingly`() = runTest {
+        val live = object : RealtimeSignals {
+            override val signals = MutableSharedFlow<RealtimeSignal>(extraBufferCapacity = 8)
+            override val connected = MutableStateFlow(true)
+        }
+        val c = controller(live)
+        c.start()
+        runCurrent()
+
+        live.signals.emit(RealtimeSignal.ChatTyping("other-conversation"))
+        runCurrent()
+        assertFalse(c.state.value.peerTyping)
+        live.signals.emit(RealtimeSignal.ChatTyping("conv"))
+        runCurrent()
+        assertTrue(c.state.value.peerTyping)
+        advanceTimeBy(ChatController.TYPING_SHOWN_MS + 1)
+        assertFalse("fades by itself", c.state.value.peerTyping)
+
+        live.signals.emit(RealtimeSignal.ChatTyping("conv"))
+        runCurrent()
+        repo.peerSays("done typing")
+        live.signals.emit(RealtimeSignal.ChatChanged("conv"))
+        runCurrent()
+        assertFalse("their message ends it", c.state.value.peerTyping)
+
+        // Our own typing: one signal now, none for the next 3 s, then one more.
+        val before = repo.typings
+        c.typing(); c.typing(); c.typing()
+        runCurrent()
+        assertEquals(before + 1, repo.typings)
+        advanceTimeBy(ChatController.TYPING_SEND_MS + 1)
+        c.typing()
+        runCurrent()
+        assertEquals(before + 2, repo.typings)
+    }
+
+    @Test
+    fun `a reply carries the id of the message it answers`() = runTest {
+        val c = controller()
+        c.start()
+        runCurrent()
+        assertTrue(c.send("plain"))
+        assertTrue(c.send("answer", replyToId = "m7"))
+        runCurrent()
+        assertEquals(listOf(null, "m7"), repo.replies)
+        assertEquals("m7", c.state.value.messages.last().replyToId)
     }
 
     @Test

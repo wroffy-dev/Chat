@@ -97,6 +97,39 @@ describe.skipIf(!TEST_DB_URL)("chat (PostgreSQL)", () => {
   const texts = (h: { items: { text: string }[] }) => h.items.map((m) => m.text);
   const leave = (token: string, conv: string, leaveId = randomUUID()) => req(token, "POST", `/conversations/${conv}/leave`, { leaveId });
 
+  it("replies point at a message of the same chat, and lose the link when it is gone or foreign", async () => {
+    const { alice, bob, conv } = await pair();
+    const first = (await send(alice, conv, "where are you?")).json();
+    const reply = await req(bob, "POST", `/conversations/${conv}/messages`, { clientMessageId: randomUUID(), epoch: 0, text: "home", replyToId: first.id });
+    expect(reply.statusCode).toBe(201);
+    // An id that is no message of this conversation is ignored: the message is sent as a plain one.
+    await req(bob, "POST", `/conversations/${conv}/messages`, { clientMessageId: randomUUID(), epoch: 0, text: "plain", replyToId: randomUUID() });
+    const h = await history(alice, conv);
+    expect(h.items.map((m: { text: string; kind: string; replyToId: string | null }) => [m.text, m.kind, m.replyToId])).toEqual([
+      ["where are you?", "text", null],
+      ["home", "text", first.id],
+      ["plain", "text", null],
+    ]);
+    // Deleting the original clears the link instead of blocking the delete.
+    await database.prisma.message.delete({ where: { id: first.id } });
+    expect((await history(alice, conv)).items.find((m: { text: string }) => m.text === "home").replyToId).toBeNull();
+    expect((await req(bob, "POST", `/conversations/${conv}/messages`, { clientMessageId: randomUUID(), epoch: 0, text: "x", replyToId: "nope" })).statusCode).toBe(400);
+  });
+
+  it("a missed call becomes a line in the chat, from the caller, and typing needs a participant", async () => {
+    const { alice, bob, aliceId, conv } = await pair();
+    const c = await database.prisma.conversation.findUniqueOrThrow({ where: { id: conv } });
+    await chat.recordMissedCall(c.connectionId, aliceId, "video");
+    const h = await history(bob, conv);
+    expect(h.items).toEqual([expect.objectContaining({ seq: 1, senderId: aliceId, kind: "missed_call", text: "video", replyToId: null })]);
+    // It takes a sequence number like any message, so the next one follows it.
+    expect((await send(bob, conv, "sorry, missed it")).json().seq).toBe(2);
+
+    expect((await req(alice, "POST", `/conversations/${conv}/typing`, {})).statusCode).toBe(204);
+    const carol = await login("carol");
+    expect((await req(carol, "POST", `/conversations/${conv}/typing`, {})).statusCode).toBe(404);
+  });
+
   it("sends, lists and retries idempotently; text is trimmed and validated", async () => {
     const { alice, bob, aliceId, conv } = await pair();
     const enter = (await req(alice, "POST", `/conversations/${conv}/enter`, {})).json();

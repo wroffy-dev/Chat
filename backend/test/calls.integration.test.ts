@@ -195,6 +195,27 @@ describe.skipIf(!TEST_DB_URL)("calls (PostgreSQL)", () => {
     expect(media.deleted).toContain(media.created[0]);
   });
 
+  it("reports a missed call for the chat line: ring timeout or caller gave up, never a decline or the walkie-talkie", async () => {
+    const { alice, bob, connectionId } = await connectedPair();
+    const missed: string[] = [];
+    calls.onMissed = (c) => missed.push(`${c.kind}:${c.callerUserId === alice.id ? "alice" : "bob"}`);
+
+    const a = (await call(alice.token, "POST", "/calls", { connectionId, kind: "video" })).json();
+    await call(alice.token, "POST", `/calls/${a.callId}/cancel`);
+    const b = (await call(bob.token, "POST", "/calls", { connectionId, kind: "voice" })).json();
+    clockMs = Date.now() + 46_000;
+    await calls.sweep();
+    clockMs = null;
+    expect(b.callId).toBeTruthy();
+    expect(missed).toEqual(["video:alice", "voice:bob"]);
+
+    const c = (await call(alice.token, "POST", "/calls", { connectionId, kind: "voice" })).json();
+    await call(bob.token, "POST", `/calls/${c.callId}/decline`);
+    const t = (await call(alice.token, "POST", "/calls", { connectionId, kind: "talk" })).json();
+    await call(alice.token, "POST", `/calls/${t.callId}/cancel`);
+    expect(missed).toHaveLength(2);
+  });
+
   it("marks unanswered calls as missed after the ring timeout", async () => {
     const { alice, connectionId } = await connectedPair();
     const s = (await call(alice.token, "POST", "/calls", { connectionId, kind: "video" })).json();

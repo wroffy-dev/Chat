@@ -207,6 +207,11 @@ security control (a request without the header is not refused).
 All routes require the caller to be the caller or callee of `{id}` (else `404`).
 
 ### POST /calls
+- *(Chat additions, 2026-11-13)* Messages carry `kind` (`"text"` or `"missed_call"`, then `text` is
+  `"video"`/`"voice"` and `senderId` the caller) and `replyToId` (uuid or null). `POST
+  /conversations/:id/messages` accepts an optional `replyToId` (a message of the same conversation;
+  anything else is ignored). `POST /conversations/:id/typing` (empty body, 204, 40/min) relays the live
+  signal `chat.typing {conversationId}` to the other participant; nothing is stored.
 - **Request:** `{ "connectionId": uuid, "kind": "video"|"voice"|"talk" }`. `talk` is the walkie-talkie
   (D-26): the callee is woken by a `talk` push or signal, accepts by itself and gets a listen-only token;
   the server gives up after 25 s without an accept and ends it 10 s (plus 8 s to connect) after the accept
