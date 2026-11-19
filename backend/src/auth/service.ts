@@ -15,8 +15,10 @@ const DAY = 24 * 60 * MINUTE;
 /** Session policy (docs/04-accounts-and-authentication.md §4). */
 export const SESSION_POLICY = {
   accessTtlMs: 15 * MINUTE,
-  idleTtlMs: 30 * DAY,
-  absoluteTtlMs: 90 * DAY,
+  // Owner decision D-28 (2026-11-19): stay signed in like Instagram or Snapchat; only signing in on another
+  // phone, a password reset, a disabled account or a year without opening the app ends a session.
+  idleTtlMs: 365 * DAY,
+  absoluteTtlMs: 10 * 365 * DAY,
   /** last_used_at / last_seen_at are written at most this often. */
   touchIntervalMs: MINUTE,
 };
@@ -182,7 +184,11 @@ export class AuthService {
       where: { accessTokenHash: hashToken(accessToken) },
       include: { user: true },
     });
-    if (!session || session.revokedAt) throw appError(401, "SESSION_REVOKED");
+    // An unknown access token is usually one the phone just replaced (a refresh by another request or the
+    // live connection): "expired" sends the phone to refresh, and the refresh decides whether the session
+    // is really over. Answering "revoked" here logged users out for nothing (D-28).
+    if (!session) throw appError(401, "TOKEN_EXPIRED");
+    if (session.revokedAt) throw appError(401, "SESSION_REVOKED");
     if (session.idleExpiresAt <= now || session.absoluteExpiresAt <= now) {
       await this.revokeSession(session.id, "expired", now);
       throw appError(401, "SESSION_REVOKED");
@@ -207,37 +213,58 @@ export class AuthService {
     return { user, session: rest };
   }
 
-  async refresh(refreshToken: string, meta: RequestMeta): Promise<LoginResult> {
+  async refresh(refreshToken: string, meta: RequestMeta, attempt = 0): Promise<LoginResult> {
     const now = this.now();
     const hash = hashToken(refreshToken);
     const session = await this.prisma.session.findUnique({ where: { refreshTokenHash: hash }, include: { user: true } });
 
     if (!session) {
-      const reused = await this.prisma.session.findFirst({ where: { previousRefreshTokenHash: hash, revokedAt: null }, include: { user: true } });
-      // The phone asked again with the token it held before because the last answer never reached it
-      // (weak network, app closed mid-request): it has not used the new tokens yet. Renew from there
-      // instead of ending the session, which logged users out for no reason.
-      if (reused && !reused.refreshConfirmed && reused.idleExpiresAt > now && reused.absoluteExpiresAt > now && reused.user.status === "active") {
-        const retried = this.newTokens(now);
-        const ok = await this.prisma.session.updateMany({
-          where: { id: reused.id, previousRefreshTokenHash: hash, refreshConfirmed: false, revokedAt: null },
-          data: { ...this.tokenColumns(retried, now, reused.absoluteExpiresAt), lastUsedAt: now },
-        });
-        if (ok.count === 1) {
-          return {
-            ...retried,
-            user: { id: reused.user.id, username: reused.user.username, mustChangePassword: reused.user.mustChangePassword },
-          };
-        }
+      // The token the phone held before its latest refresh: the answer to that refresh never reached it, it
+      // was not saved (app closed, storage error), or two requests refreshed at once. Renew from it rather
+      // than end the session (D-28: no logouts the user did not ask for). The older token stays accepted
+      // until a refresh with the current one succeeds.
+      const previous = await this.prisma.session.findFirst({ where: { previousRefreshTokenHash: hash, revokedAt: null }, include: { user: true } });
+      if (!previous) throw appError(401, "SESSION_REVOKED");
+      await this.checkUsable(previous, now);
+      const renewed = this.newTokens(now);
+      const ok = await this.prisma.session.updateMany({
+        where: { id: previous.id, previousRefreshTokenHash: hash, revokedAt: null },
+        data: { ...this.tokenColumns(renewed, now, this.absoluteFor(previous)), refreshConfirmed: false, lastUsedAt: now },
+      });
+      if (ok.count !== 1) {
+        if (attempt < 2) return this.refresh(refreshToken, meta, attempt + 1);
+        throw appError(401, "SESSION_REVOKED");
       }
-      // Otherwise a previously rotated token presented again, after the new ones were in use, means it
-      // was copied: end that session.
-      if (reused) {
-        await this.revokeSession(reused.id, "refresh_reuse", now);
-        await audit(this.prisma, { actorType: "system", action: "auth.refresh_reuse_detected", targetType: "user", targetId: reused.userId, ip: meta.ip });
-      }
+      return { ...renewed, user: { id: previous.user.id, username: previous.user.username, mustChangePassword: previous.user.mustChangePassword } };
+    }
+    await this.checkUsable(session, now);
+
+    const tokens = this.newTokens(now);
+    // Compare-and-swap on the old hash: of two concurrent refreshes with one token, one rotates and the
+    // other is renewed from the previous token (above).
+    const updated = await this.prisma.session.updateMany({
+      where: { id: session.id, refreshTokenHash: hash, revokedAt: null },
+      data: {
+        ...this.tokenColumns(tokens, now, this.absoluteFor(session)),
+        previousRefreshTokenHash: hash,
+        refreshConfirmed: false,
+        lastUsedAt: now,
+        ...(meta.appVersionCode !== undefined ? { appVersionCode: meta.appVersionCode } : {}),
+      },
+    });
+    if (updated.count !== 1) {
+      if (attempt < 2) return this.refresh(refreshToken, meta, attempt + 1);
       throw appError(401, "SESSION_REVOKED");
     }
+
+    return {
+      ...tokens,
+      user: { id: session.user.id, username: session.user.username, mustChangePassword: session.user.mustChangePassword },
+    };
+  }
+
+  /** Throws when a found session may not be refreshed: revoked, expired, or its account disabled. */
+  private async checkUsable(session: { id: string; userId: string; revokedAt: Date | null; idleExpiresAt: Date; absoluteExpiresAt: Date; user: { status: string } }, now: Date) {
     if (session.revokedAt) throw appError(401, "SESSION_REVOKED");
     if (session.idleExpiresAt <= now || session.absoluteExpiresAt <= now) {
       await this.revokeSession(session.id, "expired", now);
@@ -247,26 +274,14 @@ export class AuthService {
       await this.revokeUserSessions(session.userId, "disabled");
       throw appError(403, "ACCOUNT_DISABLED");
     }
-
-    const tokens = this.newTokens(now);
-    // Compare-and-swap on the old hash: of two concurrent refreshes with one token, only one wins.
-    const updated = await this.prisma.session.updateMany({
-      where: { id: session.id, refreshTokenHash: hash, revokedAt: null },
-      data: {
-        ...this.tokenColumns(tokens, now, session.absoluteExpiresAt),
-        previousRefreshTokenHash: hash,
-        refreshConfirmed: false,
-        lastUsedAt: now,
-        ...(meta.appVersionCode !== undefined ? { appVersionCode: meta.appVersionCode } : {}),
-      },
-    });
-    if (updated.count !== 1) throw appError(401, "SESSION_REVOKED");
-
-    return {
-      ...tokens,
-      user: { id: session.user.id, username: session.user.username, mustChangePassword: session.user.mustChangePassword },
-    };
   }
+
+  /** Sessions from before D-28 had a 90-day limit; a refresh moves it to the current policy. */
+  private absoluteFor(session: { createdAt: Date; absoluteExpiresAt: Date }): Date {
+    const policy = session.createdAt.getTime() + SESSION_POLICY.absoluteTtlMs;
+    return new Date(Math.max(policy, session.absoluteExpiresAt.getTime()));
+  }
+
 
   async logout(ctx: AuthContext, meta: RequestMeta): Promise<void> {
     await this.revokeSession(ctx.session.id, "logout", this.now());

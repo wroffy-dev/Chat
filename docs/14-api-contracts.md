@@ -58,8 +58,8 @@ Common to every authenticated route: `401` if token missing/expired/revoked; `40
 - **Auth:** none (refresh token in body). **Rate limit:** 30/min per IP.
 - **Request:** `{ "refreshToken": string }`
 - **Response 200:** same shape as login (new access + new refresh token).
-- **Errors:** `401 SESSION_REVOKED` (unknown, expired, or reused token).
-- **Side effects:** rotation; reuse of a previous token revokes the session. **Audit:** `auth.refresh_reuse_detected` on reuse.
+- **Errors:** `401 SESSION_REVOKED` (unknown, revoked or expired session). The previous refresh token is renewed, not refused (D-28).
+- **Side effects:** rotation. An unknown *access* token on other routes answers `401 TOKEN_EXPIRED` (D-28).
 
 ### POST /auth/logout
 - **Auth:** user (restricted allowed). **Request:** `{}`. **Response:** `204`.
