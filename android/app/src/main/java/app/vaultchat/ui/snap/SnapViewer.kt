@@ -24,7 +24,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -121,8 +120,9 @@ fun SnapViewerScreen(repo: SnapRepository, snapIds: List<String>, onClose: () ->
                         Box(modifier = Modifier.fillMaxSize().clickable { stage = Stage.AFTER }) {
                             if (current.kind == SnapKind.PHOTO) {
                                 // Decoded off the main thread, so opening a snap does not stutter.
-                                val bitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, showing) {
-                                    value = withContext(Dispatchers.Default) {
+                                var bitmap by remember(showing) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+                                LaunchedEffect(showing) {
+                                    bitmap = withContext(Dispatchers.Default) {
                                         BitmapFactory.decodeByteArray(current.bytes, 0, current.bytes.size)?.asImageBitmap()
                                     }
                                 }
