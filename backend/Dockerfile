@@ -41,7 +41,8 @@ COPY --from=prune /app/consents ./consents
 # Migrations are read at run time by /readyz to detect pending migrations.
 COPY --from=prune /app/prisma/migrations ./prisma/migrations
 # In-app updates: the latest uploaded APK (a volume in production; the root filesystem is read-only).
-RUN mkdir /app-updates && chown node:node /app-updates
+# Snaps (D-27): files waiting to be opened (a volume in production). Owned by node, or uploads fail.
+RUN mkdir /app-updates /snaps && chown node:node /app-updates /snaps
 USER node
 EXPOSE 3000 3001
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

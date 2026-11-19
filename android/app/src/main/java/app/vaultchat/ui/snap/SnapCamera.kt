@@ -25,6 +25,13 @@ import androidx.camera.video.VideoCapture
 import androidx.camera.video.VideoRecordEvent
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Image
+import app.vaultchat.domain.connection.Connection
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.AlertDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -97,8 +104,8 @@ private sealed interface Taken {
 @Composable
 fun SnapCameraScreen(
     repo: SnapRepository,
-    connectionId: String,
-    peerUsername: String,
+    /** The people this user is paired with; Send asks which of them get the snap (owner, 2026-11-19). */
+    loadRecipients: suspend () -> List<Connection>,
     permissionPreferences: PermissionPreferences,
     onClose: () -> Unit,
 ) {
@@ -111,11 +118,54 @@ fun SnapCameraScreen(
     var sending by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    var recipients by remember { mutableStateOf<List<Connection>>(emptyList()) }
+    LaunchedEffect(Unit) { recipients = loadRecipients() }
+    var picking by remember { mutableStateOf(false) }
 
     fun discard() {
         (taken as? Taken.Video)?.file?.delete()
         taken = null
     }
+
+    fun failureText(reason: SnapFailure) = context.getString(
+        when (reason) {
+            SnapFailure.TOO_LARGE -> R.string.snap_too_large
+            SnapFailure.UNAVAILABLE -> R.string.snap_unavailable
+            SnapFailure.NETWORK -> R.string.snap_no_network
+            else -> R.string.snap_failed
+        },
+    )
+
+    fun sendTo(chosen: List<Connection>) {
+        val item = taken ?: return
+        if (chosen.isEmpty()) return
+        picking = false
+        sending = true
+        scope.launch {
+            val (kind, bytes) = when (item) {
+                is Taken.Photo -> SnapKind.PHOTO to item.jpeg
+                is Taken.Video -> SnapKind.VIDEO to withContext(Dispatchers.IO) { item.file.readBytes() }
+            }
+            var sent = 0
+            var failure: SnapFailure? = null
+            for (person in chosen) {
+                when (val r = repo.send(person.id, kind, bytes)) {
+                    is SnapResult.Ok -> sent++
+                    is SnapResult.Failure -> failure = r.reason
+                }
+            }
+            sending = false
+            if (sent > 0) {
+                notice = context.resources.getQuantityString(R.plurals.snap_sent_to, sent, sent)
+                discard()
+                delay(1_200)
+                onClose()
+            } else {
+                notice = failureText(failure ?: SnapFailure.UNEXPECTED)
+            }
+        }
+    }
+
     DisposableEffect(Unit) { onDispose { (taken as? Taken.Video)?.file?.delete() } }
     BackHandler { if (taken != null && !sending) discard() else onClose() }
 
@@ -149,31 +199,15 @@ fun SnapCameraScreen(
                     Button(
                         enabled = !sending,
                         colors = ButtonDefaults.buttonColors(containerColor = VaultGreen.Sage, contentColor = VaultGreen.Deepest),
-                        onClick = {
-                            val item = taken ?: return@Button
-                            sending = true
-                            scope.launch {
-                                val (kind, bytes) = when (item) {
-                                    is Taken.Photo -> SnapKind.PHOTO to item.jpeg
-                                    is Taken.Video -> SnapKind.VIDEO to withContext(Dispatchers.IO) { item.file.readBytes() }
-                                }
-                                when (val r = repo.send(connectionId, kind, bytes)) {
-                                    is SnapResult.Ok -> {
-                                        notice = if (r.value > 0) context.getString(R.string.snap_sent_streak, r.value) else context.getString(R.string.snap_sent)
-                                        discard()
-                                        delay(1_200)
-                                        onClose()
-                                    }
-                                    is SnapResult.Failure -> notice = context.getString(if (r.reason == SnapFailure.TOO_LARGE) R.string.snap_too_large else R.string.snap_failed)
-                                }
-                                sending = false
-                            }
-                        },
+                        onClick = { picking = true },
                     ) {
                         if (sending) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = VaultGreen.Deepest)
-                        else Text(stringResource(R.string.snap_send, peerUsername))
+                        else Text(stringResource(R.string.snap_send_to))
                     }
                 }
+            }
+            if (picking) {
+                RecipientPicker(recipients, onSend = ::sendTo, onDismiss = { picking = false })
             }
             notice?.let {
                 Text(
@@ -334,5 +368,40 @@ internal fun LoopingVideo(file: File, modifier: Modifier = Modifier, loop: Boole
         },
         onRelease = { it.stopPlayback() },
         modifier = modifier,
+    )
+}
+
+
+/** "Send to…": the people this user is paired with, any number of them ticked (as in Snapchat). */
+@Composable
+private fun RecipientPicker(people: List<Connection>, onSend: (List<Connection>) -> Unit, onDismiss: () -> Unit) {
+    var chosen by remember { mutableStateOf(setOf<String>()) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.snap_send_to)) },
+        text = {
+            if (people.isEmpty()) {
+                Text(stringResource(R.string.snap_no_people))
+            } else {
+                Column(modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                    people.forEach { p ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().clickable { chosen = if (p.id in chosen) chosen - p.id else chosen + p.id }.padding(vertical = 6.dp),
+                        ) {
+                            Checkbox(checked = p.id in chosen, onCheckedChange = null)
+                            Text(p.peerUsername, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 8.dp).weight(1f))
+                            if (p.streak > 0) Text("\uD83D\uDD25 ${p.streak}", style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = chosen.isNotEmpty(), onClick = { onSend(people.filter { it.id in chosen }) }) {
+                Text(stringResource(R.string.snap_send_count, chosen.size))
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
     )
 }
