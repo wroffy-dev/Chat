@@ -268,7 +268,7 @@
     <string name="map_title">Map</string>
     <string name="map_me">Me</string>
     <string name="map_zoom_in">Zoom in</string>
-    <string name="map_nobody">Nobody you are connected with has shared a location yet. Each person's latest location appears here after they open Vault.</string>
+    <string name="map_nobody">Nobody you are connected with has shared a location yet. Each person\'s latest location appears here after they open Vault.</string>
     <string name="map_sharing_off">Turn on location sharing to see the Map.</string>
     <string name="map_attribution">© OpenStreetMap contributors</string>
 </resources>
