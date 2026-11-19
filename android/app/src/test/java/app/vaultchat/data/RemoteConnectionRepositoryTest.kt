@@ -86,9 +86,25 @@ class RemoteConnectionRepositoryTest {
     }
 
     @Test
-    fun `a revoked session ends the local session`() = runBlocking {
+    fun `a revoked session ends the local session once the refresh confirms it`() = runBlocking {
         backend.on("/api/v1/connections", 401, error("SESSION_REVOKED"))
+        backend.on("/api/v1/auth/refresh", 401, error("SESSION_REVOKED"))
         assertEquals(ConnResult.Failure(ConnectionFailure.SESSION_ENDED), repo.connections())
         assertNull(store.session)
+    }
+
+    @Test
+    fun `a 401 on a call that a refresh fixes keeps the user signed in (D-28)`() = runBlocking {
+        // The access token was just replaced by another request: the server answers 401, the refresh works.
+        backend.on("/api/v1/connections", 401, error("SESSION_REVOKED"))
+        backend.on(
+            "/api/v1/auth/refresh",
+            200,
+            """{"accessToken":"vca_2","accessExpiresAt":"2030-01-01T00:00:00.000Z","refreshToken":"vcr_2","user":{"id":"u1","username":"alice","mustChangePassword":false}}""",
+        )
+        backend.on("/api/v1/connections", 200, """{"items":[]}""")
+        val r = repo.connections()
+        assertTrue(r is ConnResult.Ok)
+        assertEquals("vcr_2", store.session!!.tokens.refreshToken)
     }
 }

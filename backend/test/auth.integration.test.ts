@@ -121,10 +121,11 @@ describe.skipIf(!TEST_DB_URL)("app-user authentication (PostgreSQL)", () => {
   it("rejects missing, malformed and unknown tokens", async () => {
     expect((await app.inject({ method: "GET", url: "/api/v1/me" })).json().error.code).toBe("UNAUTHENTICATED");
     expect((await me("not a token!")).statusCode).toBe(401);
-    expect((await me("vca_" + "A".repeat(43))).json().error.code).toBe("SESSION_REVOKED");
+    // Unknown access tokens send the phone to refresh; the refresh decides whether the session is over (D-28).
+    expect((await me("vca_" + "A".repeat(43))).json().error.code).toBe("TOKEN_EXPIRED");
   });
 
-  it("rotates refresh tokens and revokes the session when an old one is reused", async () => {
+  it("rotates refresh tokens, and renews from the previous one instead of logging out (D-28)", async () => {
     const s = await activeUser();
     const r1 = await app.inject({ method: "POST", url: "/api/v1/auth/refresh", payload: { refreshToken: s.refreshToken } });
     expect(r1.statusCode).toBe(200);
@@ -132,14 +133,37 @@ describe.skipIf(!TEST_DB_URL)("app-user authentication (PostgreSQL)", () => {
     expect(t1.refreshToken).not.toBe(s.refreshToken);
     expect((await me(t1.accessToken)).statusCode).toBe(200);
 
-    // The pre-rotation token shows up again: treat it as stolen and end the session.
-    const replay = await app.inject({ method: "POST", url: "/api/v1/auth/refresh", payload: { refreshToken: s.refreshToken } });
-    expect(replay.statusCode).toBe(401);
-    expect((await me(t1.accessToken)).json().error.code).toBe("SESSION_REVOKED");
-    const r2 = await app.inject({ method: "POST", url: "/api/v1/auth/refresh", payload: { refreshToken: t1.refreshToken } });
-    expect(r2.statusCode).toBe(401);
-    const events = await database.prisma.auditEvent.findMany({ where: { action: "auth.refresh_reuse_detected" } });
-    expect(events).toHaveLength(1);
+    // The phone lost the new tokens after using them (not saved), and comes back with the old refresh token.
+    const again = await app.inject({ method: "POST", url: "/api/v1/auth/refresh", payload: { refreshToken: s.refreshToken } });
+    expect(again.statusCode).toBe(200);
+    expect((await me(again.json().accessToken)).statusCode).toBe(200);
+    // The replaced access token now asks for a refresh rather than ending the session.
+    expect((await me(t1.accessToken)).json().error.code).toBe("TOKEN_EXPIRED");
+    // A token older than the previous one is refused.
+    const next = await app.inject({ method: "POST", url: "/api/v1/auth/refresh", payload: { refreshToken: again.json().refreshToken } });
+    expect(next.statusCode).toBe(200);
+    expect((await app.inject({ method: "POST", url: "/api/v1/auth/refresh", payload: { refreshToken: s.refreshToken } })).statusCode).toBe(401);
+    expect((await me(next.json().accessToken)).statusCode).toBe(200);
+  });
+
+  it("two refreshes at once with the same token both succeed", async () => {
+    const s = await activeUser();
+    const [a, b] = await Promise.all([
+      app.inject({ method: "POST", url: "/api/v1/auth/refresh", payload: { refreshToken: s.refreshToken } }),
+      app.inject({ method: "POST", url: "/api/v1/auth/refresh", payload: { refreshToken: s.refreshToken } }),
+    ]);
+    expect([a.statusCode, b.statusCode]).toEqual([200, 200]);
+  });
+
+  it("keeps sessions for a year of not opening the app and moves old 90-day limits to the new policy", async () => {
+    const s = await activeUser();
+    const row = await database.prisma.session.findFirstOrThrow({ where: { revokedAt: null }, orderBy: { createdAt: "desc" } });
+    expect(row.idleExpiresAt.getTime() - Date.now()).toBeGreaterThan(360 * 24 * 3600_000);
+    await database.prisma.session.update({ where: { id: row.id }, data: { absoluteExpiresAt: new Date(Date.now() + 24 * 3600_000) } });
+    const r = await app.inject({ method: "POST", url: "/api/v1/auth/refresh", payload: { refreshToken: s.refreshToken } });
+    expect(r.statusCode).toBe(200);
+    const after = await database.prisma.session.findUniqueOrThrow({ where: { id: row.id } });
+    expect(after.absoluteExpiresAt.getTime() - Date.now()).toBeGreaterThan(9 * 365 * 24 * 3600_000);
   });
 
   it("renews instead of logging out when a refresh answer was lost (old token again, new ones never used)", async () => {
@@ -155,10 +179,10 @@ describe.skipIf(!TEST_DB_URL)("app-user authentication (PostgreSQL)", () => {
     expect((await me(lost.json().accessToken)).statusCode).toBe(401);
     expect(await database.prisma.auditEvent.count({ where: { action: "auth.refresh_reuse_detected" } })).toBe(0);
 
-    // Once the new tokens are in use, the old token showing up again is still treated as stolen.
+    // Even after the new tokens were used, the old token renews the session rather than ending it (D-28).
     const replay = await app.inject({ method: "POST", url: "/api/v1/auth/refresh", payload: { refreshToken: s.refreshToken } });
-    expect(replay.statusCode).toBe(401);
-    expect((await me(t.accessToken)).json().error.code).toBe("SESSION_REVOKED");
+    expect(replay.statusCode).toBe(200);
+    expect((await me(replay.json().accessToken)).statusCode).toBe(200);
   });
 
   it("expires access tokens after 15 minutes but allows refresh", async () => {
@@ -172,9 +196,9 @@ describe.skipIf(!TEST_DB_URL)("app-user authentication (PostgreSQL)", () => {
     expect((await me(r.json().accessToken)).statusCode).toBe(200);
   });
 
-  it("ends the session after 30 idle days", async () => {
+  it("ends the session after a year without use (D-28)", async () => {
     const s = await activeUser();
-    clock = new Date(Date.now() + 31 * 24 * 3600_000);
+    clock = new Date(Date.now() + 366 * 24 * 3600_000);
     const r = await app.inject({ method: "POST", url: "/api/v1/auth/refresh", payload: { refreshToken: s.refreshToken } });
     expect(r.json().error.code).toBe("SESSION_REVOKED");
   });

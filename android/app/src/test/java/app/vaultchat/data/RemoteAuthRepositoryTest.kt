@@ -117,6 +117,7 @@ class RemoteAuthRepositoryTest {
         backend.on("/api/v1/auth/login", 200, tokens("vca_1", "vcr_1"))
         repo.login("alice", "pw")
         backend.on("/api/v1/me", 401, error("SESSION_REVOKED"))
+        backend.on("/api/v1/auth/refresh", 401, error("SESSION_REVOKED"))
         assertEquals(MeResult.SessionEnded, repo.me())
         assertNull(repo.currentUser())
     }

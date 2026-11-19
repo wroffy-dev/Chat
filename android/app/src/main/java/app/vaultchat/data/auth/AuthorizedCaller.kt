@@ -22,8 +22,10 @@ class AuthorizedCaller(private val api: AuthApi, private val store: TokenStore) 
     suspend fun <T> call(block: suspend (String) -> ApiResult<T>): ApiResult<T> {
         val session = load() ?: return SESSION_ENDED
         val first = block(session.tokens.accessToken)
-        if (!(first is ApiResult.HttpError && first.status == 401 && first.code == "TOKEN_EXPIRED")) {
-            if (first is ApiResult.HttpError && endsSession(first)) clear()
+        // Any 401 on an ordinary call (expired, or a token another request just replaced) is answered with a
+        // refresh; only the refresh itself may end the session (D-28: no logouts the user did not ask for).
+        if (!(first is ApiResult.HttpError && needsRefresh(first))) {
+            if (first is ApiResult.HttpError && disabled(first)) clear()
             return first
         }
 
@@ -44,7 +46,7 @@ class AuthorizedCaller(private val api: AuthApi, private val store: TokenStore) 
             }
         }
         val second = block(token)
-        if (second is ApiResult.HttpError && endsSession(second)) clear()
+        if (second is ApiResult.HttpError && disabled(second)) clear()
         return second
     }
 
@@ -77,6 +79,11 @@ class AuthorizedCaller(private val api: AuthApi, private val store: TokenStore) 
 
     companion object {
         val SESSION_ENDED = ApiResult.HttpError(401, "SESSION_REVOKED", null)
+
+        /** A 401 that a refresh can fix; a wrong password (INVALID_CREDENTIALS) is not one. */
+        fun needsRefresh(r: ApiResult.HttpError): Boolean = r.status == 401 && r.code != "INVALID_CREDENTIALS"
+
+        fun disabled(r: ApiResult.HttpError): Boolean = r.status == 403 && r.code == "ACCOUNT_DISABLED"
 
         /**
          * Whether a response means the session is over. A wrong *current password* on the

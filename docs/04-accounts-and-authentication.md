@@ -58,7 +58,7 @@ Opaque random tokens, stored only as SHA-256 hashes in the `sessions` table
 | Token | Format | Lifetime | Where the app keeps it |
 |---|---|---|---|
 | Access token | 32 random bytes, base64url, prefix `vca_` | 15 minutes | Memory + encrypted store |
-| Refresh token | 32 random bytes, base64url, prefix `vcr_` | Rotates on every use; session idle timeout 30 days, absolute lifetime 90 days | Encrypted store |
+| Refresh token | 32 random bytes, base64url, prefix `vcr_` | Rotates on every use; session idle timeout 365 days, absolute lifetime 10 years (D-28, 2026-11-19; was 30 and 90 days) | Encrypted store |
 
 - **Refresh rotation:** each `POST /auth/refresh` issues a new access + refresh pair and invalidates the
   old refresh token. The previous refresh hash is kept on the session; if a **previously used refresh
@@ -73,6 +73,11 @@ Opaque random tokens, stored only as SHA-256 hashes in the `sessions` table
   answer, e.g. a weak network or the app closed mid-request); once the new tokens are in use, the previous token
   showing up again still ends the session (`auth.refresh_reuse_detected`). Column `sessions.refresh_confirmed`
   (migration `20261102130000_session_refresh_confirmed`). This fixed users being logged out without reason.
+- **Stay signed in (D-28, 2026-11-19):** the previous refresh token is now renewed at any time while the session is
+  valid (no more `refresh_reuse` revocation), two refreshes at once both succeed, and an unknown access token answers
+  `401 TOKEN_EXPIRED` so the phone refreshes; the app ends its local session only when the refresh itself is refused.
+  Cause of the remaining logouts: a request or the live connection still holding the access token another request had
+  just replaced got `SESSION_REVOKED`, and the app signed out.
 
 ### Token storage on Android
 
