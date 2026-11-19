@@ -138,7 +138,11 @@
     <string name="chat_call_back">Call back</string>
     <string name="snap_button">Snap</string>
     <string name="snap_hint">Tap for a photo · hold for a video (up to %1$d s)</string>
-    <string name="snap_send">Send to %1$s</string>
+    <string name="snap_send_to">Send to…</string>
+    <string name="snap_send_count">Send (%1$d)</string>
+    <string name="snap_no_people">Connect with someone first (the + on the chat list).</string>
+    <string name="snap_unavailable">Snaps are not set up on the server yet.</string>
+    <string name="snap_no_network">No internet. The snap was not sent.</string>
     <string name="snap_retake">Retake</string>
     <string name="snap_sending">Sending…</string>
     <string name="snap_sent">Snap sent</string>
@@ -218,6 +222,10 @@
     <string name="home_no_matches">No chats match.</string>
     <string name="home_tap_to_chat">Tap to chat</string>
     <string name="home_yesterday">Yesterday</string>
+    <plurals name="snap_sent_to">
+        <item quantity="one">Snap sent</item>
+        <item quantity="other">Snap sent to %1$d people</item>
+    </plurals>
     <plurals name="home_new_snaps">
         <item quantity="one">📸 New snap</item>
         <item quantity="other">📸 %1$d new snaps</item>

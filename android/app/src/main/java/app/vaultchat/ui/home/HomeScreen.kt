@@ -39,6 +39,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
@@ -85,6 +89,8 @@ fun HomeScreen(
     onPasswordChangeRequired: () -> Unit,
     onOpenInbox: () -> Unit,
     onChat: (connection: Connection) -> Unit,
+    /** Swipe right on the chat list opens the snap camera (D-27, as in Snapchat). */
+    onOpenCamera: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -104,7 +110,19 @@ fun HomeScreen(
         }
     }
 
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+    // Swipe right anywhere on Home opens the snap camera (owner, 2026-11-19).
+    val swipeOpenPx = with(LocalDensity.current) { 96.dp.toPx() }
+    var swipe by remember { mutableFloatStateOf(0f) }
+    Surface(
+        modifier = Modifier.fillMaxSize().pointerInput(Unit) {
+            detectHorizontalDragGestures(
+                onDragStart = { swipe = 0f },
+                onDragEnd = { if (swipe > swipeOpenPx) onOpenCamera() },
+                onDragCancel = { swipe = 0f },
+            ) { _, dx -> swipe += dx }
+        },
+        color = MaterialTheme.colorScheme.background,
+    ) {
         Column(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
             Header(onConnect = onOpenInbox)
             UpdateBanner(updater, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))

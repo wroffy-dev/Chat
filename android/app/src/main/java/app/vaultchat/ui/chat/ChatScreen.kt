@@ -196,7 +196,6 @@ fun ChatScreen(
                             )
                         }
                     }
-                    CallButton(AppIcons.PhotoCamera, stringResource(R.string.snap_button)) { onSnap() }
                     CallButton(AppIcons.Mic, stringResource(R.string.talk_button)) { onTalk() }
                     CallButton(AppIcons.Videocam, stringResource(R.string.home_video_call)) { onCall(true) }
                     CallButton(Icons.Filled.Call, stringResource(R.string.home_voice_call)) { onCall(false) }

@@ -89,9 +89,9 @@ export class SnapService {
         cb(null, chunk);
       },
     });
-    await mkdir(dir, { recursive: true });
     const path = join(dir, `${id}.snap`);
     try {
+      await mkdir(dir, { recursive: true });
       await pipeline(body, counter, createWriteStream(path, { mode: 0o600 }));
       if (size > max) throw new AppError(413, "PAYLOAD_TOO_LARGE", "The snap is too large.");
       // A JPEG starts FF D8 FF; an MP4 has "ftyp" at byte 4.
@@ -101,7 +101,10 @@ export class SnapService {
       if (size < 256 || !valid) throw new AppError(400, "VALIDATION_FAILED", "That is not a camera photo or video.");
       await this.prisma.snap.create({ data: { id, connectionId, senderUserId: userId, recipientUserId, kind, sizeBytes: size, createdAt: now } });
     } catch (err) {
-      await rm(path, { force: true });
+      await rm(path, { force: true }).catch(() => undefined);
+      // A snaps folder the server cannot write (e.g. a volume owned by root) is a set-up problem, not the user's.
+      const code = (err as { code?: string }).code;
+      if (code === "EACCES" || code === "EPERM" || code === "EROFS" || code === "ENOSPC") throw appError(503, "SNAPS_UNAVAILABLE");
       throw err;
     }
     const streak = await this.recordStreak(connection, userId, now);

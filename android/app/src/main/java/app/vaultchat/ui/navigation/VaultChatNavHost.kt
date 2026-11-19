@@ -35,6 +35,7 @@ import app.vaultchat.ui.call.CallScreen
 import app.vaultchat.ui.snap.SnapCameraScreen
 import app.vaultchat.ui.snap.SnapViewerScreen
 import app.vaultchat.domain.snap.SnapResult
+import app.vaultchat.domain.connection.ConnResult
 import app.vaultchat.domain.realtime.RealtimeSignal
 import app.vaultchat.domain.realtime.pollWithSignals
 import app.vaultchat.ui.call.CallEntryGuard
@@ -86,9 +87,9 @@ data object ScanQrRoute
 @Serializable
 data class ChatRoute(val conversationId: String, val peerUsername: String, val connectionId: String)
 
-/** Taking a snap for one person (D-27). */
+/** Taking a snap (D-27); opened by swiping right on the chat list, the recipients are picked at Send. */
 @Serializable
-data class SnapCameraRoute(val connectionId: String, val peerUsername: String)
+data object SnapCameraRoute
 
 /** Viewing waiting snaps, oldest first; [ids] is comma-separated. */
 @Serializable
@@ -241,6 +242,7 @@ fun VaultChatNavHost(container: AppContainer) {
                 onPasswordChangeRequired = { navController.replaceAll(ChangePasswordRoute(forced = true)) },
                 onOpenInbox = { navController.navigate(InboxRoute) },
                 onChat = { c -> navController.navigate(ChatRoute(c.conversationId, c.peerUsername, c.id)) },
+                onOpenCamera = { navController.navigate(SnapCameraRoute) },
             )
         }
         composable<ChatRoute> { entry ->
@@ -281,7 +283,6 @@ fun VaultChatNavHost(container: AppContainer) {
             }
             ChatScreen(
                 onTalk = { talking = true },
-                onSnap = { navController.navigate(SnapCameraRoute(route.connectionId, route.peerUsername)) },
                 waitingSnaps = waitingSnaps.size,
                 onOpenSnaps = { if (waitingSnaps.isNotEmpty()) navController.navigate(SnapViewerRoute(waitingSnaps.joinToString(","))) },
                 viewModel = viewModel,
@@ -335,12 +336,10 @@ fun VaultChatNavHost(container: AppContainer) {
                 },
             )
         }
-        composable<SnapCameraRoute> { entry ->
-            val route = entry.toRoute<SnapCameraRoute>()
+        composable<SnapCameraRoute> {
             SnapCameraScreen(
                 repo = container.snapRepository,
-                connectionId = route.connectionId,
-                peerUsername = route.peerUsername,
+                loadRecipients = { (container.connectionRepository.connections() as? ConnResult.Ok)?.value.orEmpty() },
                 permissionPreferences = container.permissionPreferences,
                 onClose = { navController.popBackStack() },
             )
