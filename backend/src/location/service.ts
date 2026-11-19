@@ -35,6 +35,24 @@ export interface LocationReport {
   precision: LocationPrecision;
 }
 
+/** The user's own latest point, shown as "Me" on the Map. */
+export interface OwnPoint {
+  lat: number;
+  lng: number;
+  accuracyM: number;
+  capturedAt: string;
+}
+
+/** A connected person's latest point on the Map. */
+export interface ConnectionPoint {
+  connectionId: string;
+  username: string;
+  lat: number;
+  lng: number;
+  accuracyM: number;
+  capturedAt: string;
+}
+
 /** A fix may be at most this old when sent (the app sends a fresh one on each open). */
 const MAX_FIX_AGE_MS = 60 * 60_000;
 /** Phone clocks drift; a fix may claim to be this far in the future. */
@@ -105,6 +123,41 @@ export class LocationService {
       return share;
     });
     return toState(updated);
+  }
+
+  /**
+   * The Map (owner decision 2026-11-19, D-06 widened): the latest point of each person the user is connected
+   * with, for those who agreed to the current consent (which says connected people see it). Only the latest
+   * point, never the history. The asking user must be sharing too, so it is never one-sided.
+   */
+  async connectionsMap(userId: string): Promise<{ me: OwnPoint | null; people: ConnectionPoint[] }> {
+    const own = await this.prisma.locationShare.findUnique({ where: { userId } });
+    if (!own?.enabled || own.consentVersion !== LOCATION_CONSENT_VERSION) throw appError(409, "SHARING_DISABLED");
+    const me = own.latitude !== null && own.longitude !== null && own.capturedAt !== null
+      ? { lat: own.latitude, lng: own.longitude, accuracyM: own.accuracyM ?? 0, capturedAt: own.capturedAt.toISOString() }
+      : null;
+    const connections = await this.prisma.connection.findMany({
+      where: { OR: [{ userAId: userId }, { userBId: userId }] },
+      include: { userA: { select: { id: true, username: true } }, userB: { select: { id: true, username: true } } },
+      orderBy: { createdAt: "asc" },
+    });
+    const peers = connections.map((c) => ({ connectionId: c.id, peer: c.userAId === userId ? c.userB : c.userA }));
+    const shares = await this.prisma.locationShare.findMany({ where: { userId: { in: peers.map((p) => p.peer.id) } } });
+    const byUser = new Map(shares.map((s) => [s.userId, s]));
+    const people = peers.flatMap(({ connectionId, peer }) => {
+      const s = byUser.get(peer.id);
+      if (!s?.enabled || s.consentVersion !== LOCATION_CONSENT_VERSION) return [];
+      if (s.latitude === null || s.longitude === null || s.capturedAt === null) return [];
+      return [{
+        connectionId,
+        username: peer.username,
+        lat: s.latitude,
+        lng: s.longitude,
+        accuracyM: s.accuracyM ?? 0,
+        capturedAt: s.capturedAt.toISOString(),
+      }];
+    });
+    return { me, people };
   }
 
   /** Every user's sharing state for the Admin Console list (no coordinates). */

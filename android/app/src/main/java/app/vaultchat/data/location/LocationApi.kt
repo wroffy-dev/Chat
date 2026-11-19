@@ -19,6 +19,17 @@ data class LocationStateDto(
 @Serializable
 data class ConsentDto(val id: String, val version: Int, val title: String, val points: List<String>, val agree: String)
 
+/** A point on the Map: the user's own (no name) or a connected person's latest. */
+@Serializable
+data class MapPointDto(val lat: Double, val lng: Double, val accuracyM: Double, val capturedAt: String)
+
+@Serializable
+data class MapPersonDto(val connectionId: String, val username: String, val lat: Double, val lng: Double, val accuracyM: Double, val capturedAt: String)
+
+/** GET /location-sharing/connections: connected people's latest points (D-06 as widened 2026-11-19). */
+@Serializable
+data class FriendsMapDto(val me: MapPointDto?, val people: List<MapPersonDto>)
+
 @Serializable
 private data class EnableBody(val enabled: Boolean, val consentVersion: Int, val precision: String)
 
@@ -53,6 +64,9 @@ class LocationApi(private val http: HttpJson, private val caller: AuthorizedCall
             it,
         )
     }
+
+    suspend fun connectionsMap(): ApiResult<FriendsMapDto> =
+        caller.call { http.get("api/v1/location-sharing/connections", FriendsMapDto.serializer(), it) }
 
     private fun precision(precise: Boolean) = if (precise) "precise" else "approximate"
 }

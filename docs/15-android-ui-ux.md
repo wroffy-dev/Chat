@@ -11,7 +11,7 @@ where this document and the built screens differ, the plan records what exists.
 mode: mint `#DAF1DE` background, near-white cards and incoming bubbles, dark green `#163832` accents, sent
 bubbles in sage `#8EB69B`. Dark mode: `#051F20` background, `#0B2B26` cards, sage accents. The call screen is
 always `#051F20` with mint text; avatars, the QR scanner frame and the launcher icon use the same greens. Red
-stays for errors and the end-call button. This replaces the earlier monochrome look.
+stays for errors and the end-call button. This replaces the earlier monochrome look. **Layout (2026-11-19):** Snapchat-like chat list (status square, streak, camera per row, bottom bar with a round camera button) and chat (sender labels and coloured bars instead of bubbles, camera beside the text field).
 
 - Minimal, calm and professional. Material 3 (Jetpack Compose), flat surfaces, one accent colour,
   generous spacing. **No glassmorphism**, no heavy blur, gradients or decorative animation.

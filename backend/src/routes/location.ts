@@ -80,6 +80,49 @@ export async function locationRoutes(app: FastifyInstance, opts: { auth: AuthSer
     async (request) => opts.location.setSharing(authOf(request).user.id, request.body),
   );
 
+  // The Map: connected people's latest points (D-06 as widened by the owner, 2026-11-19).
+  app.get(
+    "/location-sharing/connections",
+    {
+      onRequest: user,
+      config: { rateLimit: { max: 30, timeWindow: 60_000 } },
+      schema: {
+        response: {
+          200: {
+            type: "object",
+            additionalProperties: false,
+            required: ["me", "people"],
+            properties: {
+              me: {
+                type: ["object", "null"],
+                additionalProperties: false,
+                required: ["lat", "lng", "accuracyM", "capturedAt"],
+                properties: { lat: { type: "number" }, lng: { type: "number" }, accuracyM: { type: "number" }, capturedAt: { type: "string" } },
+              },
+              people: {
+                type: "array",
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["connectionId", "username", "lat", "lng", "accuracyM", "capturedAt"],
+                  properties: {
+                    connectionId: { type: "string" },
+                    username: { type: "string" },
+                    lat: { type: "number" },
+                    lng: { type: "number" },
+                    accuracyM: { type: "number" },
+                    capturedAt: { type: "string" },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    async (request) => opts.location.connectionsMap(authOf(request).user.id),
+  );
+
   app.put<{ Body: { lat: number; lng: number; accuracyM: number; capturedAt: string; precision: LocationPrecision } }>(
     "/location-sharing/current",
     {

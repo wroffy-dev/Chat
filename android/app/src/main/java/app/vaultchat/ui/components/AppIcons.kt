@@ -30,6 +30,19 @@ object AppIcons {
         )
     }
 
+    /** Material "chat_bubble". */
+    val Chat: ImageVector by lazy {
+        icon("Chat", "M20,2H4c-1.1,0 -2,0.9 -2,2v18l4,-4h14c1.1,0 2,-0.9 2,-2V4c0,-1.1 -0.9,-2 -2,-2z")
+    }
+
+    /** Material "map". */
+    val Map: ImageVector by lazy {
+        icon(
+            "Map",
+            "M20.5,3l-0.16,0.03L15,5.1 9,3 3.36,4.9c-0.21,0.07 -0.36,0.25 -0.36,0.48V20.5c0,0.28 0.22,0.5 0.5,0.5l0.16,-0.03L9,18.9l6,2.1 5.64,-1.9c0.21,-0.07 0.36,-0.25 0.36,-0.48V3.5c0,-0.28 -0.22,-0.5 -0.5,-0.5zM15,19l-6,-2.11V5l6,2.11V19z",
+        )
+    }
+
     val FlipCamera: ImageVector by lazy {
         icon(
             "FlipCamera",

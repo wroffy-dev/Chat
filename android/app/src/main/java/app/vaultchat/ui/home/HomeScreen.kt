@@ -39,6 +39,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.foundation.layout.width
+import app.vaultchat.ui.components.AppIcons
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.border
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.input.pointer.pointerInput
@@ -91,6 +95,10 @@ fun HomeScreen(
     onChat: (connection: Connection) -> Unit,
     /** Swipe right on the chat list opens the snap camera (D-27, as in Snapchat). */
     onOpenCamera: () -> Unit = {},
+    /** The camera button on a chat row: a snap for that person. */
+    onSnapTo: (Connection) -> Unit = {},
+    /** The Map tab: connected people's latest locations (D-06 as widened 2026-11-19). */
+    onOpenMap: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -150,8 +158,9 @@ fun HomeScreen(
             } else {
                 SearchField(state.query, viewModel::setQuery)
                 FilterRow(state.filter, unread = state.chats.count { it.unreadCount > 0 }, onSelect = viewModel::setFilter)
-                ChatList(state.visibleChats, onChat, modifier = Modifier.weight(1f))
+                ChatList(state.visibleChats, onChat, onSnap = onSnapTo, modifier = Modifier.weight(1f))
             }
+            VaultBottomBar(selected = BottomTab.CHAT, onChat = {}, onCamera = onOpenCamera, onMap = onOpenMap)
         }
     }
 }
@@ -306,7 +315,7 @@ private fun Pill(label: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ChatList(chats: List<Connection>, onChat: (Connection) -> Unit, modifier: Modifier = Modifier) {
+private fun ChatList(chats: List<Connection>, onChat: (Connection) -> Unit, onSnap: (Connection) -> Unit, modifier: Modifier = Modifier) {
     if (chats.isEmpty()) {
         Box(modifier = modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.TopCenter) {
             Text(stringResource(R.string.home_no_matches), color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -314,62 +323,69 @@ private fun ChatList(chats: List<Connection>, onChat: (Connection) -> Unit, modi
         return
     }
     LazyColumn(modifier = modifier.fillMaxWidth(), contentPadding = PaddingValues(vertical = 4.dp)) {
-        items(chats, key = { it.id }) { chat -> ChatRow(chat) { onChat(chat) } }
+        items(chats, key = { it.id }) { chat ->
+            ChatRow(chat, onClick = { onChat(chat) }, onSnap = { onSnap(chat) })
+            HorizontalDivider(modifier = Modifier.padding(start = 76.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+        }
     }
 }
 
+/**
+ * A chat-list row in Snapchat's layout (owner's reference, 2026-11-19): name, a status line with a small
+ * coloured square ("New Snap", "New Chat", or the last activity), the 🔥 streak, and a camera button that
+ * opens the snap camera for this person.
+ */
 @Composable
-private fun ChatRow(chat: Connection, onClick: () -> Unit) {
+private fun ChatRow(chat: Connection, onClick: () -> Unit, onSnap: () -> Unit) {
     val colors = MaterialTheme.colorScheme
+    val snap = chat.pendingSnaps > 0
+    val unread = chat.unreadCount > 0
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 10.dp),
+            .padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        InitialsAvatar(chat.peerUsername)
+        InitialsAvatar(chat.peerUsername, size = 48.dp)
         Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(chat.peerUsername, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                // Snap streak (D-27): days in a row on which both sent a snap.
-                if (chat.streak > 0) Text("  \uD83D\uDD25 ${chat.streak}", style = MaterialTheme.typography.labelLarge)
-            }
             Text(
-                if (chat.pendingSnaps > 0) {
-                    pluralStringResource(R.plurals.home_new_snaps, chat.pendingSnaps, chat.pendingSnaps)
-                } else if (chat.unreadCount > 0) {
-                    pluralStringResource(R.plurals.home_new_messages, chat.unreadCount, chat.unreadCount)
-                } else {
-                    stringResource(R.string.home_tap_to_chat)
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = if (chat.pendingSnaps > 0) colors.primary else colors.onSurfaceVariant,
-                fontWeight = if (chat.unreadCount > 0 || chat.pendingSnaps > 0) FontWeight.Medium else FontWeight.Normal,
+                chat.peerUsername,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = if (snap || unread) FontWeight.Bold else FontWeight.Medium,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
-        }
-        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            chat.lastMessageAtEpochMs?.let {
-                Text(relativeTime(it), style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
-            }
-            if (chat.unreadCount > 0) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Snapchat's status square: filled for something new, an outline otherwise.
+                val mark = if (snap) colors.primary else colors.secondary
                 Box(
-                    modifier = Modifier.defaultMinSize(minWidth = 20.dp, minHeight = 20.dp).background(colors.primary, CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        if (chat.unreadCount > 99) "99+" else chat.unreadCount.toString(),
-                        color = colors.onPrimary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(horizontal = 5.dp),
-                    )
+                    modifier = Modifier
+                        .size(10.dp)
+                        .then(if (snap || unread) Modifier.background(mark, RoundedCornerShape(2.dp)) else Modifier.border(1.5.dp, mark, RoundedCornerShape(2.dp))),
+                )
+                Spacer(Modifier.width(6.dp))
+                val status = when {
+                    snap -> pluralStringResource(R.plurals.home_new_snaps, chat.pendingSnaps, chat.pendingSnaps)
+                    unread -> pluralStringResource(R.plurals.home_new_messages, chat.unreadCount, chat.unreadCount)
+                    else -> stringResource(R.string.home_tap_to_chat)
                 }
-            } else {
-                Spacer(Modifier.height(20.dp))
+                val time = chat.lastMessageAtEpochMs?.let { " · " + relativeTime(it) }.orEmpty()
+                Text(
+                    status + time,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (snap || unread) colors.onSurface else colors.onSurfaceVariant,
+                    fontWeight = if (snap || unread) FontWeight.SemiBold else FontWeight.Normal,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
+        }
+        // Snap streak (D-27): days in a row on which both sent a snap.
+        if (chat.streak > 0) Text("${chat.streak}\uD83D\uDD25", style = MaterialTheme.typography.labelLarge)
+        IconButton(onClick = onSnap) {
+            Icon(AppIcons.PhotoCamera, contentDescription = stringResource(R.string.snap_button), tint = colors.onSurfaceVariant)
         }
     }
 }
