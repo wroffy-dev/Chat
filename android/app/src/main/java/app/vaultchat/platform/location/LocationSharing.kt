@@ -74,6 +74,10 @@ class LocationSharing(
 
     fun hasPermission(): Boolean = granted(Manifest.permission.ACCESS_FINE_LOCATION) || granted(Manifest.permission.ACCESS_COARSE_LOCATION)
 
+    /** "Allow all the time": needed to read the position while Vault is closed (Android 10 and later). */
+    fun hasBackgroundPermission(): Boolean =
+        hasPermission() && (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || granted(Manifest.permission.ACCESS_BACKGROUND_LOCATION))
+
     private fun precise(): Boolean = granted(Manifest.permission.ACCESS_FINE_LOCATION)
 
     private fun granted(permission: String) = ContextCompat.checkSelfPermission(appContext, permission) == PackageManager.PERMISSION_GRANTED
@@ -92,12 +96,28 @@ class LocationSharing(
         recheck()
         scope.launch {
             lock.withLock { syncAndSend() }
+            // Background updates run only while sharing is on and Android allows it all the time.
+            if (_state.value.block == LocationBlock.NONE && hasBackgroundPermission()) {
+                BackgroundLocation.schedule(appContext)
+            } else {
+                BackgroundLocation.cancel(appContext)
+            }
             // No position yet (e.g. GPS still searching): one more try a little later.
             if (_state.value.unavailable) {
                 delay(RETRY_MS)
                 lock.withLock { if (_state.value.block == LocationBlock.NONE) send() }
             }
         }
+    }
+
+    /**
+     * One update while the app is closed (from [BackgroundLocationWorker], about every 15 minutes): only for a
+     * signed-in user whose sharing is on, with "Allow all the time" and the phone's location on.
+     */
+    suspend fun backgroundUpdate() {
+        if (currentUserId() == null || cachedSharingOn() != true) return
+        if (!hasBackgroundPermission() || !deviceLocationOn()) return
+        lock.withLock { send() }
     }
 
     /** The user agreed on the consent screen (permission already granted). */

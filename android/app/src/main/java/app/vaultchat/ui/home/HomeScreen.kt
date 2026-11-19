@@ -1,6 +1,10 @@
 package app.vaultchat.ui.home
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
@@ -138,6 +142,7 @@ fun HomeScreen(
             AskBatteryExemptionOnce()
             AskNotificationPermissionOnce()
             AskFullScreenCallsOnce()
+            AskBackgroundLocation()
             if (state.offline) {
                 StatusBanner(
                     kind = BannerKind.WARNING,
@@ -266,6 +271,44 @@ private fun AskFullScreenCallsOnce() {
         dismissButton = {
             TextButton(onClick = { prefs.markFullScreenCallsAsked(); show = false }) { Text(stringResource(R.string.full_screen_calls_later)) }
         },
+    )
+}
+
+/**
+ * Asks for "Allow all the time" so the Map stays current while Vault is closed (owner, 2026-11-19; D-06).
+ * Not required to use the app; asked again at most once a day until allowed.
+ */
+@Composable
+private fun AskBackgroundLocation() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+    val context = LocalContext.current
+    val sharing = (context.applicationContext as VaultChatApplication).container.locationSharing
+    val prefs = remember { context.getSharedPreferences("location_sharing", android.content.Context.MODE_PRIVATE) }
+    val dayMs = 24 * 60 * 60_000L
+    var show by remember {
+        mutableStateOf(
+            sharing.hasPermission() && !sharing.hasBackgroundPermission() &&
+                System.currentTimeMillis() - prefs.getLong("background_asked_at", 0L) > dayMs,
+        )
+    }
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { sharing.onAppOpened() }
+    if (!show) return
+    fun asked() {
+        prefs.edit().putLong("background_asked_at", System.currentTimeMillis()).apply()
+        show = false
+    }
+    AlertDialog(
+        onDismissRequest = { asked() },
+        title = { Text(stringResource(R.string.background_location_title)) },
+        text = { Text(stringResource(R.string.background_location_body)) },
+        confirmButton = {
+            TextButton(onClick = {
+                asked()
+                // Android 11 and later open the app's location settings, where "Allow all the time" is chosen.
+                launcher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+            }) { Text(stringResource(R.string.background_location_allow)) }
+        },
+        dismissButton = { TextButton(onClick = { asked() }) { Text(stringResource(R.string.full_screen_calls_later)) } },
     )
 }
 
