@@ -36,12 +36,13 @@ decisions there are either recorded as decided or still open; never decide an op
   is a separate operational identity, not an app user.
 - Chat deletion follows decisions D-01 (option D) and D-02 (60 s lease, 24 h backstop) in docs/17 — do not change them without the owner.
 - Location sharing is **approved with changes** (D-06, 2026-11-02): sent when the
-  app is opened (never in the background), required to use the app; the last 10 points are kept and shown to the
+  app is opened, and since 2026-11-19 (owner, Snap Map style) about every 15 minutes in the background when the user
+  allows "Allow all the time" (not required); required to use the app; the last 10 points are kept and shown to the
   administrator on a map (owner, 2026-11-03). Since 2026-11-19 (owner) the app's Map tab also shows each connected
-  person's latest point (only the latest, consent version 3) to the people they are paired with. The Home line and the ⋮ menu (with "Turn off") were removed by the owner on 2026-11-02, so the
+  person's latest point (only the latest; consent version 4 covers this and the background updates) to the people they are paired with. The Home line and the ⋮ menu (with "Turn off") were removed by the owner on 2026-11-02, so the
   app has no in-app switch; sharing stops only by revoking Android's permission or switching the phone's location off
   (which blocks the app). Do not
-  widen it further (background tracking, a longer history, sharing beyond connected people) without the owner.
+  widen it further (more often than every 15 minutes, a longer history, sharing beyond connected people) without the owner.
 - Do not claim end-to-end encryption, guaranteed screenshot prevention, or guaranteed deletion. (Chats set
   `FLAG_SECURE` per D-23, which stops ordinary screenshots and recordings, not another camera or a rooted phone.)
 - Do not claim the VPS supports N simultaneous calls or 1080p without real-device test results.

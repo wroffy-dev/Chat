@@ -4,6 +4,8 @@
     <!-- Location shared with the administrator when the app is opened (D-06); never in the background. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Snap Map-style updates while the app is closed (owner, 2026-11-19; D-06). -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Turns the screen on when a call rings while Vault is open with the screen off (MainActivity). -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />

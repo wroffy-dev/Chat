@@ -36,7 +36,8 @@ enum class BottomTab { CHAT, CAMERA, MAP }
 @Composable
 fun VaultBottomBar(selected: BottomTab, onChat: () -> Unit, onCamera: () -> Unit, onMap: () -> Unit) {
     val colors = MaterialTheme.colorScheme
-    Surface(color = colors.surface, shadowElevation = 6.dp) {
+    // Same light green as the screen, no white strip or shadow (owner, 2026-11-19).
+    Surface(color = colors.background) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceBetween,

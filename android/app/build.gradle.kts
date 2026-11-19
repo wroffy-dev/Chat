@@ -156,6 +156,8 @@ androidComponents {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
+    // Location every ~15 minutes in the background (D-06 as changed by the owner, 2026-11-19).
+    implementation(libs.androidx.work.runtime)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)

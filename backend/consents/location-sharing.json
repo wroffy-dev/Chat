@@ -1,9 +1,9 @@
 {
   "id": "location-sharing",
-  "version": 3,
+  "version": 4,
   "title": "Share your location to use Vault",
   "points": [
-    "Vault sends your location each time you open the app. Nothing is sent while the app is closed.",
+    "Vault sends your location when you open the app and, if you choose \"Allow all the time\", about every 15 minutes while it is closed.",
     "The people you are connected with in Vault can see your latest location on the Map.",
     "The administrator can see your last 10 locations on a map. Older ones are deleted automatically.",
     "Nobody else can see your location.",

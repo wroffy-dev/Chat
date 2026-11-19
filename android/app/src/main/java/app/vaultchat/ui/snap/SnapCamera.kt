@@ -13,6 +13,7 @@ import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
+import androidx.camera.core.MirrorMode
 import androidx.camera.core.Preview
 import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.camera.core.resolutionselector.ResolutionSelector
@@ -253,7 +254,8 @@ private fun CaptureView(
             .build()
     }
     val videoCapture = remember {
-        VideoCapture.withOutput(
+        // Front camera videos mirrored like the preview (owner, 2026-11-19).
+        VideoCapture.Builder(
             Recorder.Builder()
                 // 1080p where the phone can (720p, then 480p otherwise). 12 Mbps keeps a 7 s video near 11 MB,
                 // under the server's 20 MB limit.
@@ -265,7 +267,7 @@ private fun CaptureView(
                 )
                 .setTargetVideoEncodingBitRate(VIDEO_BITRATE)
                 .build(),
-        )
+        ).setMirrorMode(MirrorMode.MIRROR_MODE_ON_FRONT_ONLY).build()
     }
     var recording by remember { mutableStateOf<Recording?>(null) }
     var secondsLeft by remember { mutableIntStateOf(SnapRules.MAX_VIDEO_SECONDS) }
@@ -337,7 +339,7 @@ private fun CaptureView(
                                         val raw = image.toBitmap()
                                         image.close()
                                         scope.launch {
-                                            val photo = withContext(Dispatchers.Default) { toUprightJpeg(raw, rotation) }
+                                            val photo = withContext(Dispatchers.Default) { toUprightJpeg(raw, rotation, mirror = front) }
                                             onPhoto(photo)
                                         }
                                     }
@@ -366,12 +368,14 @@ private const val PHOTO_LONG_SIDE = 2560
 private const val PHOTO_MAX_BYTES = 5_500_000
 
 /** Turns the camera frame upright and makes a JPEG of at most [PHOTO_LONG_SIDE] px on the long side. */
-private fun toUprightJpeg(raw: Bitmap, rotation: Int): Taken.Photo {
+private fun toUprightJpeg(raw: Bitmap, rotation: Int, mirror: Boolean): Taken.Photo {
     val longSide = maxOf(raw.width, raw.height)
     val scale = if (longSide > PHOTO_LONG_SIDE) PHOTO_LONG_SIDE.toFloat() / longSide else 1f
     val matrix = Matrix().apply {
         postScale(scale, scale)
         postRotate(rotation.toFloat())
+        // A front-camera photo comes out as the preview showed it (mirrored), as in Snapchat (owner, 2026-11-19).
+        if (mirror) postScale(-1f, 1f)
     }
     val upright = Bitmap.createBitmap(raw, 0, 0, raw.width, raw.height, matrix, true)
     // High JPEG quality; lowered step by step only if a very detailed photo would pass the server's limit.
