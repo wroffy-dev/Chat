@@ -57,9 +57,12 @@ services:
       # secret VAULTCHAT_APP_UPLOAD_TOKEN); unset = uploads refused.
       APP_UPDATES_DIR: /app-updates
       APP_UPLOAD_TOKEN: ${APP_UPLOAD_TOKEN:-}
+      # Snaps (D-27): files wait here until opened (then deleted) or for at most 24 h. Not backed up.
+      SNAPS_DIR: /snaps
     volumes:
       - vaultchat-backups:/backups:ro
       - vaultchat-app-updates:/app-updates
+      - vaultchat-snaps:/snaps
       # Secret files placed on the VPS by hand (never in git), readable by the container's user
       # (uid 1000): chown 1000 <file> && chmod 400 <file>. Empty directory = push disabled.
       - /opt/vaultchat/secrets:/run/secrets/vaultchat:ro
@@ -169,6 +172,7 @@ services:
 volumes:
   vaultchat-backups:
   vaultchat-app-updates:
+  vaultchat-snaps:
 
 networks:
   # Coolify's shared network, where its PostgreSQL resource lives (created by Coolify; `docker

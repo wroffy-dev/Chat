@@ -58,6 +58,8 @@ const envSchema = z.object({
   // build workflow uploads with. Without both, the app offers no download.
   APP_UPDATES_DIR: z.string().min(1).optional(),
   APP_UPLOAD_TOKEN: z.string().min(32, "must be at least 32 characters").optional(),
+  // Snaps (D-27): a writable directory for snap files waiting to be opened. Without it, snaps return 503.
+  SNAPS_DIR: z.string().min(1).optional(),
 }).superRefine((env, ctx) => {
   const livekit = [env.LIVEKIT_PUBLIC_URL, env.LIVEKIT_API_URL, env.LIVEKIT_API_KEY, env.LIVEKIT_API_SECRET];
   if (livekit.some(Boolean) && !livekit.every(Boolean)) {

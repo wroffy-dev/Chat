@@ -23,6 +23,7 @@ export type ErrorCode =
   | "PEER_BUSY"
   | "CALL_NOT_ACTIVE"
   | "MEDIA_UNAVAILABLE"
+  | "SNAPS_UNAVAILABLE"
   | "CONVERSATION_CLEARED"
   | "LEASE_EXPIRED"
   | "MESSAGE_TOO_LONG"
@@ -90,6 +91,7 @@ export const DEFAULT_MESSAGES: Record<ErrorCode, string> = {
   PEER_BUSY: "They are on another call. Try again later.",
   CALL_NOT_ACTIVE: "This call is no longer ringing or active.",
   MEDIA_UNAVAILABLE: "Calling is temporarily unavailable.",
+  SNAPS_UNAVAILABLE: "Snaps are not available on this server.",
   CONVERSATION_CLEARED: "The chat was cleared. Your message was not sent.",
   LEASE_EXPIRED: "You left the chat. Open it again to continue.",
   MESSAGE_TOO_LONG: "The message is too long.",

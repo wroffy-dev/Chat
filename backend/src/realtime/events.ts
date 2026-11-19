@@ -8,6 +8,8 @@ export type RealtimeEvent =
   /** The other person is typing right now (sent to them only; nothing is stored). */
   | { type: "chat.typing"; conversationId: string }
   | { type: "call.changed"; callId: string }
+  /** A snap was sent to or opened by this user in this connection (D-27). */
+  | { type: "snap.changed"; connectionId: string }
   | { type: "connection.changed"; requestId: string };
 
 export interface EventPublisher {

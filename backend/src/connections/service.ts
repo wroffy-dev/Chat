@@ -1,3 +1,4 @@
+import type { SnapService } from "../snaps/service.js";
 import type { PrismaClient, Prisma } from "../generated/prisma/client.js";
 import { audit } from "../auth/audit.js";
 import { generateToken, hashToken } from "../auth/tokens.js";
@@ -40,6 +41,10 @@ export interface ConnectionView {
 export interface ConnectionSummary extends ConnectionView {
   unreadCount: number;
   lastMessageAt: Date | null;
+  /** Snap streak in days (D-27); 0 when none or a day was missed. */
+  streak: number;
+  /** Snaps from the peer waiting to be opened. */
+  pendingSnaps: number;
 }
 
 /** Fixed-window per-user counter, in memory (single backend instance, docs/02 ADR-07). */
@@ -66,6 +71,9 @@ export function qrPayload(token: string): string {
 }
 
 export class ConnectionService {
+  /** Snaps (D-27), for the streak and waiting snaps on the chat list; set by the server. */
+  snaps: SnapService | null = null;
+
   private readonly qrMinute = new UserRateLimiter(QR_POLICY.qrPerMinute, MINUTE);
   private readonly qrHour = new UserRateLimiter(QR_POLICY.qrPerHour, 60 * MINUTE);
   private readonly redeemMinute = new UserRateLimiter(QR_POLICY.redeemPerMinute, MINUTE);
@@ -114,9 +122,11 @@ export class ConnectionService {
       WHERE p.user_id = ${userId}::uuid AND p.conversation_id = ANY(${ids}::uuid[])
       GROUP BY p.conversation_id`;
     const byId = new Map(stats.map((s) => [s.conversation_id, s]));
+    const streaks = (await this.snaps?.streaks(views.map((v) => v.id))) ?? new Map<string, number>();
+    const pending = (await this.snaps?.pendingCounts(userId)) ?? new Map<string, number>();
     return views.map((v) => {
       const s = byId.get(v.conversationId);
-      return { ...v, unreadCount: Number(s?.unread ?? 0), lastMessageAt: s?.last_at ?? null };
+      return { ...v, unreadCount: Number(s?.unread ?? 0), lastMessageAt: s?.last_at ?? null, streak: streaks.get(v.id) ?? 0, pendingSnaps: pending.get(v.id) ?? 0 };
     });
   }
 

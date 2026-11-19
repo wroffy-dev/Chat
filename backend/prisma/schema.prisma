@@ -46,6 +46,8 @@ model User {
   connectionsAsB             Connection[]              @relation("ConnectionB")
   callsMade                  Call[]                    @relation("CallCaller")
   callsReceived              Call[]                    @relation("CallCallee")
+  snapsSent                  Snap[]                    @relation("SnapSender")
+  snapsReceived              Snap[]                    @relation("SnapRecipient")
   callDiagnostics            CallDiagnostic[]
   conversationParticipants   ConversationParticipant[]
   sentMessages               Message[]
@@ -185,6 +187,8 @@ model Connection {
   fromRequest  ConnectionRequest? @relation(fields: [createdFromRequestId], references: [id], onDelete: SetNull)
   calls        Call[]
   conversation Conversation?
+  snaps        Snap[]
+  snapStreak   SnapStreak?
 
   @@unique([userAId, userBId])
   @@map("connections")
@@ -352,4 +356,40 @@ model LocationPoint {
 
   @@index([userId, capturedAt])
   @@map("location_points")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Snaps and streaks (D-27, 2026-11-19). The media file lives in SNAPS_DIR, never in the database.
+// ---------------------------------------------------------------------------------------------
+
+model Snap {
+  id              String   @id @default(uuid()) @db.Uuid
+  connectionId    String   @map("connection_id") @db.Uuid
+  senderUserId    String   @map("sender_user_id") @db.Uuid
+  recipientUserId String   @map("recipient_user_id") @db.Uuid
+  /// "photo" | "video" (CHECK in SQL)
+  kind            String
+  sizeBytes       Int      @map("size_bytes")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  connection Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  sender     User       @relation("SnapSender", fields: [senderUserId], references: [id], onDelete: Cascade)
+  recipient  User       @relation("SnapRecipient", fields: [recipientUserId], references: [id], onDelete: Cascade)
+
+  @@index([recipientUserId])
+  @@index([createdAt])
+  @@map("snaps")
+}
+
+model SnapStreak {
+  connectionId  String  @id @map("connection_id") @db.Uuid
+  count         Int     @default(0)
+  /// India-time day (YYYY-MM-DD) on which both last sent a snap.
+  lastMutualDay String? @map("last_mutual_day")
+  userADay      String? @map("user_a_day")
+  userBDay      String? @map("user_b_day")
+
+  connection Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@map("snap_streaks")
 }
