@@ -33,6 +33,11 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -279,6 +284,15 @@ fun ChatScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
+                    // Snapchat's camera button beside the text field: a snap for this person.
+                    FilledIconButton(
+                        onClick = onSnap,
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                        ),
+                        modifier = Modifier.size(44.dp),
+                    ) { Icon(AppIcons.PhotoCamera, contentDescription = stringResource(R.string.snap_button)) }
                     PrivateTextInput(
                         value = draft,
                         onValueChange = {
@@ -406,7 +420,10 @@ private fun MessageList(
             val onThis = reactions[m.id].orEmpty()
             val quoted = m.replyToId?.let { id -> messages.find { it.id == id } }
             var picking by remember { mutableStateOf(false) }
-            Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
+            val index = messages.indexOf(m)
+            val firstOfRun = index <= 0 || messages[index - 1].senderId != m.senderId || messages[index - 1].kind == MessageKind.MISSED_CALL
+            Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
+                if (firstOfRun) SenderLabel(if (mine) stringResource(R.string.chat_me) else peerUsername, mine)
                 if (quoted != null) {
                     QuotedMessage(
                         who = if (quoted.senderId == myUserId) stringResource(R.string.chat_you) else peerUsername,
@@ -441,7 +458,7 @@ private fun MessageList(
             }
         }
         items(outgoing, key = { it.clientMessageId }) { o ->
-            Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
+            Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
                 Bubble(o.text, mine = true, faded = true)
                 if (o.status == OutgoingStatus.SENDING) {
                     Text(stringResource(R.string.chat_sending), style = MaterialTheme.typography.labelSmall)
@@ -544,19 +561,34 @@ private fun Bubble(text: String, mine: Boolean, faded: Boolean = false, onLongPr
         )
         return
     }
-    // Mine in the palette's sage green, theirs near-white (owner's green design, 2026-11-19).
-    val bubble = if (mine) colors.primaryContainer else colors.surface
-    val ink = if (mine) colors.onPrimaryContainer else colors.onSurface
+    // Snapchat's layout (owner's reference, 2026-11-19): no bubbles; each message sits beside a thin coloured
+    // bar, dark green for mine and sage for theirs, under the sender's name when the sender changes.
+    Row(
+        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min).then(press).padding(vertical = 1.dp),
+    ) {
+        Box(modifier = Modifier.width(2.dp).fillMaxHeight().background(senderColor(mine)))
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyLarge,
+            color = colors.onSurface.copy(alpha = if (faded) 0.6f else 1f),
+            modifier = Modifier.padding(start = 10.dp, top = 2.dp, bottom = 2.dp),
+        )
+    }
+}
+
+/** The colour that marks a sender: dark green for this user, sage for the other person. */
+@Composable
+private fun senderColor(mine: Boolean) = if (mine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+
+/** "ME" or the other person's name above a run of their messages, as in Snapchat. */
+@Composable
+private fun SenderLabel(name: String, mine: Boolean) {
     Text(
-        text,
-        style = MaterialTheme.typography.bodyMedium,
-        color = ink.copy(alpha = if (faded) 0.6f else 1f),
-        modifier = Modifier
-            .widthIn(max = 290.dp)
-            .clip(shape)
-            .then(press)
-            .background(bubble, shape)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+        name.uppercase(),
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.Bold,
+        color = senderColor(mine),
+        modifier = Modifier.padding(top = 6.dp, bottom = 2.dp),
     )
 }
 

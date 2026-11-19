@@ -108,6 +108,8 @@ fun SnapCameraScreen(
     loadRecipients: suspend () -> List<Connection>,
     permissionPreferences: PermissionPreferences,
     onClose: () -> Unit,
+    /** Connection ticked in advance (camera opened from a person's chat or row). */
+    preselect: String? = null,
 ) {
     val context = LocalContext.current
     val camera = rememberPermissionRequest(AppPermission.CAMERA, permissionPreferences)
@@ -207,7 +209,7 @@ fun SnapCameraScreen(
                 }
             }
             if (picking) {
-                RecipientPicker(recipients, onSend = ::sendTo, onDismiss = { picking = false })
+                RecipientPicker(recipients, preselect, onSend = ::sendTo, onDismiss = { picking = false })
             }
             notice?.let {
                 Text(
@@ -374,8 +376,8 @@ internal fun LoopingVideo(file: File, modifier: Modifier = Modifier, loop: Boole
 
 /** "Send to…": the people this user is paired with, any number of them ticked (as in Snapchat). */
 @Composable
-private fun RecipientPicker(people: List<Connection>, onSend: (List<Connection>) -> Unit, onDismiss: () -> Unit) {
-    var chosen by remember { mutableStateOf(setOf<String>()) }
+private fun RecipientPicker(people: List<Connection>, preselect: String?, onSend: (List<Connection>) -> Unit, onDismiss: () -> Unit) {
+    var chosen by remember { mutableStateOf(setOfNotNull(preselect)) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.snap_send_to)) },

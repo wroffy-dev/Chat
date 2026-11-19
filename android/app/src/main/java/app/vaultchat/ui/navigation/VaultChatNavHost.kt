@@ -89,7 +89,10 @@ data class ChatRoute(val conversationId: String, val peerUsername: String, val c
 
 /** Taking a snap (D-27); opened by swiping right on the chat list, the recipients are picked at Send. */
 @Serializable
-data object SnapCameraRoute
+data class SnapCameraRoute(
+    /** Ticked in the "Send to…" list when the camera was opened from that person's row or chat. */
+    val preselect: String? = null,
+)
 
 /** Viewing waiting snaps, oldest first; [ids] is comma-separated. */
 @Serializable
@@ -242,7 +245,8 @@ fun VaultChatNavHost(container: AppContainer) {
                 onPasswordChangeRequired = { navController.replaceAll(ChangePasswordRoute(forced = true)) },
                 onOpenInbox = { navController.navigate(InboxRoute) },
                 onChat = { c -> navController.navigate(ChatRoute(c.conversationId, c.peerUsername, c.id)) },
-                onOpenCamera = { navController.navigate(SnapCameraRoute) },
+                onOpenCamera = { navController.navigate(SnapCameraRoute()) },
+                onSnapTo = { c -> navController.navigate(SnapCameraRoute(c.id)) },
             )
         }
         composable<ChatRoute> { entry ->
@@ -283,6 +287,7 @@ fun VaultChatNavHost(container: AppContainer) {
             }
             ChatScreen(
                 onTalk = { talking = true },
+                onSnap = { navController.navigate(SnapCameraRoute(route.connectionId)) },
                 waitingSnaps = waitingSnaps.size,
                 onOpenSnaps = { if (waitingSnaps.isNotEmpty()) navController.navigate(SnapViewerRoute(waitingSnaps.joinToString(","))) },
                 viewModel = viewModel,
@@ -336,8 +341,9 @@ fun VaultChatNavHost(container: AppContainer) {
                 },
             )
         }
-        composable<SnapCameraRoute> {
+        composable<SnapCameraRoute> { entry ->
             SnapCameraScreen(
+                preselect = entry.toRoute<SnapCameraRoute>().preselect,
                 repo = container.snapRepository,
                 loadRecipients = { (container.connectionRepository.connections() as? ConnResult.Ok)?.value.orEmpty() },
                 permissionPreferences = container.permissionPreferences,
