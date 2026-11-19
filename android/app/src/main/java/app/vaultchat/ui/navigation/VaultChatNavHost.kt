@@ -33,6 +33,7 @@ import app.vaultchat.domain.chat.flushPendingLeave
 import app.vaultchat.ui.about.UpgradeRequiredScreen
 import app.vaultchat.ui.call.CallScreen
 import app.vaultchat.ui.snap.SnapCameraScreen
+import app.vaultchat.ui.map.MapScreen
 import app.vaultchat.ui.snap.SnapViewerScreen
 import app.vaultchat.domain.snap.SnapResult
 import app.vaultchat.domain.connection.ConnResult
@@ -93,6 +94,10 @@ data class SnapCameraRoute(
     /** Ticked in the "Send to…" list when the camera was opened from that person's row or chat. */
     val preselect: String? = null,
 )
+
+/** The Map tab: connected people's latest locations (D-06 as widened by the owner, 2026-11-19). */
+@Serializable
+data object MapRoute
 
 /** Viewing waiting snaps, oldest first; [ids] is comma-separated. */
 @Serializable
@@ -247,6 +252,7 @@ fun VaultChatNavHost(container: AppContainer) {
                 onChat = { c -> navController.navigate(ChatRoute(c.conversationId, c.peerUsername, c.id)) },
                 onOpenCamera = { navController.navigate(SnapCameraRoute()) },
                 onSnapTo = { c -> navController.navigate(SnapCameraRoute(c.id)) },
+                onOpenMap = { navController.navigate(MapRoute) { launchSingleTop = true } },
             )
         }
         composable<ChatRoute> { entry ->
@@ -339,6 +345,13 @@ fun VaultChatNavHost(container: AppContainer) {
                         navController.navigate(CallRoute(video = route.video, peerUsername = route.peerUsername, connectionId = connectionId))
                     }
                 },
+            )
+        }
+        composable<MapRoute> {
+            MapScreen(
+                api = container.locationApi,
+                onChat = { navController.popBackStack() },
+                onCamera = { navController.navigate(SnapCameraRoute()) },
             )
         }
         composable<SnapCameraRoute> { entry ->

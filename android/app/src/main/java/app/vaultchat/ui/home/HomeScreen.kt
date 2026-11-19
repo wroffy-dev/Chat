@@ -97,6 +97,8 @@ fun HomeScreen(
     onOpenCamera: () -> Unit = {},
     /** The camera button on a chat row: a snap for that person. */
     onSnapTo: (Connection) -> Unit = {},
+    /** The Map tab: connected people's latest locations (D-06 as widened 2026-11-19). */
+    onOpenMap: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -158,7 +160,7 @@ fun HomeScreen(
                 FilterRow(state.filter, unread = state.chats.count { it.unreadCount > 0 }, onSelect = viewModel::setFilter)
                 ChatList(state.visibleChats, onChat, onSnap = onSnapTo, modifier = Modifier.weight(1f))
             }
-            BottomBar(onCamera = onOpenCamera, onConnect = onOpenInbox)
+            VaultBottomBar(selected = BottomTab.CHAT, onChat = {}, onCamera = onOpenCamera, onMap = onOpenMap)
         }
     }
 }
@@ -384,35 +386,6 @@ private fun ChatRow(chat: Connection, onClick: () -> Unit, onSnap: () -> Unit) {
         if (chat.streak > 0) Text("${chat.streak}\uD83D\uDD25", style = MaterialTheme.typography.labelLarge)
         IconButton(onClick = onSnap) {
             Icon(AppIcons.PhotoCamera, contentDescription = stringResource(R.string.snap_button), tint = colors.onSurfaceVariant)
-        }
-    }
-}
-
-/**
- * The bottom bar in Snapchat's layout: chats, the round camera button in the middle (also reached by
- * swiping right), and adding a person.
- */
-@Composable
-private fun BottomBar(onCamera: () -> Unit, onConnect: () -> Unit) {
-    val colors = MaterialTheme.colorScheme
-    Surface(color = colors.surface, shadowElevation = 6.dp) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 32.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(AppIcons.Chat, contentDescription = stringResource(R.string.home_title), tint = colors.primary, modifier = Modifier.size(28.dp))
-            Surface(
-                shape = CircleShape,
-                color = colors.primary,
-                contentColor = colors.onPrimary,
-                modifier = Modifier.size(60.dp).clickable(onClickLabel = stringResource(R.string.snap_button), onClick = onCamera),
-            ) {
-                Box(contentAlignment = Alignment.Center) { Icon(AppIcons.PhotoCamera, contentDescription = stringResource(R.string.snap_button), modifier = Modifier.size(28.dp)) }
-            }
-            IconButton(onClick = onConnect) {
-                Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.home_connect_new), tint = colors.onSurfaceVariant, modifier = Modifier.size(28.dp))
-            }
         }
     }
 }

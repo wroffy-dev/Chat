@@ -274,6 +274,11 @@ current consent version).
   lng ∈ [-180, 180], accuracyM ∈ (0, 100000], capturedAt ISO time no more than 1 h old or 5 min ahead.
   Stored rounded (5 decimals precise, 2 approximate), replacing the previous point. `409 SHARING_DISABLED`
   when off. 6/min.
+- `GET /location-sharing/connections` — the Map (D-06 as widened 2026-11-19): `{ me, people[] }`, where `me` is the
+  user's own latest point `{ lat, lng, accuracyM, capturedAt }` or null, and each of `people` is
+  `{ connectionId, username, lat, lng, accuracyM, capturedAt }` — the latest point of a connected person who is
+  sharing under the current consent version (others are left out). Never the history. `409 SHARING_DISABLED`
+  when the asking user is not sharing. 30/min.
 
 Admin Console: the Users page shows each user's sharing state; `GET /admin/users/{id}/location[?p=n]` shows the
 last 10 points (newest first) and the selected one (latest by default) on an embedded OpenStreetMap map — the only

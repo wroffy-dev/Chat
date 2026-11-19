@@ -156,6 +156,39 @@ describe.skipIf(!TEST_DB_URL)("location sharing (PostgreSQL)", () => {
     expect(await database.prisma.locationPoint.count({ where: { userId: alice.id } })).toBe(0);
   });
 
+  it("shows connected people's latest point on the Map, only to someone sharing too", async () => {
+    const alice = await signIn("alice");
+    const bob = await signIn("bob");
+    const carol = await signIn("carol");
+    const [ua, ub] = [alice.id, bob.id].sort();
+    await database.prisma.connection.create({ data: { userAId: ua!, userBId: ub! } });
+    const on = (u: { token: string }) =>
+      call(u.token, "PUT", "/location-sharing", { enabled: true, consentVersion: LOCATION_CONSENT_VERSION, precision: "precise" });
+
+    // Alice is not sharing: no Map for her.
+    expect((await call(alice.token, "GET", "/location-sharing/connections")).statusCode).toBe(409);
+    await on(alice);
+    // Bob is connected but has not agreed yet: nothing shown.
+    expect((await call(alice.token, "GET", "/location-sharing/connections")).json()).toEqual({ me: null, people: [] });
+    await call(alice.token, "PUT", "/location-sharing/current", point());
+
+    await on(bob);
+    await call(bob.token, "PUT", "/location-sharing/current", point({ lat: 19.07601234 }));
+    await location.report(bob.id, { lat: 19.1, lng: 72.9, accuracyM: 8, capturedAt: new Date().toISOString(), precision: "precise" });
+    // Carol shares but is not connected with Alice: never shown.
+    await on(carol);
+    await call(carol.token, "PUT", "/location-sharing/current", point());
+
+    const map = (await call(alice.token, "GET", "/location-sharing/connections")).json();
+    expect(map.me).toMatchObject({ lat: 28.61394, lng: 77.20902 });
+    expect(map.people).toHaveLength(1);
+    expect(map.people[0]).toMatchObject({ username: "bob", lat: 19.1, lng: 72.9, accuracyM: 8 });
+
+    // Bob turns sharing off: his point is gone from Alice's Map.
+    await call(bob.token, "PUT", "/location-sharing", { enabled: false });
+    expect((await call(alice.token, "GET", "/location-sharing/connections")).json().people).toEqual([]);
+  });
+
   it("refuses anonymous requests", async () => {
     expect((await app.inject({ method: "GET", url: "/api/v1/location-sharing" })).statusCode).toBe(401);
     expect((await app.inject({ method: "PUT", url: "/api/v1/location-sharing/current", payload: point() })).statusCode).toBe(401);

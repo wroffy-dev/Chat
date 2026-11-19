@@ -83,7 +83,8 @@ class AppContainer(context: Context) {
     val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /** Location sharing with the administrator (D-06); the app is used only while it is on. */
-    val locationSharing = LocationSharing(appContext, LocationApi(httpJson, caller), applicationScope) { authRepository.currentUser()?.id }
+    val locationApi = LocationApi(httpJson, caller)
+    val locationSharing = LocationSharing(appContext, locationApi, applicationScope) { authRepository.currentUser()?.id }
 
     /** In-app updates (Home shows the Update button after sign-in). */
     val appUpdater = AppUpdater(appContext, appVersionApi, ApkDownloader(BuildConfig.API_BASE_URL, http, caller), applicationScope)

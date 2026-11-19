@@ -20,6 +20,10 @@
 
 ## 1. What it is (and is not)
 
+> **Changed 2026-11-19 (owner, D-06):** connected people now see each other's **latest** point on the app's Map
+> tab (consent version 3; `GET /location-sharing/connections`, docs/14). The rest of this proposal predates that
+> and the 10-point admin history; [docs/17](17-open-decisions.md) D-06 is the current rule.
+
 **Is:** a user may choose to share their **current** location with the administrator, only while the app
 is open and only while sharing is switched on. The Admin Console shows the latest position, its accuracy and
 when it was taken.
