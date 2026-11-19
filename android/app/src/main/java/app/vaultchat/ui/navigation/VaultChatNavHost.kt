@@ -32,6 +32,11 @@ import app.vaultchat.domain.call.CallStatus
 import app.vaultchat.domain.chat.flushPendingLeave
 import app.vaultchat.ui.about.UpgradeRequiredScreen
 import app.vaultchat.ui.call.CallScreen
+import app.vaultchat.ui.snap.SnapCameraScreen
+import app.vaultchat.ui.snap.SnapViewerScreen
+import app.vaultchat.domain.snap.SnapResult
+import app.vaultchat.domain.realtime.RealtimeSignal
+import app.vaultchat.domain.realtime.pollWithSignals
 import app.vaultchat.ui.call.CallEntryGuard
 import app.vaultchat.ui.call.CallSession
 import app.vaultchat.ui.call.MiniCall
@@ -80,6 +85,14 @@ data object ScanQrRoute
 
 @Serializable
 data class ChatRoute(val conversationId: String, val peerUsername: String, val connectionId: String)
+
+/** Taking a snap for one person (D-27). */
+@Serializable
+data class SnapCameraRoute(val connectionId: String, val peerUsername: String)
+
+/** Viewing waiting snaps, oldest first; [ids] is comma-separated. */
+@Serializable
+data class SnapViewerRoute(val ids: String)
 
 /** Outgoing: [connectionId] set, [callId] null. Incoming: [callId] set. */
 @Serializable
@@ -256,8 +269,21 @@ fun VaultChatNavHost(container: AppContainer) {
                     onClose = { talking = false },
                 )
             }
+            // Snaps from this person waiting to be opened (D-27): re-read on a live signal, else every 15 s.
+            var waitingSnaps by remember { mutableStateOf<List<String>>(emptyList()) }
+            LaunchedEffect(route.connectionId) {
+                pollWithSignals(container.realtime, { it is RealtimeSignal.SnapChanged }, pollMs = 15_000, signalledPollMs = 60_000) {
+                    (container.snapRepository.inbox() as? SnapResult.Ok)?.value?.let { all ->
+                        waitingSnaps = all.filter { it.connectionId == route.connectionId }.map { it.id }
+                    }
+                    true
+                }
+            }
             ChatScreen(
                 onTalk = { talking = true },
+                onSnap = { navController.navigate(SnapCameraRoute(route.connectionId, route.peerUsername)) },
+                waitingSnaps = waitingSnaps.size,
+                onOpenSnaps = { if (waitingSnaps.isNotEmpty()) navController.navigate(SnapViewerRoute(waitingSnaps.joinToString(","))) },
                 viewModel = viewModel,
                 myUserId = me.id,
                 peerUsername = route.peerUsername,
@@ -307,6 +333,24 @@ fun VaultChatNavHost(container: AppContainer) {
                         navController.navigate(CallRoute(video = route.video, peerUsername = route.peerUsername, connectionId = connectionId))
                     }
                 },
+            )
+        }
+        composable<SnapCameraRoute> { entry ->
+            val route = entry.toRoute<SnapCameraRoute>()
+            SnapCameraScreen(
+                repo = container.snapRepository,
+                connectionId = route.connectionId,
+                peerUsername = route.peerUsername,
+                permissionPreferences = container.permissionPreferences,
+                onClose = { navController.popBackStack() },
+            )
+        }
+        composable<SnapViewerRoute> { entry ->
+            val route = entry.toRoute<SnapViewerRoute>()
+            SnapViewerScreen(
+                repo = container.snapRepository,
+                snapIds = route.ids.split(",").filter { it.isNotBlank() },
+                onClose = { navController.popBackStack() },
             )
         }
         composable<InboxRoute> {

@@ -110,6 +110,7 @@ class RealtimeClient(
             "chat.changed" -> field("conversationId")?.let { RealtimeSignal.ChatChanged(it) }
             "chat.typing" -> field("conversationId")?.let { RealtimeSignal.ChatTyping(it) }
             "call.changed" -> field("callId")?.let { RealtimeSignal.CallChanged(it) }
+            "snap.changed" -> field("connectionId")?.let { RealtimeSignal.SnapChanged(it) }
             "connection.changed" -> field("requestId")?.let { RealtimeSignal.ConnectionChanged(it) }
             else -> null
         }

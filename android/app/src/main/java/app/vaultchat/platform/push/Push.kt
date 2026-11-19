@@ -130,7 +130,7 @@ object Push {
     }
 
     /** "New message" only: no sender, no text, no preview (docs/07 §4, docs/10 §2). */
-    fun showNewMessage(context: Context) {
+    fun showNewMessage(context: Context, textRes: Int = R.string.chat_new_message) {
         // Nothing while Vault is on screen: the chat list already shows the unread message.
         if (!MESSAGE_NOTIFICATIONS || appInFront) return
         if (Build.VERSION.SDK_INT >= 33 &&
@@ -143,7 +143,7 @@ object Push {
         val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(context.getString(R.string.app_name))
-            .setContentText(context.getString(R.string.chat_new_message))
+            .setContentText(context.getString(textRes))
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setAutoCancel(true)
@@ -221,6 +221,8 @@ class VaultChatMessagingService : FirebaseMessagingService() {
             "talk" -> if (id != null && container().authRepository.currentUser() != null) TalkPlayer.play(applicationContext, id)
             "call_end" -> Push.cancelIncomingCall(applicationContext)
             "msg" -> Push.showNewMessage(applicationContext)
+            // A snap (D-27): "New snap", no sender or picture.
+            "snap" -> Push.showNewMessage(applicationContext, R.string.snap_new_notification)
         }
     }
 

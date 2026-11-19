@@ -313,16 +313,22 @@ private fun ChatRow(chat: Connection, onClick: () -> Unit) {
     ) {
         InitialsAvatar(chat.peerUsername)
         Column(modifier = Modifier.weight(1f)) {
-            Text(chat.peerUsername, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(chat.peerUsername, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                // Snap streak (D-27): days in a row on which both sent a snap.
+                if (chat.streak > 0) Text("  \uD83D\uDD25 ${chat.streak}", style = MaterialTheme.typography.labelLarge)
+            }
             Text(
-                if (chat.unreadCount > 0) {
+                if (chat.pendingSnaps > 0) {
+                    pluralStringResource(R.plurals.home_new_snaps, chat.pendingSnaps, chat.pendingSnaps)
+                } else if (chat.unreadCount > 0) {
                     pluralStringResource(R.plurals.home_new_messages, chat.unreadCount, chat.unreadCount)
                 } else {
                     stringResource(R.string.home_tap_to_chat)
                 },
                 style = MaterialTheme.typography.bodySmall,
-                color = colors.onSurfaceVariant,
-                fontWeight = if (chat.unreadCount > 0) FontWeight.Medium else FontWeight.Normal,
+                color = if (chat.pendingSnaps > 0) colors.primary else colors.onSurfaceVariant,
+                fontWeight = if (chat.unreadCount > 0 || chat.pendingSnaps > 0) FontWeight.Medium else FontWeight.Normal,
                 maxLines = 1,
             )
         }

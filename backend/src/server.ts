@@ -17,6 +17,7 @@ import { ConfigError, loadConfig, requireAdminKey } from "./config/env.js";
 import { PrismaDatabase } from "./db/database.js";
 import { audit } from "./auth/audit.js";
 import { AppUpdateStore } from "./updates/store.js";
+import { SnapService } from "./snaps/service.js";
 
 async function main() {
   let config;
@@ -63,7 +64,9 @@ async function main() {
       }
     : undefined;
   const location = new LocationService(database.prisma);
-  const app = buildApp({ config, database, auth, connections, calls, chat, media, push, realtime: { hub }, settings, location, ...(updates ? { updates } : {}) });
+  const snaps = new SnapService(database.prisma, config.SNAPS_DIR ?? null, undefined, push, hub);
+  connections.snaps = snaps;
+  const app = buildApp({ config, database, auth, connections, calls, chat, media, push, realtime: { hub }, settings, location, snaps, ...(updates ? { updates } : {}) });
   logPush = (msg, extra) => app.log.warn(extra ?? {}, msg);
   // The database is owned (and closed) by the public app; the admin app shares it.
   const adminApp = buildAdminApp({ config, prisma: database.prisma, database, auth, admin, media, pushEnabled: push.enabled, realtime: hub, settings, location });
@@ -86,6 +89,11 @@ async function main() {
     chat.sweep().catch((err: unknown) => app.log.warn({ err }, "chat sweep failed"));
   }, 15_000);
   chatSweep.unref();
+  // Unopened snaps are deleted after 24 h (D-27): checked every 10 minutes.
+  const snapSweep = setInterval(() => {
+    snaps.sweep().catch((err: unknown) => app.log.warn({ err }, "snap sweep failed"));
+  }, 10 * 60_000);
+  snapSweep.unref();
 
   let shuttingDown = false;
   const shutdown = (signal: string) => {

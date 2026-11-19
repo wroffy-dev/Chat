@@ -23,6 +23,9 @@ data class ConnectionDto(
     // Only in GET /connections (the chat list).
     val unreadCount: Int = 0,
     val lastMessageAt: String? = null,
+    // Snaps (D-27); absent from older servers.
+    val streak: Int = 0,
+    val pendingSnaps: Int = 0,
 )
 
 @Serializable
@@ -58,6 +61,8 @@ fun ConnectionDto.toDomain() = Connection(
     sinceEpochMs = Instant.parse(createdAt).toEpochMilli(),
     unreadCount = unreadCount,
     lastMessageAtEpochMs = lastMessageAt?.let { Instant.parse(it).toEpochMilli() },
+    streak = streak,
+    pendingSnaps = pendingSnaps,
 )
 
 fun RequestDto.toDomain() = ConnectionRequest(

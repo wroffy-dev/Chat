@@ -13,6 +13,8 @@ sealed interface RealtimeSignal {
     /** The other person is typing in this conversation right now. */
     data class ChatTyping(val conversationId: String) : RealtimeSignal
     data class CallChanged(val callId: String) : RealtimeSignal
+    /** A snap was sent to or opened by this user (D-27). */
+    data class SnapChanged(val connectionId: String) : RealtimeSignal
     /** A pairing request was made, answered, withdrawn or superseded. */
     data class ConnectionChanged(val requestId: String) : RealtimeSignal
 }

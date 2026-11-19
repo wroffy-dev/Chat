@@ -65,6 +65,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.vaultchat.R
+import app.vaultchat.ui.theme.VaultGreen
 import app.vaultchat.domain.permissions.AppPermission
 import app.vaultchat.domain.permissions.PermissionStatus
 import app.vaultchat.ui.components.AppIcons
@@ -382,7 +383,7 @@ fun ScanQrScreen(
         when (val stage = state.stage) {
             ScanStage.Scanning -> when (val status = camera.status) {
                 PermissionStatus.Granted -> {
-                    Box(modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(20.dp)).background(Color(0xFF16181C))) {
+                    Box(modifier = Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(20.dp)).background(VaultGreen.Deepest)) {
                         CameraQrScanner(onDecoded = viewModel::onDecoded, modifier = Modifier.fillMaxSize())
                         ViewfinderOverlay(Modifier.fillMaxSize())
                     }

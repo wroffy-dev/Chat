@@ -46,7 +46,7 @@ private const val POLL_MS = 10_000L
 private const val SIGNALLED_POLL_MS = 60_000L
 
 /** New messages and new connections change the chat list. */
-private val listChanges: (RealtimeSignal) -> Boolean = { it is RealtimeSignal.ChatChanged || it is RealtimeSignal.ConnectionChanged }
+private val listChanges: (RealtimeSignal) -> Boolean = { it is RealtimeSignal.ChatChanged || it is RealtimeSignal.ConnectionChanged || it is RealtimeSignal.SnapChanged }
 
 class HomeViewModel(
     private val auth: AuthRepository,

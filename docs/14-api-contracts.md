@@ -212,6 +212,13 @@ All routes require the caller to be the caller or callee of `{id}` (else `404`).
   /conversations/:id/messages` accepts an optional `replyToId` (a message of the same conversation;
   anything else is ignored). `POST /conversations/:id/typing` (empty body, 204, 40/min) relays the live
   signal `chat.typing {conversationId}` to the other participant; nothing is stored.
+- *(Snaps, D-27, 2026-11-19)* `POST /connections/:id/snaps?kind=photo|video` with the raw body as
+  `image/jpeg` (≤ 6 MB) or `video/mp4` (≤ 20 MB), checked by magic bytes → 201 `{ id, streak }`; 30/min.
+  `GET /snaps` → `{ items: [{ id, connectionId, from: {id, username}, kind, createdAt }] }` (snaps waiting
+  for the caller). `POST /snaps/:id/open` (empty JSON body) → the media bytes with their content type,
+  `Cache-Control: no-store`; the snap is deleted on the server in the same step, so a second open is 404.
+  `GET /connections` items gain `streak` and `pendingSnaps`. Live signal `snap.changed {connectionId}`;
+  push `{t: "snap"}`. 503 `SNAPS_UNAVAILABLE` without `SNAPS_DIR`.
 - **Request:** `{ "connectionId": uuid, "kind": "video"|"voice"|"talk" }`. `talk` is the walkie-talkie
   (D-26): the callee is woken by a `talk` push or signal, accepts by itself and gets a listen-only token;
   the server gives up after 25 s without an accept and ends it 10 s (plus 8 s to connect) after the accept

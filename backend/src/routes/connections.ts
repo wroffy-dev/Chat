@@ -41,10 +41,12 @@ export const connectionSchema = {
 /** A chat-list row: the connection plus unread count and latest message time (D-21). */
 const connectionSummarySchema = {
   ...connectionSchema,
-  required: [...connectionSchema.required, "unreadCount", "lastMessageAt"],
+  required: [...connectionSchema.required, "unreadCount", "lastMessageAt", "streak", "pendingSnaps"],
   properties: {
     ...connectionSchema.properties,
     unreadCount: { type: "integer" },
+    streak: { type: "integer" },
+    pendingSnaps: { type: "integer" },
     lastMessageAt: { type: ["string", "null"], format: "date-time" },
   },
 } as const;
