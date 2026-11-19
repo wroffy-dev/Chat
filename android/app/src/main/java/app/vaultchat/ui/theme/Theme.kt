@@ -11,24 +11,33 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-// Minimal monochrome look (owner's reference design, 2026-10-29): near-black accents on white
-// surfaces over a light grey background (docs/15-android-ui-ux.md §1).
-private val Ink = Color(0xFF111111)
+// Green palette chosen by the owner on 2026-11-19 (docs/15-android-ui-ux.md §1). Six shades, darkest first.
+object VaultGreen {
+    val Deepest = Color(0xFF051F20)
+    val Deep = Color(0xFF0B2B26)
+    val Forest = Color(0xFF163832)
+    val Pine = Color(0xFF235347)
+    val Sage = Color(0xFF8EB69B)
+    val Mint = Color(0xFFDAF1DE)
+}
 
 private val LightColors = lightColorScheme(
-    primary = Ink,
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFEDEDEF),
-    onPrimaryContainer = Ink,
-    secondaryContainer = Color(0xFFEDEDEF),
-    onSecondaryContainer = Ink,
-    background = Color(0xFFF4F4F5),
-    onBackground = Ink,
-    surface = Color.White,
-    onSurface = Ink,
-    surfaceVariant = Color(0xFFEDEDEF),
-    onSurfaceVariant = Color(0xFF6B6B70),
-    outline = Color(0xFFDADADD),
+    primary = VaultGreen.Forest,
+    onPrimary = VaultGreen.Mint,
+    primaryContainer = VaultGreen.Sage,
+    onPrimaryContainer = VaultGreen.Deepest,
+    secondary = VaultGreen.Pine,
+    onSecondary = VaultGreen.Mint,
+    secondaryContainer = VaultGreen.Sage,
+    onSecondaryContainer = VaultGreen.Deepest,
+    background = VaultGreen.Mint,
+    onBackground = VaultGreen.Deepest,
+    // Cards, bubbles and bars stay near-white over the mint background, so text keeps its contrast.
+    surface = Color(0xFFF6FBF7),
+    onSurface = VaultGreen.Deepest,
+    surfaceVariant = Color(0xFFC3DCC9),
+    onSurfaceVariant = VaultGreen.Pine,
+    outline = VaultGreen.Sage,
     error = Color(0xFFB3261E),
     onError = Color.White,
     errorContainer = Color(0xFFF9DEDC),
@@ -36,19 +45,21 @@ private val LightColors = lightColorScheme(
 )
 
 private val DarkColors = darkColorScheme(
-    primary = Color(0xFFF2F2F2),
-    onPrimary = Ink,
-    primaryContainer = Color(0xFF2C2C2E),
-    onPrimaryContainer = Color(0xFFF2F2F2),
-    secondaryContainer = Color(0xFF2C2C2E),
-    onSecondaryContainer = Color(0xFFF2F2F2),
-    background = Color(0xFF0E0E10),
-    onBackground = Color(0xFFF2F2F2),
-    surface = Color(0xFF1C1C1E),
-    onSurface = Color(0xFFF2F2F2),
-    surfaceVariant = Color(0xFF2C2C2E),
-    onSurfaceVariant = Color(0xFFA1A1A6),
-    outline = Color(0xFF3A3A3C),
+    primary = VaultGreen.Sage,
+    onPrimary = VaultGreen.Deepest,
+    primaryContainer = VaultGreen.Pine,
+    onPrimaryContainer = VaultGreen.Mint,
+    secondary = VaultGreen.Sage,
+    onSecondary = VaultGreen.Deepest,
+    secondaryContainer = VaultGreen.Pine,
+    onSecondaryContainer = VaultGreen.Mint,
+    background = VaultGreen.Deepest,
+    onBackground = VaultGreen.Mint,
+    surface = VaultGreen.Deep,
+    onSurface = VaultGreen.Mint,
+    surfaceVariant = VaultGreen.Forest,
+    onSurfaceVariant = VaultGreen.Sage,
+    outline = VaultGreen.Pine,
     error = Color(0xFFF2B8B5),
     onError = Color(0xFF601410),
     errorContainer = Color(0xFF8C1D18),

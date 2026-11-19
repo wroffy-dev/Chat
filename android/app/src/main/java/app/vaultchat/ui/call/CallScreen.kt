@@ -73,6 +73,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import app.vaultchat.ui.theme.VaultGreen
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -232,7 +233,7 @@ fun CallScreen(
     val maxPipX = with(density) { (config.screenWidthDp.dp - 112.dp - 32.dp).toPx() }.coerceAtLeast(0f)
     val maxPipY = with(density) { (config.screenHeightDp.dp - 160.dp - 96.dp).toPx() }.coerceAtLeast(0f)
 
-    Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFF0E1013), contentColor = Color.White) {
+    Surface(modifier = Modifier.fillMaxSize(), color = VaultGreen.Deepest, contentColor = VaultGreen.Mint) {
         Box(
             modifier = Modifier.fillMaxSize().pointerInput(Unit) {
                 // Sees every touch before the buttons do, without consuming it, so a button press
@@ -327,7 +328,7 @@ fun CallScreen(
                 Text(
                     statsOverlayText(live),
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color.White,
+                    color = VaultGreen.Mint,
                     // Lower left, above the buttons, so it does not cover the name and status at the top.
                     modifier = Modifier
                         .align(Alignment.BottomStart)
@@ -394,7 +395,7 @@ fun CallScreen(
                         else -> phase
                     },
                     style = MaterialTheme.typography.bodyLarge,
-                    color = Color.White.copy(alpha = 0.8f),
+                    color = VaultGreen.Mint.copy(alpha = 0.8f),
                     textAlign = TextAlign.Center,
                     // Announces phase changes only, not every tick of the timer.
                     modifier = Modifier.clearAndSetSemantics {
@@ -447,13 +448,13 @@ fun CallScreen(
                         if (onCallAgain != null) {
                             Button(
                                 onClick = onCallAgain,
-                                colors = ButtonDefaults.buttonColors(containerColor = Tonal, contentColor = Color.White),
+                                colors = ButtonDefaults.buttonColors(containerColor = Tonal, contentColor = VaultGreen.Mint),
                                 modifier = Modifier.fillMaxWidth().height(52.dp),
                             ) { Text(stringResource(R.string.call_again), style = MaterialTheme.typography.labelLarge) }
                         }
                         Button(
                             onClick = onClose,
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFF111111)),
+                            colors = ButtonDefaults.buttonColors(containerColor = VaultGreen.Mint, contentColor = VaultGreen.Deepest),
                             modifier = Modifier.fillMaxWidth().height(52.dp),
                         ) { Text(stringResource(R.string.call_close), style = MaterialTheme.typography.labelLarge) }
                     }
@@ -565,8 +566,8 @@ private fun MutedPill(text: String, modifier: Modifier = Modifier) {
 }
 
 private val EndRed = Color(0xFFB3261E)
-private val AcceptGreen = Color(0xFF2E7D32)
-private val Tonal = Color.White.copy(alpha = 0.14f)
+private val AcceptGreen = VaultGreen.Pine
+private val Tonal = VaultGreen.Forest
 
 /** "3:12", or "1:02:03" past an hour. */
 private fun formatDuration(seconds: Long): String {
@@ -594,12 +595,12 @@ private fun RoundToggle(
             .semantics(mergeDescendants = true) { if (state != null) stateDescription = state },
     ) {
         Box(
-            modifier = Modifier.size(64.dp).background(if (on) Color.White else Tonal, CircleShape),
+            modifier = Modifier.size(64.dp).background(if (on) VaultGreen.Mint else Tonal, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(icon, contentDescription = null, tint = if (on) Color.Black else Color.White, modifier = Modifier.size(26.dp))
+            Icon(icon, contentDescription = null, tint = if (on) VaultGreen.Deepest else VaultGreen.Mint, modifier = Modifier.size(26.dp))
         }
-        Text(label, style = MaterialTheme.typography.labelMedium, color = Color.White.copy(alpha = 0.85f), textAlign = TextAlign.Center)
+        Text(label, style = MaterialTheme.typography.labelMedium, color = VaultGreen.Mint.copy(alpha = 0.85f), textAlign = TextAlign.Center)
     }
 }
 
@@ -651,9 +652,9 @@ private fun RoundAction(label: String, icon: ImageVector, container: Color, onCl
         modifier = Modifier.clickable(role = Role.Button, onClick = onClick).semantics(mergeDescendants = true) {},
     ) {
         Box(modifier = Modifier.size(72.dp).background(container, CircleShape), contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(30.dp))
+            Icon(icon, contentDescription = null, tint = VaultGreen.Mint, modifier = Modifier.size(30.dp))
         }
-        Text(label, style = MaterialTheme.typography.bodyMedium, color = Color.White)
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = VaultGreen.Mint)
     }
 }
 
@@ -740,7 +741,7 @@ private fun Controls(
         // End call is set apart and coloured so it is hard to hit by accident (docs/15 §4).
         Button(
             onClick = onEnd,
-            colors = ButtonDefaults.buttonColors(containerColor = EndRed, contentColor = Color.White),
+            colors = ButtonDefaults.buttonColors(containerColor = EndRed, contentColor = VaultGreen.Mint),
             modifier = Modifier.fillMaxWidth().height(56.dp),
         ) {
             Icon(AppIcons.CallEnd, contentDescription = null, modifier = Modifier.size(24.dp))

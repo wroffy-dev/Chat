@@ -14,10 +14,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.vaultchat.ui.theme.VaultGreen
 
+// Shades of the app's green palette (owner, 2026-11-19), light enough for the dark initial.
 private val AvatarColors = listOf(
-    Color(0xFFE8DEF8), Color(0xFFD7E8F7), Color(0xFFDDF0E1), Color(0xFFFBE7C6),
-    Color(0xFFF8D9D9), Color(0xFFE2E2E6), Color(0xFFD9F1F1), Color(0xFFF3DFF0),
+    VaultGreen.Mint, VaultGreen.Sage, Color(0xFFC3DCC9), Color(0xFFA9CBB3),
+    Color(0xFFB8D8C0), Color(0xFFE8F5EA), Color(0xFF9FC2AA), Color(0xFFCFE6D4),
 )
 
 /**
@@ -32,6 +34,6 @@ fun InitialsAvatar(name: String, modifier: Modifier = Modifier, size: Dp = 44.dp
         modifier = modifier.size(size).background(color, CircleShape).clearAndSetSemantics { },
         contentAlignment = Alignment.Center,
     ) {
-        Text(initial, color = Color(0xFF1C1B1F), fontWeight = FontWeight.SemiBold, fontSize = (size.value * 0.4f).sp)
+        Text(initial, color = VaultGreen.Deepest, fontWeight = FontWeight.SemiBold, fontSize = (size.value * 0.4f).sp)
     }
 }

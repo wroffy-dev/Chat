@@ -6,6 +6,13 @@ where this document and the built screens differ, the plan records what exists.
 
 ## 1. Design principles
 
+**Colours (owner decision 2026-11-19, Implemented):** the app uses the owner's six-shade green palette,
+`#051F20`, `#0B2B26`, `#163832`, `#235347`, `#8EB69B`, `#DAF1DE` (`VaultGreen` in `ui/theme/Theme.kt`). Light
+mode: mint `#DAF1DE` background, near-white cards and incoming bubbles, dark green `#163832` accents, sent
+bubbles in sage `#8EB69B`. Dark mode: `#051F20` background, `#0B2B26` cards, sage accents. The call screen is
+always `#051F20` with mint text; avatars, the QR scanner frame and the launcher icon use the same greens. Red
+stays for errors and the end-call button. This replaces the earlier monochrome look.
+
 - Minimal, calm and professional. Material 3 (Jetpack Compose), flat surfaces, one accent colour,
   generous spacing. **No glassmorphism**, no heavy blur, gradients or decorative animation.
 - Light and dark themes following the system setting.

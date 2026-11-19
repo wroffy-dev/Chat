@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.vaultchat.R
+import app.vaultchat.ui.theme.VaultGreen
 import app.vaultchat.domain.call.CallKind
 import app.vaultchat.domain.call.CallPhase
 import app.vaultchat.platform.call.CallForegroundService
@@ -86,8 +87,8 @@ fun MiniCall(session: CallSession, onOpen: (video: Boolean, peerUsername: String
         } else {
             Surface(
                 shape = RoundedCornerShape(50),
-                color = Color(0xFF1E8E3E),
-                contentColor = Color.White,
+                color = VaultGreen.Pine,
+                contentColor = VaultGreen.Mint,
                 shadowElevation = 6.dp,
                 modifier = place.padding(top = 64.dp).clip(RoundedCornerShape(50)).clickable(onClickLabel = stringResource(R.string.call_return), onClick = open),
             ) {

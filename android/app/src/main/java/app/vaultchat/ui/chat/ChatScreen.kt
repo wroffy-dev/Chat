@@ -526,15 +526,18 @@ private fun Bubble(text: String, mine: Boolean, faded: Boolean = false, onLongPr
         )
         return
     }
+    // Mine in the palette's sage green, theirs near-white (owner's green design, 2026-11-19).
+    val bubble = if (mine) colors.primaryContainer else colors.surface
+    val ink = if (mine) colors.onPrimaryContainer else colors.onSurface
     Text(
         text,
         style = MaterialTheme.typography.bodyMedium,
-        color = colors.onSurface.copy(alpha = if (faded) 0.6f else 1f),
+        color = ink.copy(alpha = if (faded) 0.6f else 1f),
         modifier = Modifier
             .widthIn(max = 290.dp)
             .clip(shape)
             .then(press)
-            .background(colors.surface, shape)
+            .background(bubble, shape)
             .padding(horizontal = 14.dp, vertical = 10.dp),
     )
 }
