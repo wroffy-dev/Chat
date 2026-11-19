@@ -14,6 +14,9 @@ import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
+import androidx.camera.core.resolutionselector.AspectRatioStrategy
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.FallbackStrategy
 import androidx.camera.video.FileOutputOptions
@@ -236,12 +239,31 @@ private fun CaptureView(
     val owner = LocalLifecycleOwner.current
     val previewView = remember { PreviewView(context).apply { scaleType = PreviewView.ScaleType.FILL_CENTER } }
     var front by remember { mutableStateOf(false) }
-    val imageCapture = remember { ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY).build() }
+    // Best photo the camera gives (owner, 2026-11-19: better snap quality): the full sensor resolution and the
+    // camera's quality processing (a little slower to take than "minimise latency").
+    val imageCapture = remember {
+        ImageCapture.Builder()
+            .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+            .setResolutionSelector(
+                ResolutionSelector.Builder()
+                    .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
+                    .setResolutionStrategy(ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY)
+                    .build(),
+            )
+            .build()
+    }
     val videoCapture = remember {
         VideoCapture.withOutput(
             Recorder.Builder()
-                // 720p keeps a 7 s video well under the server's 20 MB limit.
-                .setQualitySelector(QualitySelector.from(Quality.HD, FallbackStrategy.lowerQualityOrHigherThan(Quality.SD)))
+                // 1080p where the phone can (720p, then 480p otherwise). 12 Mbps keeps a 7 s video near 11 MB,
+                // under the server's 20 MB limit.
+                .setQualitySelector(
+                    QualitySelector.fromOrderedList(
+                        listOf(Quality.FHD, Quality.HD, Quality.SD),
+                        FallbackStrategy.lowerQualityOrHigherThan(Quality.SD),
+                    ),
+                )
+                .setTargetVideoEncodingBitRate(VIDEO_BITRATE)
                 .build(),
         )
     }
@@ -335,18 +357,32 @@ private fun CaptureView(
     }
 }
 
-/** Turns the camera frame upright and makes a JPEG of at most 1600 px on the long side. */
+private const val VIDEO_BITRATE = 12_000_000
+
+/** Longest side of a sent photo; sharp on a full-screen phone (was 1600). */
+private const val PHOTO_LONG_SIDE = 2560
+
+/** The server takes photos up to 6 MB; this leaves room. */
+private const val PHOTO_MAX_BYTES = 5_500_000
+
+/** Turns the camera frame upright and makes a JPEG of at most [PHOTO_LONG_SIDE] px on the long side. */
 private fun toUprightJpeg(raw: Bitmap, rotation: Int): Taken.Photo {
     val longSide = maxOf(raw.width, raw.height)
-    val scale = if (longSide > 1600) 1600f / longSide else 1f
+    val scale = if (longSide > PHOTO_LONG_SIDE) PHOTO_LONG_SIDE.toFloat() / longSide else 1f
     val matrix = Matrix().apply {
         postScale(scale, scale)
         postRotate(rotation.toFloat())
     }
     val upright = Bitmap.createBitmap(raw, 0, 0, raw.width, raw.height, matrix, true)
-    val out = ByteArrayOutputStream()
-    upright.compress(Bitmap.CompressFormat.JPEG, 85, out)
-    return Taken.Photo(out.toByteArray(), upright)
+    // High JPEG quality; lowered step by step only if a very detailed photo would pass the server's limit.
+    var bytes = ByteArray(0)
+    for (quality in intArrayOf(92, 85, 75, 65)) {
+        val out = ByteArrayOutputStream()
+        upright.compress(Bitmap.CompressFormat.JPEG, quality, out)
+        bytes = out.toByteArray()
+        if (bytes.size <= PHOTO_MAX_BYTES) break
+    }
+    return Taken.Photo(bytes, upright)
 }
 
 @Composable
