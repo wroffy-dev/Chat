@@ -79,10 +79,12 @@ export class SnapService {
     const max = kind === "photo" ? SNAP_POLICY.maxPhotoBytes : SNAP_POLICY.maxVideoBytes;
     let size = 0;
     let head = Buffer.alloc(0);
+    // Past the limit the rest of the body is read and dropped (not written), so the client always gets a
+    // clean 413 instead of a connection cut in the middle of its upload.
     const counter = new Transform({
       transform(chunk: Buffer, _enc, cb) {
         size += chunk.length;
-        if (size > max) return cb(new AppError(413, "PAYLOAD_TOO_LARGE", "The snap is too large."));
+        if (size > max) return cb();
         if (head.length < 12) head = Buffer.concat([head, chunk.subarray(0, 12 - head.length)]);
         cb(null, chunk);
       },
@@ -91,6 +93,7 @@ export class SnapService {
     const path = join(dir, `${id}.snap`);
     try {
       await pipeline(body, counter, createWriteStream(path, { mode: 0o600 }));
+      if (size > max) throw new AppError(413, "PAYLOAD_TOO_LARGE", "The snap is too large.");
       // A JPEG starts FF D8 FF; an MP4 has "ftyp" at byte 4.
       const valid = kind === "photo"
         ? head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff
