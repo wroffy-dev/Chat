@@ -74,6 +74,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import app.vaultchat.R
@@ -245,6 +246,9 @@ private fun CaptureView(
     val imageCapture = remember {
         ImageCapture.Builder()
             .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+            // The camera's own JPEG at full quality, so the one re-encode after rotation starts from the
+            // cleanest picture (owner 2026-11-20: photos looked soft).
+            .setJpegQuality(100)
             .setResolutionSelector(
                 ResolutionSelector.Builder()
                     .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
@@ -271,6 +275,8 @@ private fun CaptureView(
     }
     var recording by remember { mutableStateOf<Recording?>(null) }
     var taking by remember { mutableStateOf(false) }
+    // The bound camera, for pinch-to-zoom before taking the photo or video.
+    var boundCamera by remember { mutableStateOf<androidx.camera.core.Camera?>(null) }
     var secondsLeft by remember { mutableIntStateOf(SnapRules.MAX_VIDEO_SECONDS) }
     val scope = rememberCoroutineScope()
 
@@ -283,9 +289,9 @@ private fun CaptureView(
             provider = p
             val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
             p.unbindAll()
-            runCatching {
+            boundCamera = runCatching {
                 p.bindToLifecycle(owner, if (front) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA, preview, imageCapture, videoCapture)
-            }
+            }.getOrNull()
         }, ContextCompat.getMainExecutor(context))
         onDispose {
             recording?.stop()
@@ -314,7 +320,18 @@ private fun CaptureView(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
+        // Pinch on the picture to zoom the camera (owner request 2026-11-20), within what the lens allows.
+        AndroidView(
+            factory = { previewView },
+            modifier = Modifier.fillMaxSize().pointerInput(boundCamera) {
+                detectTransformGestures { _, _, change, _ ->
+                    val cam = boundCamera ?: return@detectTransformGestures
+                    val zoomState = cam.cameraInfo.zoomState.value ?: return@detectTransformGestures
+                    val next = (zoomState.zoomRatio * change).coerceIn(zoomState.minZoomRatio, zoomState.maxZoomRatio)
+                    cam.cameraControl.setZoomRatio(next)
+                }
+            },
+        )
         Column(
             modifier = Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(bottom = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -374,8 +391,8 @@ private fun CaptureView(
 
 private const val VIDEO_BITRATE = 12_000_000
 
-/** Longest side of a sent photo; sharp on a full-screen phone (was 1600). */
-private const val PHOTO_LONG_SIDE = 2560
+/** Longest side of a sent photo: about 8 megapixels, sharp even when zoomed in (was 2560, before that 1600). */
+private const val PHOTO_LONG_SIDE = 3264
 
 /** The server takes photos up to 6 MB; this leaves room. */
 private const val PHOTO_MAX_BYTES = 5_500_000
@@ -393,7 +410,7 @@ private fun toUprightJpeg(raw: Bitmap, rotation: Int, mirror: Boolean): Taken.Ph
     val upright = Bitmap.createBitmap(raw, 0, 0, raw.width, raw.height, matrix, true)
     // High JPEG quality; lowered step by step only if a very detailed photo would pass the server's limit.
     var bytes = ByteArray(0)
-    for (quality in intArrayOf(92, 85, 75, 65)) {
+    for (quality in intArrayOf(95, 90, 85, 75, 65)) {
         val out = ByteArrayOutputStream()
         upright.compress(Bitmap.CompressFormat.JPEG, quality, out)
         bytes = out.toByteArray()
@@ -405,7 +422,11 @@ private fun toUprightJpeg(raw: Bitmap, rotation: Int, mirror: Boolean): Taken.Ph
 @Composable
 private fun ReviewView(taken: Taken) {
     when (taken) {
-        is Taken.Photo -> Image(taken.preview.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+        // Pinch or double-tap to zoom the photo before sending it (owner request 2026-11-20).
+        is Taken.Photo -> {
+            val image = remember(taken) { taken.preview.asImageBitmap() }
+            ZoomableImage(image)
+        }
         is Taken.Video -> LoopingVideo(taken.file, Modifier.fillMaxSize())
     }
 }

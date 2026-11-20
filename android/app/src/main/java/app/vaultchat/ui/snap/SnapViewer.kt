@@ -126,7 +126,8 @@ fun SnapViewerScreen(repo: SnapRepository, snapIds: List<String>, onClose: () ->
                                         BitmapFactory.decodeByteArray(current.bytes, 0, current.bytes.size)?.asImageBitmap()
                                     }
                                 }
-                                bitmap?.let { Image(it, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()) }
+                                // Pinch or double-tap to zoom; a single tap still closes the photo.
+                                bitmap?.let { ZoomableImage(it, onTap = { stage = Stage.AFTER }) }
                                 var progress by remember(showing) { mutableFloatStateOf(1f) }
                                 LaunchedEffect(showing) {
                                     val steps = SnapRules.PHOTO_SECONDS * 10
