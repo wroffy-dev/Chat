@@ -47,6 +47,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -89,19 +90,19 @@ fun LoginScreen(viewModel: LoginViewModel, onLoggedIn: (LoginOutcome) -> Unit) {
     )
 }
 
-// Colours of the owner's reference login design (login.html, 2026-11-20), light scheme. The login screen
-// always uses them, in light and dark mode, as the reference shows.
-private val RefPrimary = Color(0xFF254EDB)
-private val RefOnPrimary = Color.White
-private val RefPrimaryContainer = Color(0xFFE8EEFF)
-private val RefSurface = Color.White
-private val RefOnSurface = Color(0xFF111318)
-private val RefOnSurfaceVariant = Color(0xFF525B6C)
-private val RefContainerLow = Color(0xFFF8F9FB)
-private val RefContainer = Color(0xFFF1F3F7)
-private val RefOutlineVariant = Color(0xFFDCE1EA)
-private val RefTeal = Color(0xFF0F766E)
-private val RefError = Color(0xFFC81E1E)
+// The reference login layout (login.html, 2026-11-20) in the app's green theme (owner, 2026-11-20), so it
+// follows light and dark mode like the rest of the app.
+private val RefPrimary: Color @Composable get() = MaterialTheme.colorScheme.primary
+private val RefOnPrimary: Color @Composable get() = MaterialTheme.colorScheme.onPrimary
+private val RefPrimaryContainer: Color @Composable get() = MaterialTheme.colorScheme.primaryContainer
+private val RefSurface: Color @Composable get() = MaterialTheme.colorScheme.background
+private val RefOnSurface: Color @Composable get() = MaterialTheme.colorScheme.onBackground
+private val RefOnSurfaceVariant: Color @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
+private val RefContainerLow: Color @Composable get() = MaterialTheme.colorScheme.surface
+private val RefContainer: Color @Composable get() = MaterialTheme.colorScheme.surface
+private val RefOutlineVariant: Color @Composable get() = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
+private val RefTeal: Color @Composable get() = MaterialTheme.colorScheme.secondary
+private val RefError: Color @Composable get() = MaterialTheme.colorScheme.error
 
 /**
  * Sign-in in the owner's reference design: brand mark and "Private Access" at the top, the heading, two
