@@ -266,6 +266,10 @@
     <string name="tab_camera">Camera</string>
     <string name="tab_map">Map</string>
     <string name="map_me">Me</string>
+    <string name="snap_flash_on">Flash on</string>
+    <string name="snap_flash_off">Flash off</string>
+    <string name="snap_sound_on">Sound on</string>
+    <string name="snap_sound_off">Sound off</string>
     <string name="map_everyone">Show everyone</string>
     <string name="map_center_me">Show me</string>
     <string name="map_nobody">Nobody you are connected with has shared a location yet. Each person\'s latest location appears here after they open Vault.</string>
