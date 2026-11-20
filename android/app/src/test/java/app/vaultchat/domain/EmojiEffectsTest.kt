@@ -16,7 +16,7 @@ class EmojiEffectsTest {
     }
 
     @Test
-    fun `confetti falls for a party popper; skin tones still match`() {
+    fun `confetti falls for a party popper and skin tones still match`() {
         assertEquals(EmojiEffects.Motion.FALL, EmojiEffects.effectFor("🎉")?.motion)
         assertEquals(listOf("👍"), EmojiEffects.effectFor("👍🏽")?.pieces)
     }
