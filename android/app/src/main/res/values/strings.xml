@@ -126,7 +126,7 @@
     <string name="call_switch_their_camera">Switch their camera</string>
     <string name="call_switched_their_camera">Switched %1$s\'s camera</string>
     <string name="call_peer_switched_your_camera">%1$s switched your camera</string>
-    <string name="chat_typing">typing…</string>
+    <string name="chat_typing">typing</string>
     <string name="chat_reply">Reply</string>
     <string name="chat_you">You</string>
     <string name="chat_me">Me</string>
@@ -275,4 +275,36 @@
     <string name="background_location_title">Keep your Map location current</string>
     <string name="background_location_body">Like Snap Map, Vault can update your location about every 15 minutes while the app is closed, so the people you are connected with see where you are. On the next screen choose \"Allow all the time\".</string>
     <string name="background_location_allow">Allow</string>
+    <string name="chat_deletion_more">How deletion works</string>
+    <string name="chat_deletion_sheet_title">Messages don\'t stay</string>
+    <string name="chat_deletion_sheet_note">These times are the same for every chat and cannot be changed in the app.</string>
+    <string name="chat_deletion_ok">Got it</string>
+    <string name="settings_account">Account</string>
+    <string name="settings_account_note">Signed in on this phone</string>
+    <string name="settings_privacy">Privacy and security</string>
+    <string name="settings_change_password">Change password</string>
+    <string name="settings_screen_protection">Screen protection</string>
+    <string name="settings_screen_protection_body">Screenshots and screen recording are blocked in chats and snaps. A photo from another camera is still possible.</string>
+    <string name="settings_messages">Message deletion</string>
+    <string name="settings_location">Location</string>
+    <string name="settings_location_body">Shared with the people you are connected with and the administrator when you open Vault, and about every 15 minutes with \"Allow all the time\". Change the permission in Android\'s settings.</string>
+    <string name="settings_notifications">Notifications</string>
+    <string name="settings_notifications_system">Notification settings</string>
+    <string name="settings_notifications_system_body">Calls, messages and snaps: sound, vibration and lock-screen content are set in Android\'s settings for Vault.</string>
+    <string name="settings_full_screen_calls">Calls over other apps</string>
+    <string name="settings_full_screen_calls_body">Lets an incoming call open full screen while you use another app.</string>
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_theme_body">Follows your phone: light or dark.</string>
+    <string name="settings_about">About</string>
+    <string name="settings_version">Version</string>
+    <string name="settings_about_vault">Vault</string>
+    <string name="settings_about_vault_body">A private app for chats, calls and snaps with the people you paired with by QR code.</string>
+    <string name="call_quality_good">Good connection</string>
+    <string name="call_quality_fair">Fair connection</string>
+    <string name="call_quality_poor">Poor connection</string>
+    <!-- UI upgrade (2026-11-20) -->
+    <string name="home_search_close">Close search</string>
+    <string name="home_search_clear">Clear search</string>
+    <string name="settings_title">Settings</string>
 </resources>

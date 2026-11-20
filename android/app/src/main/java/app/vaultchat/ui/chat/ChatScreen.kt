@@ -36,8 +36,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -89,6 +87,28 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.ui.graphics.graphicsLayer
+import app.vaultchat.ui.components.PrimaryButton
+import app.vaultchat.ui.components.TypingDots
+import app.vaultchat.ui.components.VaultIconButton
+import app.vaultchat.ui.theme.Motion
+import app.vaultchat.ui.theme.Radii
+import app.vaultchat.ui.theme.Sizes
+import app.vaultchat.ui.theme.Spacing
 import app.vaultchat.R
 import app.vaultchat.domain.chat.ChatMessage
 import app.vaultchat.domain.chat.ChatNotice
@@ -176,29 +196,38 @@ fun ChatScreen(
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(modifier = Modifier.fillMaxSize().safeDrawingPadding().imePadding()) {
-            Surface(color = MaterialTheme.colorScheme.surface) {
+            Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 0.5.dp) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.xs, vertical = Spacing.xs),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                     }
-                    InitialsAvatar(peerUsername, size = 40.dp)
-                    Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
+                    InitialsAvatar(peerUsername, size = Sizes.avatarHeader)
+                    Column(modifier = Modifier.weight(1f).padding(start = Spacing.md)) {
                         Text(
                             peerUsername,
                             style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.semantics { heading() },
                         )
-                        if (state.peerTyping) {
-                            Text(
-                                stringResource(R.string.chat_typing),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
+                        // "typing…" with animated dots, sliding in and out (data from chat.typing; no presence).
+                        AnimatedVisibility(
+                            visible = state.peerTyping,
+                            enter = fadeIn(tween(Motion.FAST)) + expandVertically(tween(Motion.FAST)),
+                            exit = fadeOut(tween(Motion.FAST)) + shrinkVertically(tween(Motion.FAST)),
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                                Text(
+                                    stringResource(R.string.chat_typing),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                                TypingDots()
+                            }
                         }
                     }
                     CallButton(AppIcons.Mic, stringResource(R.string.talk_button)) { onTalk() }
@@ -211,8 +240,8 @@ fun ChatScreen(
                 Surface(
                     color = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).clickable(onClick = onOpenSnaps),
+                    shape = MaterialTheme.shapes.large,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.screen, vertical = 6.dp).clip(MaterialTheme.shapes.large).clickable(onClick = onOpenSnaps),
                 ) {
                     Text(
                         if (waitingSnaps == 1) stringResource(R.string.snap_waiting, peerUsername) else stringResource(R.string.snap_waiting_more, waitingSnaps, peerUsername),
@@ -280,9 +309,9 @@ fun ChatScreen(
             }
             Surface(color = MaterialTheme.colorScheme.surface) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 ) {
                     // Snapchat's camera button beside the text field: a snap for this person.
                     FilledIconButton(
@@ -291,8 +320,8 @@ fun ChatScreen(
                             containerColor = MaterialTheme.colorScheme.surfaceVariant,
                             contentColor = MaterialTheme.colorScheme.onSurface,
                         ),
-                        modifier = Modifier.size(44.dp),
-                    ) { Icon(AppIcons.PhotoCamera, contentDescription = stringResource(R.string.snap_button)) }
+                        modifier = Modifier.size(Sizes.touch),
+                    ) { Icon(AppIcons.PhotoCamera, contentDescription = stringResource(R.string.snap_button), modifier = Modifier.size(22.dp)) }
                     PrivateTextInput(
                         value = draft,
                         onValueChange = {
@@ -304,6 +333,8 @@ fun ChatScreen(
                         modifier = Modifier.weight(1f),
                     )
                     val canSend = state.phase == ChatPhase.OPEN && draft.isNotBlank() && !tooLong
+                    // The send button grows in when there is something to send, and shrinks back after.
+                    val sendScale by animateFloatAsState(if (canSend) 1f else 0.88f, tween(Motion.FAST), label = "send")
                     FilledIconButton(
                         onClick = {
                             if (controller.send(draft, replyTo?.id)) {
@@ -316,9 +347,9 @@ fun ChatScreen(
                             disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
                             disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                         ),
-                        modifier = Modifier.size(48.dp),
+                        modifier = Modifier.size(Sizes.touch).graphicsLayer { scaleX = sendScale; scaleY = sendScale },
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.chat_send))
+                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.chat_send), modifier = Modifier.size(22.dp))
                     }
                 }
             }
@@ -343,12 +374,18 @@ private fun PrivateTextInput(
     val textColor = colors.onSurface.toArgb()
     val hintColor = colors.onSurfaceVariant.toArgb()
     val onChange by rememberUpdatedState(onValueChange)
+    // A soft outline in the accent colour while typing: the field shows it has focus.
+    var focused by remember { mutableStateOf(false) }
+    val border by animateColorAsState(if (focused) colors.primary.copy(alpha = 0.55f) else Color.Transparent, tween(Motion.FAST), label = "inputBorder")
     AndroidView(
         modifier = modifier
-            .background(colors.background, RoundedCornerShape(24.dp))
-            .padding(horizontal = 16.dp, vertical = 4.dp),
+            .heightIn(min = Sizes.touch)
+            .background(colors.background, RoundedCornerShape(Radii.input))
+            .border(1.dp, border, RoundedCornerShape(Radii.input))
+            .padding(horizontal = Spacing.lg, vertical = 2.dp),
         factory = { context ->
             EditText(context).apply {
+                setOnFocusChangeListener { _, has -> focused = has }
                 imeOptions = EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
                 inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
                 maxLines = 5
@@ -400,11 +437,19 @@ private fun MessageList(
         placed = true
     }
     if (total == 0) {
-        Box(modifier = modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+        // An empty chat explains itself quietly: who it is with and that messages do not stay.
+        Column(
+            modifier = modifier.fillMaxWidth().padding(Spacing.xxxl),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(Spacing.md, Alignment.CenterVertically),
+        ) {
+            InitialsAvatar(peerUsername, size = 72.dp)
+            Text(peerUsername, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
                 stringResource(R.string.chat_empty),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
             )
         }
         return
@@ -412,22 +457,27 @@ private fun MessageList(
     LazyColumn(
         state = listState,
         modifier = modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.md),
     ) {
         items(messages, key = { it.id }) { m ->
             val mine = m.senderId == myUserId
             if (m.kind == MessageKind.MISSED_CALL) {
-                MissedCallLine(m, mine = mine, onCallBack = onCallBack)
+                Box(Modifier.animateItem().padding(vertical = Spacing.sm)) { MissedCallLine(m, mine = mine, onCallBack = onCallBack) }
                 return@items
             }
             val onThis = reactions[m.id].orEmpty()
             val quoted = m.replyToId?.let { id -> messages.find { it.id == id } }
             var picking by remember { mutableStateOf(false) }
             val index = messages.indexOf(m)
-            val firstOfRun = index <= 0 || messages[index - 1].senderId != m.senderId || messages[index - 1].kind == MessageKind.MISSED_CALL
-            Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
-                if (firstOfRun) SenderLabel(if (mine) stringResource(R.string.chat_me) else peerUsername, mine)
+            // A run is consecutive messages from one sender: tight corners inside it, the time under its last one.
+            val prev = messages.getOrNull(index - 1)
+            val next = messages.getOrNull(index + 1)
+            val firstOfRun = prev == null || prev.senderId != m.senderId || prev.kind == MessageKind.MISSED_CALL
+            val lastOfRun = next == null || next.senderId != m.senderId || next.kind == MessageKind.MISSED_CALL
+            Column(
+                modifier = Modifier.fillMaxWidth().animateItem().padding(top = if (firstOfRun) Spacing.sm else Spacing.xxs),
+                horizontalAlignment = if (mine) Alignment.End else Alignment.Start,
+            ) {
                 if (quoted != null) {
                     QuotedMessage(
                         who = if (quoted.senderId == myUserId) stringResource(R.string.chat_you) else peerUsername,
@@ -435,7 +485,7 @@ private fun MessageList(
                     )
                 }
                 Box {
-                    Bubble(m.text, mine = mine, onLongPress = { picking = true })
+                    Bubble(m.text, mine = mine, firstOfRun = firstOfRun, lastOfRun = lastOfRun, onLongPress = { picking = true })
                     if (picking) {
                         ReactionPicker(
                             chosen = onThis.find { it.userId == myUserId }?.emoji,
@@ -453,26 +503,38 @@ private fun MessageList(
                     }
                 }
                 if (onThis.isNotEmpty()) ReactionPill(onThis, onClick = { picking = true })
-                Text(
-                    DateUtils.formatDateTime(LocalContext.current, m.createdAtEpochMs, DateUtils.FORMAT_SHOW_TIME),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                )
+                if (lastOfRun) {
+                    Text(
+                        DateUtils.formatDateTime(LocalContext.current, m.createdAtEpochMs, DateUtils.FORMAT_SHOW_TIME),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xxs),
+                    )
+                }
             }
         }
         items(outgoing, key = { it.clientMessageId }) { o ->
-            Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
-                Bubble(o.text, mine = true, faded = true)
-                if (o.status == OutgoingStatus.SENDING) {
-                    Text(stringResource(R.string.chat_sending), style = MaterialTheme.typography.labelSmall)
+            val sending = o.status == OutgoingStatus.SENDING
+            Column(
+                modifier = Modifier.fillMaxWidth().animateItem().padding(top = Spacing.xxs),
+                horizontalAlignment = Alignment.End,
+            ) {
+                Bubble(o.text, mine = true, firstOfRun = false, lastOfRun = true, faded = sending, failed = !sending)
+                if (sending) {
+                    Text(
+                        stringResource(R.string.chat_sending),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xxs),
+                    )
                 } else {
-                    Row {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(14.dp))
                         Text(
                             stringResource(R.string.chat_not_sent),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.align(Alignment.CenterVertically),
+                            modifier = Modifier.padding(start = Spacing.xs),
                         )
                         TextButton(onClick = { onRetry(o.clientMessageId) }) { Text(stringResource(R.string.action_retry)) }
                         TextButton(onClick = { onDiscard(o.clientMessageId) }) { Text(stringResource(R.string.chat_discard)) }
@@ -538,62 +600,70 @@ private fun MissedCallLine(m: ChatMessage, mine: Boolean, onCallBack: (video: Bo
     }
 }
 
-/** White rounded bubbles on the grey background (reference design); mine sit on the right. */
+/**
+ * Message bubbles (UI upgrade 2026-11-20; replaces the Snapchat-style bars): mine on the right in the accent
+ * green, theirs on the left on the light surface. Corners tighten on the sender's side inside a run, so a
+ * run reads as one block. At most about 78 % of the width, so long messages wrap instead of stretching.
+ */
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
-private fun Bubble(text: String, mine: Boolean, faded: Boolean = false, onLongPress: (() -> Unit)? = null) {
+private fun Bubble(
+    text: String,
+    mine: Boolean,
+    firstOfRun: Boolean,
+    lastOfRun: Boolean,
+    faded: Boolean = false,
+    failed: Boolean = false,
+    onLongPress: (() -> Unit)? = null,
+) {
     val colors = MaterialTheme.colorScheme
-    val corner = 16.dp
+    val big = Radii.bubble
+    val tight = Radii.bubbleTight
     val shape = if (mine) {
-        RoundedCornerShape(topStart = corner, topEnd = corner, bottomStart = corner, bottomEnd = 4.dp)
+        RoundedCornerShape(topStart = big, topEnd = if (firstOfRun) big else tight, bottomStart = big, bottomEnd = if (lastOfRun) big else tight)
     } else {
-        RoundedCornerShape(topStart = corner, topEnd = corner, bottomStart = 4.dp, bottomEnd = corner)
+        RoundedCornerShape(topStart = if (firstOfRun) big else tight, topEnd = big, bottomStart = if (lastOfRun) big else tight, bottomEnd = big)
     }
     val press = if (onLongPress != null) {
         Modifier.combinedClickable(onClick = {}, onLongClickLabel = stringResource(R.string.chat_react), onLongClick = onLongPress)
     } else {
         Modifier
     }
+    val alpha = if (faded) 0.65f else 1f
     // Only emoji (1 to 3): large and without a bubble, as on WhatsApp (D-25).
     val emojiCount = EmojiText.count(text.trim())
     if (emojiCount != null && emojiCount in 1..EmojiText.MAX_BIG) {
         Text(
             text.trim(),
             fontSize = when (emojiCount) { 1 -> 48.sp; 2 -> 40.sp; else -> 34.sp },
-            color = colors.onSurface.copy(alpha = if (faded) 0.6f else 1f),
-            modifier = press.padding(horizontal = 4.dp),
+            color = colors.onSurface.copy(alpha = alpha),
+            modifier = Modifier.clip(shape).then(press).padding(horizontal = Spacing.xs),
         )
         return
     }
-    // Snapchat's layout (owner's reference, 2026-11-19): no bubbles; each message sits beside a thin coloured
-    // bar, dark green for mine and sage for theirs, under the sender's name when the sender changes.
-    Row(
-        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min).then(press).padding(vertical = 1.dp),
-    ) {
-        Box(modifier = Modifier.width(2.dp).fillMaxHeight().background(senderColor(mine)))
+    val container = when {
+        failed -> colors.errorContainer
+        mine -> colors.primary
+        else -> colors.surface
+    }
+    val content = when {
+        failed -> colors.onErrorContainer
+        mine -> colors.onPrimary
+        else -> colors.onSurface
+    }
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth(), contentAlignment = if (mine) Alignment.CenterEnd else Alignment.CenterStart) {
         Text(
             text,
             style = MaterialTheme.typography.bodyLarge,
-            color = colors.onSurface.copy(alpha = if (faded) 0.6f else 1f),
-            modifier = Modifier.padding(start = 10.dp, top = 2.dp, bottom = 2.dp),
+            color = content.copy(alpha = alpha),
+            modifier = Modifier
+                .widthIn(max = maxWidth * 0.78f)
+                .clip(shape)
+                .background(container.copy(alpha = if (faded) 0.8f else 1f))
+                .then(press)
+                .padding(horizontal = 14.dp, vertical = 9.dp),
         )
     }
-}
-
-/** The colour that marks a sender: dark green for this user, sage for the other person. */
-@Composable
-private fun senderColor(mine: Boolean) = if (mine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-
-/** "ME" or the other person's name above a run of their messages, as in Snapchat. */
-@Composable
-private fun SenderLabel(name: String, mine: Boolean) {
-    Text(
-        name.uppercase(),
-        style = MaterialTheme.typography.labelMedium,
-        fontWeight = FontWeight.Bold,
-        color = senderColor(mine),
-        modifier = Modifier.padding(top = 6.dp, bottom = 2.dp),
-    )
 }
 
 /**
@@ -646,43 +716,51 @@ private fun ReactionPill(reactions: List<Reaction>, onClick: () -> Unit) {
     }
 }
 
-/** One short line about deletion under the header; tapping it shows the full rule (docs/07). */
+/**
+ * A small pill under the header: messages do not stay (D-01/D-02). Tapping it opens a sheet with the full rule.
+ * There are no expiry options to choose: the rule is fixed by the owner's decisions, so none are shown.
+ */
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 private fun DeletionRule() {
-    var expanded by remember { mutableStateOf(false) }
+    var open by remember { mutableStateOf(false) }
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { expanded = !expanded }
-            .padding(start = 24.dp, end = 24.dp, top = 10.dp, bottom = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Box(modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm, bottom = Spacing.xs), contentAlignment = Alignment.Center) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier
+                .clip(RoundedCornerShape(50))
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f))
+                .clickable(onClickLabel = stringResource(R.string.chat_deletion_more)) { open = true }
+                .padding(horizontal = Spacing.md, vertical = 6.dp),
+        ) {
             Icon(Icons.Filled.Lock, contentDescription = null, tint = muted, modifier = Modifier.size(13.dp))
             Text(stringResource(R.string.chat_deletion_short), style = MaterialTheme.typography.labelMedium, color = muted)
         }
-        if (expanded) {
-            Text(
-                stringResource(R.string.chat_deletion_rule),
-                style = MaterialTheme.typography.bodySmall,
-                color = muted,
-                textAlign = TextAlign.Center,
-            )
+    }
+    if (open) {
+        ModalBottomSheet(onDismissRequest = { open = false }, containerColor = MaterialTheme.colorScheme.surface) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(start = Spacing.xxl, end = Spacing.xxl, bottom = Spacing.xxxl),
+                verticalArrangement = Arrangement.spacedBy(Spacing.md),
+            ) {
+                Box(
+                    modifier = Modifier.size(44.dp).background(MaterialTheme.colorScheme.background, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.Filled.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }
+                Text(stringResource(R.string.chat_deletion_sheet_title), style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
+                Text(stringResource(R.string.chat_deletion_rule), style = MaterialTheme.typography.bodyMedium, color = muted)
+                Text(stringResource(R.string.chat_deletion_sheet_note), style = MaterialTheme.typography.bodySmall, color = muted)
+                PrimaryButton(stringResource(R.string.chat_deletion_ok), onClick = { open = false })
+            }
         }
     }
 }
 
 @Composable
 private fun CallButton(icon: ImageVector, description: String, onClick: () -> Unit) {
-    Surface(
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.background,
-        modifier = Modifier.padding(horizontal = 4.dp).size(42.dp),
-    ) {
-        IconButton(onClick = onClick) { Icon(icon, contentDescription = description, modifier = Modifier.size(20.dp)) }
-    }
+    VaultIconButton(icon, description, onClick, container = MaterialTheme.colorScheme.background, size = 40.dp)
 }
 
 @Composable

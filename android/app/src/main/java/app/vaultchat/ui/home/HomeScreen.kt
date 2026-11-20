@@ -11,6 +11,26 @@ import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
 import android.text.format.DateUtils
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.selected
+import app.vaultchat.ui.components.SkeletonRow
+import app.vaultchat.ui.components.UnreadBadge
+import app.vaultchat.ui.components.VaultIconButton
+import app.vaultchat.ui.theme.Motion
+import app.vaultchat.ui.theme.Radii
+import app.vaultchat.ui.theme.Sizes
+import app.vaultchat.ui.theme.Spacing
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -103,6 +123,8 @@ fun HomeScreen(
     onSnapTo: (Connection) -> Unit = {},
     /** The Map tab: connected people's latest locations (D-06 as widened 2026-11-19). */
     onOpenMap: () -> Unit = {},
+    /** Settings (UI upgrade, 2026-11-20): version, notifications, password; no sign-out. */
+    onOpenSettings: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -136,7 +158,20 @@ fun HomeScreen(
         color = MaterialTheme.colorScheme.background,
     ) {
         Column(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
-            Header(onConnect = onOpenInbox)
+            var searching by rememberSaveable { mutableStateOf(false) }
+            Header(
+                searching = searching || state.query.isNotEmpty(),
+                onSearch = {
+                    if (searching || state.query.isNotEmpty()) {
+                        viewModel.setQuery("")
+                        searching = false
+                    } else {
+                        searching = true
+                    }
+                },
+                onSettings = onOpenSettings,
+                onConnect = onOpenInbox,
+            )
             UpdateBanner(updater, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             LastCrashCard(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             AskBatteryExemptionOnce()
@@ -153,7 +188,10 @@ fun HomeScreen(
                 )
             }
 
-            if (!state.loading && state.chats.isEmpty()) {
+            if (state.loading && state.chats.isEmpty()) {
+                // Placeholder rows while the first list loads, so the screen does not jump.
+                Column(modifier = Modifier.weight(1f)) { repeat(4) { SkeletonRow() } }
+            } else if (state.chats.isEmpty()) {
                 EmptyState(
                     modifier = Modifier.weight(1f),
                     title = stringResource(R.string.home_not_connected_title),
@@ -161,7 +199,13 @@ fun HomeScreen(
                     action = { PrimaryButton(stringResource(R.string.home_connect), onOpenInbox) },
                 )
             } else {
-                SearchField(state.query, viewModel::setQuery)
+                AnimatedVisibility(
+                    visible = searching || state.query.isNotEmpty(),
+                    enter = expandVertically(tween(Motion.MEDIUM)) + fadeIn(tween(Motion.MEDIUM)),
+                    exit = shrinkVertically(tween(Motion.FAST)) + fadeOut(tween(Motion.FAST)),
+                ) {
+                    SearchField(state.query, viewModel::setQuery)
+                }
                 FilterRow(state.filter, unread = state.chats.count { it.unreadCount > 0 }, onSelect = viewModel::setFilter)
                 ChatList(state.visibleChats, onChat, onSnap = onSnapTo, modifier = Modifier.weight(1f))
             }
@@ -170,21 +214,35 @@ fun HomeScreen(
     }
 }
 
-/** Title and the "+" to connect with someone. No menu (owner request 2026-11-02): no sign-out, no settings. */
+/**
+ * The app's title with three quiet actions: search (expands the search field), Settings and "+" to connect
+ * with someone. No sign-out here (owner request 2026-11-02).
+ */
 @Composable
-private fun Header(onConnect: () -> Unit) {
+private fun Header(searching: Boolean, onSearch: () -> Unit, onSettings: () -> Unit, onConnect: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 12.dp, bottom = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(start = Spacing.xl, end = Spacing.sm, top = Spacing.md, bottom = Spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            stringResource(R.string.home_title),
+            stringResource(R.string.app_name),
             style = MaterialTheme.typography.headlineMedium,
+            maxLines = 1,
             modifier = Modifier.weight(1f).semantics { heading() },
         )
-        RoundIconButton(onClick = onConnect) {
-            Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.home_connect_new))
-        }
+        VaultIconButton(
+            icon = if (searching) Icons.Filled.Close else Icons.Filled.Search,
+            contentDescription = stringResource(if (searching) R.string.home_search_close else R.string.home_search_hint),
+            onClick = onSearch,
+        )
+        VaultIconButton(Icons.Filled.Settings, stringResource(R.string.settings_title), onSettings)
+        VaultIconButton(
+            Icons.Filled.Add,
+            stringResource(R.string.home_connect_new),
+            onConnect,
+            container = MaterialTheme.colorScheme.primary,
+            tint = MaterialTheme.colorScheme.onPrimary,
+        )
     }
 }
 
@@ -320,13 +378,19 @@ private fun SearchField(query: String, onQuery: (String) -> Unit) {
         singleLine = true,
         placeholder = { Text(stringResource(R.string.home_search_hint)) },
         leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-        shape = RoundedCornerShape(28.dp),
+        trailingIcon = if (query.isNotEmpty()) {
+            { IconButton(onClick = { onQuery("") }) { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.home_search_clear)) } }
+        } else {
+            null
+        },
+        shape = RoundedCornerShape(Radii.input),
         colors = OutlinedTextFieldDefaults.colors(
             focusedContainerColor = MaterialTheme.colorScheme.surface,
             unfocusedContainerColor = MaterialTheme.colorScheme.surface,
             unfocusedBorderColor = MaterialTheme.colorScheme.surface,
+            focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
         ),
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.screen, vertical = Spacing.xs),
     )
 }
 
@@ -347,13 +411,15 @@ private fun FilterRow(selected: ChatFilter, unread: Int, onSelect: (ChatFilter) 
 @Composable
 private fun Pill(label: String, selected: Boolean, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
+    val container by animateColorAsState(if (selected) colors.primary else colors.surface, tween(Motion.MEDIUM), label = "pill")
+    val content by animateColorAsState(if (selected) colors.onPrimary else colors.onSurface, tween(Motion.MEDIUM), label = "pillText")
     Surface(
         shape = RoundedCornerShape(50),
-        color = if (selected) colors.primary else colors.surface,
-        contentColor = if (selected) colors.onPrimary else colors.onSurface,
-        modifier = Modifier.clickable(role = Role.Tab, onClick = onClick),
+        color = container,
+        contentColor = content,
+        modifier = Modifier.semantics { this.selected = selected }.clip(RoundedCornerShape(50)).clickable(role = Role.Tab, onClick = onClick),
     ) {
-        Text(label, style = MaterialTheme.typography.labelLarge.copy(fontSize = 14.sp), modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
+        Text(label, style = MaterialTheme.typography.labelLarge.copy(fontSize = 14.sp), modifier = Modifier.padding(horizontal = 16.dp, vertical = 7.dp))
     }
 }
 
@@ -365,48 +431,80 @@ private fun ChatList(chats: List<Connection>, onChat: (Connection) -> Unit, onSn
         }
         return
     }
-    LazyColumn(modifier = modifier.fillMaxWidth(), contentPadding = PaddingValues(vertical = 4.dp)) {
+    LazyColumn(modifier = modifier.fillMaxWidth(), contentPadding = PaddingValues(vertical = Spacing.xs)) {
         items(chats, key = { it.id }) { chat ->
-            ChatRow(chat, onClick = { onChat(chat) }, onSnap = { onSnap(chat) })
-            HorizontalDivider(modifier = Modifier.padding(start = 76.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+            // Rows slide to their new place when the order changes (a new message moves a chat up).
+            Column(modifier = Modifier.animateItem()) {
+                ChatRow(chat, onClick = { onChat(chat) }, onSnap = { onSnap(chat) })
+                HorizontalDivider(
+                    modifier = Modifier.padding(start = Spacing.screen + Sizes.avatarRow + Spacing.md),
+                    thickness = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                )
+            }
         }
     }
 }
 
 /**
- * A chat-list row in Snapchat's layout (owner's reference, 2026-11-19): name, a status line with a small
- * coloured square ("New Snap", "New Chat", or the last activity), the 🔥 streak, and a camera button that
- * opens the snap camera for this person.
+ * A chat-list row (UI upgrade 2026-11-20, keeping the owner's Snapchat elements): avatar, name with the time
+ * on the right, a status line ("New snap", "N new messages" or "Tap to chat") with its coloured square, the
+ * 🔥 streak, the unread badge and a camera button for a snap. The list has no message text to preview (the
+ * chat list API carries counts and times only).
  */
 @Composable
 private fun ChatRow(chat: Connection, onClick: () -> Unit, onSnap: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val snap = chat.pendingSnaps > 0
     val unread = chat.unreadCount > 0
+    val fresh = snap || unread
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 72.dp)
             .clickable(onClick = onClick)
-            .padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+            .padding(start = Spacing.screen, end = Spacing.xs, top = Spacing.sm, bottom = Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
-        InitialsAvatar(chat.peerUsername, size = 48.dp)
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                chat.peerUsername,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = if (snap || unread) FontWeight.Bold else FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+        InitialsAvatar(chat.peerUsername, size = Sizes.avatarRow, highlighted = snap)
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    chat.peerUsername,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = if (fresh) FontWeight.SemiBold else FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                // Snap streak (D-27): days in a row on which both sent a snap.
+                if (chat.streak > 0) {
+                    Text(
+                        " ${chat.streak}\uD83D\uDD25",
+                        style = MaterialTheme.typography.labelMedium,
+                        maxLines = 1,
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                chat.lastMessageAtEpochMs?.let {
+                    Text(
+                        relativeTime(it),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (unread) colors.primary else colors.onSurfaceVariant,
+                        fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Normal,
+                        maxLines = 1,
+                        modifier = Modifier.padding(start = Spacing.sm),
+                    )
+                }
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 // Snapchat's status square: filled for something new, an outline otherwise.
                 val mark = if (snap) colors.primary else colors.secondary
                 Box(
                     modifier = Modifier
-                        .size(10.dp)
-                        .then(if (snap || unread) Modifier.background(mark, RoundedCornerShape(2.dp)) else Modifier.border(1.5.dp, mark, RoundedCornerShape(2.dp))),
+                        .size(9.dp)
+                        .then(if (fresh) Modifier.background(mark, RoundedCornerShape(2.dp)) else Modifier.border(1.5.dp, mark, RoundedCornerShape(2.dp))),
                 )
                 Spacer(Modifier.width(6.dp))
                 val status = when {
@@ -414,21 +512,20 @@ private fun ChatRow(chat: Connection, onClick: () -> Unit, onSnap: () -> Unit) {
                     unread -> pluralStringResource(R.plurals.home_new_messages, chat.unreadCount, chat.unreadCount)
                     else -> stringResource(R.string.home_tap_to_chat)
                 }
-                val time = chat.lastMessageAtEpochMs?.let { " · " + relativeTime(it) }.orEmpty()
                 Text(
-                    status + time,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (snap || unread) colors.onSurface else colors.onSurfaceVariant,
-                    fontWeight = if (snap || unread) FontWeight.SemiBold else FontWeight.Normal,
+                    status,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (fresh) colors.onSurface else colors.onSurfaceVariant,
+                    fontWeight = if (fresh) FontWeight.Medium else FontWeight.Normal,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
                 )
+                UnreadBadge(chat.unreadCount, modifier = Modifier.padding(start = Spacing.sm))
             }
         }
-        // Snap streak (D-27): days in a row on which both sent a snap.
-        if (chat.streak > 0) Text("${chat.streak}\uD83D\uDD25", style = MaterialTheme.typography.labelLarge)
         IconButton(onClick = onSnap) {
-            Icon(AppIcons.PhotoCamera, contentDescription = stringResource(R.string.snap_button), tint = colors.onSurfaceVariant)
+            Icon(AppIcons.PhotoCamera, contentDescription = stringResource(R.string.snap_button), tint = colors.onSurfaceVariant, modifier = Modifier.size(22.dp))
         }
     }
 }
