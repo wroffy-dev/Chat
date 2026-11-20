@@ -381,14 +381,15 @@ private fun PrivateTextInput(
     val hintColor = Ref.OnSurfaceVariant.toArgb()
     val onChange by rememberUpdatedState(onValueChange)
     var focused by remember { mutableStateOf(false) }
-    val background by animateColorAsState(if (focused) Ref.Surface else Ref.Container, tween(120), label = "inputBg")
-    val border by animateColorAsState(if (focused) Ref.Primary else Color.Transparent, tween(120), label = "inputBorder")
+    // Not named "background": inside the EditText's apply {} below that would hide View.background.
+    val fieldFill by animateColorAsState(if (focused) Ref.Surface else Ref.Container, tween(120), label = "inputBg")
+    val fieldOutline by animateColorAsState(if (focused) Ref.Primary else Color.Transparent, tween(120), label = "inputBorder")
     AndroidView(
         modifier = modifier
             .heightIn(min = 44.dp)
             .clip(RoundedCornerShape(50))
-            .background(background)
-            .border(1.dp, border, RoundedCornerShape(50))
+            .background(fieldFill)
+            .border(1.dp, fieldOutline, RoundedCornerShape(50))
             .padding(horizontal = 16.dp, vertical = 2.dp),
         factory = { context ->
             EditText(context).apply {
