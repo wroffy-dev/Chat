@@ -27,10 +27,23 @@ class EmojiEffectsTest {
     }
 
     @Test
-    fun `no effect for text, long emoji runs or emoji without an effect`() {
+    fun `no effect for text or long emoji runs`() {
         assertNull(EmojiEffects.effectFor("I ❤️ you"))
         assertNull(EmojiEffects.effectFor("❤️❤️❤️❤️"))
-        assertNull(EmojiEffects.effectFor("😐"))
         assertNull(EmojiEffects.effectFor(""))
+    }
+
+    @Test
+    fun `every other emoji floats up itself`() {
+        val e = EmojiEffects.effectFor("😐")
+        assertEquals(listOf("😐"), e?.pieces)
+        assertEquals(EmojiEffects.Motion.RISE, e?.motion)
+        assertEquals(listOf("🐶", "🐱"), EmojiEffects.effectFor("🐶 🐱")?.pieces)
+    }
+
+    @Test
+    fun `tears and snow fall`() {
+        assertEquals(EmojiEffects.Motion.FALL, EmojiEffects.effectFor("😭")?.motion)
+        assertEquals(EmojiEffects.Motion.FALL, EmojiEffects.effectFor("❄️")?.motion)
     }
 }
