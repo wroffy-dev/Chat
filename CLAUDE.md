@@ -29,12 +29,15 @@ decisions there are either recorded as decided or still open; never decide an op
   at most 10 s that is never recorded or stored; do not turn it into stored voice messages, lengthen it or
   let the listening phone send audio without the owner. Snaps (D-27, 2026-11-19) are the one exception to "no
   photos/media": a camera photo or a video of at most 7 s, deleted on the server when opened (one replay in
-  memory) or after 24 h, never in the database or backups; do not add gallery uploads, saving, longer videos
-  or keeping snaps without the owner.
+  memory) or after 24 h, never in the database or backups; since 2026-11-20 (owner) the sender may save their own photo or video to
+  the gallery before sending; do not add gallery uploads, saving received snaps, longer videos or keeping
+  snaps without the owner.
 - At most ten app users (owner decision D-21, 2026-10-29; previously exactly two), each chatting and
   calling 1-to-1 with the people they paired with by QR. No group chats or group calls. The administrator
   is a separate operational identity, not an app user.
-- Chat deletion follows decisions D-01 (option D) and D-02 (60 s lease, 24 h backstop) in docs/17 — do not change them without the owner.
+- Chat deletion follows decisions D-01 (option D) and D-02 (60 s lease, 24 h backstop) in docs/17, with the per-chat
+  disappearing timer of D-30 (owner, 2026-11-20: Off, 1 min, 5 min, 1 h, 24 h after seen, set by either person for
+  both) — do not change them without the owner.
 - Location sharing is **approved with changes** (D-06, 2026-11-02): sent when the
   app is opened, and since 2026-11-19 (owner, Snap Map style) about every 15 minutes in the background when the user
   allows "Allow all the time" (not required); required to use the app; the last 10 points are kept and shown to the

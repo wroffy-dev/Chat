@@ -55,6 +55,33 @@ object AppIcons {
         icon("VerifiedUser", "M12,1L3,5v6c0,5.55 3.84,10.74 9,12 5.16,-1.26 9,-6.45 9,-12V5l-9,-4zM10,17l-4,-4 1.41,-1.41L10,14.17l6.59,-6.59L18,9l-8,8z")
     }
 
+    /** Material "timer" (disappearing messages). */
+    val Timer: ImageVector by lazy {
+        icon(
+            "Timer",
+            "M15,1H9v2h6V1zM11,14h2V8h-2v6zM19.03,7.39l1.42,-1.42c-0.43,-0.51 -0.9,-0.99 -1.41,-1.41l-1.42,1.42C16.07,4.74 14.12,4 12,4c-4.97,0 -9,4.03 -9,9s4.02,9 9,9 9,-4.03 9,-9c0,-2.12 -0.74,-4.07 -1.97,-5.61zM12,20c-3.87,0 -7,-3.13 -7,-7s3.13,-7 7,-7 7,3.13 7,7 -3.13,7 -7,7z",
+        )
+    }
+
+    /** Material "done_all" (read) and "done" (sent). */
+    val DoneAll: ImageVector by lazy {
+        icon("DoneAll", "M18,7l-1.41,-1.41 -6.34,6.34 1.41,1.41L18,7zM22.24,5.59L11.66,16.17 7.48,12l-1.41,1.41L11.66,19l12,-12 -1.42,-1.41zM0.41,13.41L6,19l1.41,-1.41L1.83,12 0.41,13.41z")
+    }
+
+    val Done: ImageVector by lazy {
+        icon("Done", "M9,16.2L4.8,12l-1.4,1.4L9,19 21,7l-1.4,-1.4L9,16.2z")
+    }
+
+    /** Material "arrow_upward" (send). */
+    val ArrowUpward: ImageVector by lazy {
+        icon("ArrowUpward", "M4,12l1.41,1.41L11,7.83V20h2V7.83l5.58,5.59L20,12l-8,-8 -8,8z")
+    }
+
+    /** Material "download" (save a snap you took). */
+    val Download: ImageVector by lazy {
+        icon("Download", "M19,9h-4V3H9v6H5l7,7 7,-7zM5,18v2h14v-2H5z")
+    }
+
     /** Material "map". */
     val Map: ImageVector by lazy {
         icon(

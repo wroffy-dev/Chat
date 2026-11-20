@@ -52,8 +52,15 @@ export interface ReactionView {
   emoji: string;
 }
 
+/** The timer choices of the disappearing setting (D-30), in seconds; null is Off. */
+export const DISAPPEAR_CHOICES = [60, 300, 3600, 86400] as const;
+
 export interface HistoryView {
   epoch: number;
+  /** Disappearing timer (D-30): null = Off (seen messages go when either leaves); else seconds after seen. */
+  disappearSeconds: number | null;
+  /** How far the other person has read: the caller's messages up to here are "Read". */
+  peerReadSeq: number;
   /** The caller's epoch was stale: it must drop everything it holds; `items` start from the beginning. */
   cleared: boolean;
   items: MessageView[];
@@ -129,7 +136,7 @@ export class ChatService {
       await this.lockConversation(tx, conversationId);
       const p = await this.participant(tx, conversationId, userId);
       // A lease that lapsed but was not yet swept is an exit that already happened (D-02).
-      const removed = p.leaseExpiresAt && p.leaseExpiresAt <= now ? await this.clearSeen(tx, conversationId, now) : 0;
+      const removed = p.leaseExpiresAt && p.leaseExpiresAt <= now ? await this.clearSeenIfOff(tx, conversationId, now) : 0;
       await this.setLease(tx, conversationId, userId, leaseId, now);
       return { epoch: await this.epochOf(tx, conversationId), deleted: removed };
     });
@@ -268,6 +275,7 @@ export class ChatService {
         await this.participant(tx, conversationId, userId);
         const conv = await tx.conversation.findUniqueOrThrow({ where: { id: conversationId } });
         const epoch = Number(conv.clearEpoch);
+        const peer = await tx.conversationParticipant.findFirst({ where: { conversationId, userId: { not: userId } }, select: { lastReadSeq: true } });
         const cleared = q.epoch !== undefined && q.epoch !== epoch;
         const rows = await tx.message.findMany({
           where: { conversationId, seq: { gt: BigInt(cleared ? 0 : q.afterSeq) } },
@@ -276,6 +284,8 @@ export class ChatService {
         });
         return {
           epoch,
+          disappearSeconds: conv.disappearSeconds,
+          peerReadSeq: Number(peer?.lastReadSeq ?? 0n),
           cleared,
           hasMore: rows.length > limit,
           items: rows.slice(0, limit).map((m) => ({
@@ -318,13 +328,54 @@ export class ChatService {
         FROM conversations c
        WHERE c.id = p.conversation_id AND p.conversation_id = ${conversationId}::uuid AND p.user_id = ${userId}::uuid`;
     if (updated !== 1) throw appError(404, "NOT_FOUND");
+    // The disappearing timer (D-30) starts when the recipient has seen a message.
+    const now = this.now();
+    const seen = await this.prisma.$executeRaw`
+      UPDATE messages m
+         SET seen_at = ${now}
+        FROM conversation_participants p
+       WHERE p.conversation_id = m.conversation_id AND p.user_id = ${userId}::uuid
+         AND m.conversation_id = ${conversationId}::uuid
+         AND m.sender_user_id <> ${userId}::uuid
+         AND m.seen_at IS NULL
+         AND m.seq <= p.last_read_seq`;
+    // The sender's app shows "Read" from this.
+    if (seen > 0) this.changed(conversationId);
+  }
+
+  /**
+   * Sets the chat's disappearing timer for both people (owner, 2026-11-20; D-30): null = Off, or one of
+   * [DISAPPEAR_CHOICES]. A line in the chat says who changed it. A repeated choice changes nothing.
+   */
+  async setDisappearing(userId: string, conversationId: string, seconds: number | null): Promise<{ disappearSeconds: number | null }> {
+    if (seconds !== null && !(DISAPPEAR_CHOICES as readonly number[]).includes(seconds)) {
+      throw appError(400, "VALIDATION_FAILED", [{ path: "/seconds", rule: "choice" }]);
+    }
+    const now = this.now();
+    const changed = await this.prisma.$transaction(async (tx) => {
+      const conv = await this.lockConversation(tx, conversationId);
+      await this.participant(tx, conversationId, userId);
+      const current = await tx.conversation.findUniqueOrThrow({ where: { id: conversationId }, select: { disappearSeconds: true } });
+      if (current.disappearSeconds === seconds) return false;
+      const seq = conv.last_seq + 1n;
+      await tx.message.create({
+        data: {
+          conversationId, seq, epoch: conv.clear_epoch, senderUserId: userId, clientMessageId: randomUUID(),
+          body: seconds === null ? "off" : String(seconds), kind: "disappear", createdAt: now,
+        },
+      });
+      await tx.conversation.update({ where: { id: conversationId }, data: { lastSeq: seq, disappearSeconds: seconds } });
+      return true;
+    });
+    if (changed) this.changed(conversationId);
+    return { disappearSeconds: seconds };
   }
 
   /**
    * Server-side exits and the backstop (D-02): lapsed leases count as exits; messages older than
    * 24 h are deleted, seen or not. Runs every few seconds; also catches up after downtime.
    */
-  async sweep(): Promise<{ expiredLeases: number; backstopDeleted: number }> {
+  async sweep(): Promise<{ expiredLeases: number; backstopDeleted: number; timerDeleted: number }> {
     const now = this.now();
     const lapsed = await this.prisma.conversationParticipant.findMany({
       where: { leaseExpiresAt: { lte: now } },
@@ -364,18 +415,54 @@ export class ChatService {
       if (n > 0) this.changed(conversationId);
       backstopDeleted += n;
     }
-    return { expiredLeases, backstopDeleted };
+    const timerDeleted = await this.sweepTimers(now);
+    return { expiredLeases, backstopDeleted, timerDeleted };
+  }
+
+  /** Disappearing timers (D-30): deletes messages whose recipient saw them longer ago than the chat's timer. */
+  private async sweepTimers(now: Date): Promise<number> {
+    const due = await this.prisma.$queryRaw<{ conversation_id: string }[]>`
+      SELECT DISTINCT m.conversation_id
+        FROM messages m JOIN conversations c ON c.id = m.conversation_id
+       WHERE c.disappear_seconds IS NOT NULL
+         AND m.seen_at IS NOT NULL
+         AND m.seen_at <= ${now}::timestamptz - make_interval(secs => c.disappear_seconds)`;
+    let total = 0;
+    for (const { conversation_id: conversationId } of due) {
+      const n = await this.prisma.$transaction(async (tx) => {
+        await this.lockConversation(tx, conversationId);
+        const deleted = await tx.$executeRaw`
+          DELETE FROM messages m
+           USING conversations c
+           WHERE c.id = m.conversation_id
+             AND m.conversation_id = ${conversationId}::uuid
+             AND c.disappear_seconds IS NOT NULL
+             AND m.seen_at IS NOT NULL
+             AND m.seen_at <= ${now}::timestamptz - make_interval(secs => c.disappear_seconds)`;
+        if (deleted > 0) await this.bumpEpoch(tx, conversationId, now);
+        return deleted;
+      });
+      if (n > 0) this.changed(conversationId);
+      total += n;
+    }
+    return total;
   }
 
   // ---------------------------------------------------------------------------------------------
 
   /** The exit rule (D-01 option D) plus ending the caller's lease. Caller holds the conversation lock. */
   private async exit(tx: Tx, conversationId: string, userId: string, now: Date) {
-    await this.clearSeen(tx, conversationId, now);
+    await this.clearSeenIfOff(tx, conversationId, now);
     await tx.conversationParticipant.update({
       where: { conversationId_userId: { conversationId, userId } },
       data: { leaseId: null, leaseExpiresAt: null },
     });
+  }
+
+  /** The exit rule applies only while the disappearing timer is Off (D-30); a timer replaces it. */
+  private async clearSeenIfOff(tx: Tx, conversationId: string, now: Date): Promise<number> {
+    const c = await tx.conversation.findUniqueOrThrow({ where: { id: conversationId }, select: { disappearSeconds: true } });
+    return c.disappearSeconds === null ? this.clearSeen(tx, conversationId, now) : 0;
   }
 
   /**

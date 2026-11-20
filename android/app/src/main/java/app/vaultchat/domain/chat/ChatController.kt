@@ -55,6 +55,10 @@ data class ChatState(
     val reactions: Map<String, List<Reaction>> = emptyMap(),
     /** The other person is typing right now (shown for a few seconds after their last signal). */
     val peerTyping: Boolean = false,
+    /** Disappearing timer (D-30): null = Off; else seconds after a message is seen. Same for both people. */
+    val disappearSeconds: Int? = null,
+    /** How far the other person has read: this user's messages up to here show as "Read". */
+    val peerReadSeq: Long = 0,
 )
 
 /**
@@ -227,6 +231,18 @@ class ChatController(
         }
     }
 
+    /** Sets the disappearing timer for both people (D-30); the chat then shows a line saying so. */
+    fun setDisappearing(seconds: Int?) {
+        if (_state.value.phase != ChatPhase.OPEN) return
+        scope.launch {
+            when (val r = repo.setDisappearing(conversationId, seconds)) {
+                is ChatResult.Ok -> _state.update { it.copy(disappearSeconds = r.value) }
+                is ChatResult.Failure -> if (r.reason == ChatFailure.SESSION_ENDED) failed(r.reason) else _state.update { it.copy(notice = ChatNotice.NETWORK) }
+            }
+            sync()
+        }
+    }
+
     fun discard(clientMessageId: String) {
         _state.update { s -> s.copy(outgoing = s.outgoing.filterNot { it.clientMessageId == clientMessageId }) }
     }
@@ -315,7 +331,7 @@ class ChatController(
                 val fromPeer = page.items.any { it.senderId != myUserId }
                 _state.update { s -> s.copy(messages = merge(s.messages, page.items), peerTyping = s.peerTyping && !fromPeer) }
             }
-            _state.update { s -> s.copy(reactions = page.reactions.groupBy { it.messageId }) }
+            _state.update { s -> s.copy(reactions = page.reactions.groupBy { it.messageId }, disappearSeconds = page.disappearSeconds, peerReadSeq = page.peerReadSeq) }
             syncedSeq = maxOf(if (page.cleared) 0 else syncedSeq, page.items.maxOfOrNull { it.seq } ?: 0)
             if (!page.hasMore) break
         }

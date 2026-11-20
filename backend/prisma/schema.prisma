@@ -251,6 +251,9 @@ model Conversation {
   /// Incremented whenever messages are deleted (exit or backstop); sends from an older epoch are refused.
   clearEpoch   BigInt    @default(0) @map("clear_epoch")
   clearedAt    DateTime? @map("cleared_at") @db.Timestamptz(3)
+  /// Disappearing timer (D-30): null = Off (seen messages deleted when either leaves, D-01); else seconds
+  /// after the recipient saw a message (60, 300, 3600 or 86400; CHECK in SQL).
+  disappearSeconds Int?  @map("disappear_seconds")
 
   connection   Connection                @relation(fields: [connectionId], references: [id], onDelete: Restrict)
   participants ConversationParticipant[]
@@ -289,7 +292,10 @@ model Message {
   /// sensitivity as `body`; deleted with the message.
   senderReaction    String?  @map("sender_reaction")
   recipientReaction String?  @map("recipient_reaction")
-  /// "text" | "missed_call" (CHECK in SQL). A missed call is written by the server; its body is "video" | "voice".
+  /// When the recipient first displayed it (D-30); the disappearing timer runs from here.
+  seenAt            DateTime? @map("seen_at") @db.Timestamptz(3)
+  /// "text" | "missed_call" | "disappear" (CHECK in SQL). A missed call is written by the server; its body is
+  /// "video" | "voice". A "disappear" line records a timer change; its body is the seconds or "off".
   kind              String   @default("text")
   /// The message this one replies to; set to NULL when that message is deleted.
   replyToId         String?  @map("reply_to_id") @db.Uuid

@@ -344,3 +344,13 @@ Envelope: `{ "type": string, "data": object }`
 Signals are best effort. Polling stays as the fallback: the chat polls every 2 s without a socket and
 every 10 s with one; the incoming-call check every 3 s / 15 s; the pairing screens every 3 s / 15 s. The chat heartbeat stays on REST
 (`POST /conversations/{id}/heartbeat`).
+
+## Disappearing timer (D-30, 2026-11-20)
+
+- `GET /conversations/{id}/messages` also returns `disappearSeconds` (null = Off, or 60, 300, 3600, 86400) and
+  `peerReadSeq` (how far the other person has read; the caller's messages up to it show as "Read").
+- `PUT /conversations/{id}/disappearing` — `{ "seconds": null | 60 | 300 | 3600 | 86400 }` → `{ disappearSeconds }`.
+  Applies to both participants; writes a message of kind `disappear` (body = seconds or `off`) from the caller.
+  A repeated value changes nothing. 20/min. `400 VALIDATION_FAILED` for any other value.
+- Message `kind` may be `disappear`. Reading a message (`POST /conversations/{id}/read`) sets its `seen_at`; the
+  timer sweep deletes messages `seen_at + disappear_seconds` after they were seen and bumps the epoch.

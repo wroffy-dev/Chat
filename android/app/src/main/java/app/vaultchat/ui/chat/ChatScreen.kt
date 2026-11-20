@@ -109,6 +109,19 @@ import app.vaultchat.ui.theme.Motion
 import app.vaultchat.ui.theme.Radii
 import app.vaultchat.ui.theme.Sizes
 import app.vaultchat.ui.theme.Spacing
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import app.vaultchat.domain.chat.DISAPPEAR_CHOICES
+import app.vaultchat.ui.theme.Ref
 import app.vaultchat.R
 import app.vaultchat.domain.chat.ChatMessage
 import app.vaultchat.domain.chat.ChatNotice
@@ -194,59 +207,52 @@ fun ChatScreen(
         }
     }
 
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+    // The disappearing-messages screen (owner's reference, 2026-11-20) opens over the chat, so the chat stays
+    // open (no exit, FLAG_SECURE kept) while the timer is chosen.
+    var showExpiry by remember { mutableStateOf(false) }
+    if (showExpiry) {
+        DisappearingScreen(
+            peerUsername = peerUsername,
+            current = state.disappearSeconds,
+            onBack = { showExpiry = false },
+            onSet = { seconds ->
+                controller.setDisappearing(seconds)
+                showExpiry = false
+            },
+        )
+        return
+    }
+
+    Surface(modifier = Modifier.fillMaxSize(), color = Ref.Surface, contentColor = Ref.OnSurface) {
         Column(modifier = Modifier.fillMaxSize().safeDrawingPadding().imePadding()) {
-            Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 0.5.dp) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.xs, vertical = Spacing.xs),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
-                    }
-                    InitialsAvatar(peerUsername, size = Sizes.avatarHeader)
-                    Column(modifier = Modifier.weight(1f).padding(start = Spacing.md)) {
-                        Text(
-                            peerUsername,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.semantics { heading() },
-                        )
-                        // "typing…" with animated dots, sliding in and out (data from chat.typing; no presence).
-                        AnimatedVisibility(
-                            visible = state.peerTyping,
-                            enter = fadeIn(tween(Motion.FAST)) + expandVertically(tween(Motion.FAST)),
-                            exit = fadeOut(tween(Motion.FAST)) + shrinkVertically(tween(Motion.FAST)),
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                                Text(
-                                    stringResource(R.string.chat_typing),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                                TypingDots()
-                            }
-                        }
-                    }
-                    CallButton(AppIcons.Mic, stringResource(R.string.talk_button)) { onTalk() }
-                    CallButton(AppIcons.Videocam, stringResource(R.string.home_video_call)) { onCall(true) }
-                    CallButton(Icons.Filled.Call, stringResource(R.string.home_voice_call)) { onCall(false) }
-                }
-            }
-            DeletionRule()
+            ChatHeader(
+                peerUsername = peerUsername,
+                typing = state.peerTyping,
+                onBack = onBack,
+                onVoice = { onCall(false) },
+                onVideo = { onCall(true) },
+                onTalk = onTalk,
+                onDisappearing = { showExpiry = true },
+            )
+            StatusStrip(disappearSeconds = state.disappearSeconds, onExpiry = { showExpiry = true })
             if (waitingSnaps > 0) {
-                Surface(
-                    color = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    shape = MaterialTheme.shapes.large,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.screen, vertical = 6.dp).clip(MaterialTheme.shapes.large).clickable(onClick = onOpenSnaps),
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Ref.PrimaryContainer)
+                        .clickable(onClick = onOpenSnaps)
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
                 ) {
+                    Icon(AppIcons.PhotoCamera, contentDescription = null, tint = Ref.Primary, modifier = Modifier.size(18.dp))
                     Text(
                         if (waitingSnaps == 1) stringResource(R.string.snap_waiting, peerUsername) else stringResource(R.string.snap_waiting_more, waitingSnaps, peerUsername),
-                        style = MaterialTheme.typography.labelLarge,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        color = Ref.OnPrimaryContainer,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
                     )
                 }
             }
@@ -274,6 +280,8 @@ fun ChatScreen(
                     onCallBack = onCall,
                     peerUsername = peerUsername,
                     myUserId = myUserId,
+                    peerReadSeq = state.peerReadSeq,
+                    disappearing = state.disappearSeconds != null,
                     onRetry = controller::retry,
                     onDiscard = controller::discard,
                     modifier = Modifier.weight(1f),
@@ -284,73 +292,71 @@ fun ChatScreen(
             if (tooLong) {
                 Text(
                     stringResource(R.string.chat_too_long, ChatText.MAX_CODE_POINTS),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
+                    fontSize = 12.sp,
+                    color = Ref.Error,
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
             replyTo?.let { target ->
-                Surface(color = MaterialTheme.colorScheme.surface) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                stringResource(R.string.chat_replying_to, if (target.senderId == myUserId) stringResource(R.string.chat_you) else peerUsername),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                            Text(target.text, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                        TextButton(onClick = { replyTo = null }) { Text(stringResource(R.string.action_cancel)) }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Ref.ContainerLow)
+                        .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.width(3.dp).height(32.dp).background(Ref.Primary, RoundedCornerShape(2.dp)))
+                    Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
+                        Text(
+                            stringResource(R.string.chat_replying_to, if (target.senderId == myUserId) stringResource(R.string.chat_you) else peerUsername),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Ref.Primary,
+                        )
+                        Text(target.text, fontSize = 12.sp, color = Ref.OnSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
+                    TextButton(onClick = { replyTo = null }) { Text(stringResource(R.string.action_cancel), color = Ref.Primary) }
                 }
             }
-            Surface(color = MaterialTheme.colorScheme.surface) {
+            // Composer: text only. The round button on the left takes a snap (the reference's place for it).
+            Column(modifier = Modifier.fillMaxWidth().background(Ref.Surface)) {
+                Box(Modifier.fillMaxWidth().height(1.dp).background(Ref.OutlineVariant))
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md, vertical = Spacing.sm),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.Bottom,
-                    horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    // Snapchat's camera button beside the text field: a snap for this person.
-                    FilledIconButton(
+                    RoundAction(
+                        icon = AppIcons.PhotoCamera,
+                        description = stringResource(R.string.snap_button),
+                        container = Ref.Container,
+                        tint = Ref.OnSurfaceVariant,
                         onClick = onSnap,
-                        colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            contentColor = MaterialTheme.colorScheme.onSurface,
-                        ),
-                        modifier = Modifier.size(Sizes.touch),
-                    ) { Icon(AppIcons.PhotoCamera, contentDescription = stringResource(R.string.snap_button), modifier = Modifier.size(22.dp)) }
+                    )
                     PrivateTextInput(
                         value = draft,
                         onValueChange = {
                             draft = it
                             if (it.isNotBlank()) controller.typing()
                         },
-                        hint = stringResource(R.string.chat_input_hint),
+                        hint = stringResource(R.string.chat_message_hint, peerUsername),
                         enabled = state.phase == ChatPhase.OPEN,
                         modifier = Modifier.weight(1f),
                     )
                     val canSend = state.phase == ChatPhase.OPEN && draft.isNotBlank() && !tooLong
-                    // The send button grows in when there is something to send, and shrinks back after.
-                    val sendScale by animateFloatAsState(if (canSend) 1f else 0.88f, tween(Motion.FAST), label = "send")
-                    FilledIconButton(
+                    RoundAction(
+                        icon = AppIcons.ArrowUpward,
+                        description = stringResource(R.string.chat_send),
+                        container = if (canSend) Ref.Primary else Ref.Primary.copy(alpha = 0.4f),
+                        tint = Ref.OnPrimary,
+                        enabled = canSend,
                         onClick = {
                             if (controller.send(draft, replyTo?.id)) {
                                 draft = ""
                                 replyTo = null
                             }
                         },
-                        enabled = canSend,
-                        colors = IconButtonDefaults.filledIconButtonColors(
-                            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        ),
-                        modifier = Modifier.size(Sizes.touch).graphicsLayer { scaleX = sendScale; scaleY = sendScale },
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.chat_send), modifier = Modifier.size(22.dp))
-                    }
+                    )
                 }
             }
         }
@@ -360,7 +366,8 @@ fun ChatScreen(
 /**
  * Message input as a platform EditText, because Compose text fields cannot ask the keyboard not to
  * learn from what is typed (docs/07 §4 rule 6). The keyboard may still ignore the request. The text
- * is never put in saved instance state.
+ * is never put in saved instance state. Styled as the reference: a grey pill that turns white with a
+ * blue outline while typing.
  */
 @Composable
 private fun PrivateTextInput(
@@ -370,25 +377,26 @@ private fun PrivateTextInput(
     enabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val colors = MaterialTheme.colorScheme
-    val textColor = colors.onSurface.toArgb()
-    val hintColor = colors.onSurfaceVariant.toArgb()
+    val textColor = Ref.OnSurface.toArgb()
+    val hintColor = Ref.OnSurfaceVariant.toArgb()
     val onChange by rememberUpdatedState(onValueChange)
-    // A soft outline in the accent colour while typing: the field shows it has focus.
     var focused by remember { mutableStateOf(false) }
-    val border by animateColorAsState(if (focused) colors.primary.copy(alpha = 0.55f) else Color.Transparent, tween(Motion.FAST), label = "inputBorder")
+    val background by animateColorAsState(if (focused) Ref.Surface else Ref.Container, tween(120), label = "inputBg")
+    val border by animateColorAsState(if (focused) Ref.Primary else Color.Transparent, tween(120), label = "inputBorder")
     AndroidView(
         modifier = modifier
-            .heightIn(min = Sizes.touch)
-            .background(colors.background, RoundedCornerShape(Radii.input))
-            .border(1.dp, border, RoundedCornerShape(Radii.input))
-            .padding(horizontal = Spacing.lg, vertical = 2.dp),
+            .heightIn(min = 44.dp)
+            .clip(RoundedCornerShape(50))
+            .background(background)
+            .border(1.dp, border, RoundedCornerShape(50))
+            .padding(horizontal = 16.dp, vertical = 2.dp),
         factory = { context ->
             EditText(context).apply {
                 setOnFocusChangeListener { _, has -> focused = has }
                 imeOptions = EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
                 inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
                 maxLines = 5
+                textSize = 14f
                 isSaveEnabled = false
                 background = null
                 addTextChangedListener(
@@ -413,6 +421,203 @@ private fun PrivateTextInput(
     )
 }
 
+/** Round 44 dp button of the reference (composer and header). */
+@Composable
+private fun RoundAction(
+    icon: ImageVector,
+    description: String,
+    container: Color,
+    tint: Color,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+) {
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .background(container)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = description, tint = tint, modifier = Modifier.size(20.dp))
+    }
+}
+
+/** Two letters for the header avatar ("EV" for "Elena Vance", "AL" for "alice"). */
+private fun initialsOf(name: String): String {
+    val words = name.split(' ', '.', '_', '-').filter { it.isNotBlank() }
+    val letters = if (words.size >= 2) "${words[0].first()}${words[1].first()}" else name.filter { it.isLetterOrDigit() }.take(2)
+    return letters.uppercase().ifEmpty { "?" }
+}
+
+/** Header of the reference: back, avatar and name, then voice, video and the options menu. */
+@Composable
+private fun ChatHeader(
+    peerUsername: String,
+    typing: Boolean,
+    onBack: () -> Unit,
+    onVoice: () -> Unit,
+    onVideo: () -> Unit,
+    onTalk: () -> Unit,
+    onDisappearing: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth().background(Ref.Surface)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            RoundAction(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back), Color.Transparent, Ref.OnSurface, onBack)
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Box(
+                    modifier = Modifier.size(40.dp).background(Ref.PrimaryContainer, CircleShape).clearAndSetSemantics { },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(initialsOf(peerUsername), color = Ref.OnPrimaryContainer, fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold)
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        peerUsername,
+                        color = Ref.OnSurface,
+                        fontSize = 16.sp,
+                        lineHeight = 22.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.semantics { heading() },
+                    )
+                    // The reference's status line; Vault only knows when the other person is typing (no presence).
+                    if (typing) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(stringResource(R.string.chat_typing), color = Ref.Teal, fontSize = 11.sp, lineHeight = 14.sp, letterSpacing = 0.3.sp, fontWeight = FontWeight.Medium)
+                            TypingDots(color = Ref.Teal)
+                        }
+                    }
+                }
+            }
+            RoundAction(Icons.Filled.Call, stringResource(R.string.home_voice_call), Color.Transparent, Ref.OnSurface, onVoice)
+            RoundAction(AppIcons.Videocam, stringResource(R.string.home_video_call), Color.Transparent, Ref.OnSurface, onVideo)
+            var menu by remember { mutableStateOf(false) }
+            Box {
+                RoundAction(Icons.Filled.MoreVert, stringResource(R.string.chat_options), Color.Transparent, Ref.OnSurface, { menu = true })
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.expiry_title)) },
+                        leadingIcon = { Icon(AppIcons.Timer, contentDescription = null) },
+                        onClick = { menu = false; onDisappearing() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.talk_button)) },
+                        leadingIcon = { Icon(AppIcons.Mic, contentDescription = null) },
+                        onClick = { menu = false; onTalk() },
+                    )
+                }
+            }
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Ref.OutlineVariant))
+    }
+}
+
+/** "5 min expiry", "24h expiry" or "Expiry off" for the strip's pill. */
+@Composable
+private fun expiryLabel(seconds: Int?): String = when (seconds) {
+    null -> stringResource(R.string.expiry_pill_off)
+    60 -> stringResource(R.string.expiry_pill, "1 min")
+    300 -> stringResource(R.string.expiry_pill, "5 min")
+    3600 -> stringResource(R.string.expiry_pill, "1h")
+    else -> stringResource(R.string.expiry_pill, "24h")
+}
+
+/**
+ * The strip under the header: what protects the chat (left) and the disappearing timer (right, opens its
+ * screen). The reference's "End-to-end encrypted" is not used: the app makes no encryption claim.
+ */
+@Composable
+private fun StatusStrip(disappearSeconds: Int?, onExpiry: () -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth().background(Ref.ContainerLow)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.weight(1f, fill = false)) {
+                Icon(AppIcons.VerifiedUser, contentDescription = null, tint = Ref.Teal, modifier = Modifier.size(14.dp))
+                Text(stringResource(R.string.chat_strip_private), color = Ref.Teal, fontSize = 11.sp, lineHeight = 14.sp, letterSpacing = 0.3.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier
+                    .padding(start = 8.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(Ref.Surface)
+                    .border(1.dp, Ref.OutlineVariant, RoundedCornerShape(50))
+                    .clickable(role = Role.Button, onClick = onExpiry)
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            ) {
+                Icon(AppIcons.Timer, contentDescription = null, tint = Ref.OnSurfaceVariant, modifier = Modifier.size(12.dp))
+                Text(expiryLabel(disappearSeconds), color = Ref.OnSurfaceVariant, fontSize = 11.sp, lineHeight = 14.sp, letterSpacing = 0.3.sp, fontWeight = FontWeight.Medium)
+            }
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Ref.OutlineVariant))
+    }
+}
+
+/** "Today", "Yesterday" or a date, as a small grey chip between days. */
+@Composable
+private fun DayChip(epochMs: Long) {
+    val context = LocalContext.current
+    val label = when {
+        DateUtils.isToday(epochMs) -> stringResource(R.string.chat_today)
+        DateUtils.isToday(epochMs + DateUtils.DAY_IN_MILLIS) -> stringResource(R.string.home_yesterday)
+        else -> DateUtils.formatDateTime(context, epochMs, DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_ABBREV_MONTH)
+    }
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Text(
+            label,
+            color = Ref.OnSurfaceVariant,
+            fontSize = 11.sp,
+            lineHeight = 14.sp,
+            letterSpacing = 0.3.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.clip(RoundedCornerShape(50)).background(Ref.Container).padding(horizontal = 12.dp, vertical = 4.dp),
+        )
+    }
+}
+
+private fun sameDay(a: Long, b: Long): Boolean {
+    val ca = java.util.Calendar.getInstance().apply { timeInMillis = a }
+    val cb = java.util.Calendar.getInstance().apply { timeInMillis = b }
+    return ca.get(java.util.Calendar.YEAR) == cb.get(java.util.Calendar.YEAR) && ca.get(java.util.Calendar.DAY_OF_YEAR) == cb.get(java.util.Calendar.DAY_OF_YEAR)
+}
+
+/** A centred line saying who changed the disappearing timer (D-30). */
+@Composable
+private fun DisappearLine(m: ChatMessage, mine: Boolean, peerUsername: String) {
+    val who = if (mine) stringResource(R.string.chat_you) else peerUsername
+    val text = when (m.text) {
+        "off" -> stringResource(R.string.expiry_line_off, who)
+        "60" -> stringResource(R.string.expiry_line_set, who, stringResource(R.string.expiry_1m))
+        "300" -> stringResource(R.string.expiry_line_set, who, stringResource(R.string.expiry_5m))
+        "3600" -> stringResource(R.string.expiry_line_set, who, stringResource(R.string.expiry_1h))
+        else -> stringResource(R.string.expiry_line_set, who, stringResource(R.string.expiry_24h))
+    }
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.clip(RoundedCornerShape(50)).background(Ref.ContainerLow).border(1.dp, Ref.OutlineVariant, RoundedCornerShape(50)).padding(horizontal = 12.dp, vertical = 6.dp),
+        ) {
+            Icon(AppIcons.Timer, contentDescription = null, tint = Ref.OnSurfaceVariant, modifier = Modifier.size(14.dp))
+            Text(text, color = Ref.OnSurfaceVariant, fontSize = 12.sp, lineHeight = 16.sp)
+        }
+    }
+}
+
 @Composable
 private fun MessageList(
     messages: List<ChatMessage>,
@@ -423,6 +628,8 @@ private fun MessageList(
     onCallBack: (video: Boolean) -> Unit,
     peerUsername: String,
     myUserId: String,
+    peerReadSeq: Long,
+    disappearing: Boolean,
     onRetry: (String) -> Unit,
     onDiscard: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -437,110 +644,120 @@ private fun MessageList(
         placed = true
     }
     if (total == 0) {
-        // An empty chat explains itself quietly: who it is with and that messages do not stay.
         Column(
-            modifier = modifier.fillMaxWidth().padding(Spacing.xxxl),
+            modifier = modifier.fillMaxWidth().background(Ref.Surface).padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(Spacing.md, Alignment.CenterVertically),
+            verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
         ) {
-            InitialsAvatar(peerUsername, size = 72.dp)
-            Text(peerUsername, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(
-                stringResource(R.string.chat_empty),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
+            Box(Modifier.size(64.dp).background(Ref.PrimaryContainer, CircleShape), contentAlignment = Alignment.Center) {
+                Text(initialsOf(peerUsername), color = Ref.OnPrimaryContainer, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            }
+            Text(peerUsername, color = Ref.OnSurface, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(stringResource(R.string.chat_empty), color = Ref.OnSurfaceVariant, fontSize = 14.sp, textAlign = TextAlign.Center)
         }
         return
     }
     LazyColumn(
         state = listState,
-        modifier = modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(horizontal = Spacing.md, vertical = Spacing.md),
+        modifier = modifier.fillMaxWidth().background(Ref.Surface),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         items(messages, key = { it.id }) { m ->
-            val mine = m.senderId == myUserId
-            if (m.kind == MessageKind.MISSED_CALL) {
-                Box(Modifier.animateItem().padding(vertical = Spacing.sm)) { MissedCallLine(m, mine = mine, onCallBack = onCallBack) }
-                return@items
-            }
-            val onThis = reactions[m.id].orEmpty()
-            val quoted = m.replyToId?.let { id -> messages.find { it.id == id } }
-            var picking by remember { mutableStateOf(false) }
             val index = messages.indexOf(m)
-            // A run is consecutive messages from one sender: tight corners inside it, the time under its last one.
             val prev = messages.getOrNull(index - 1)
-            val next = messages.getOrNull(index + 1)
-            val firstOfRun = prev == null || prev.senderId != m.senderId || prev.kind == MessageKind.MISSED_CALL
-            val lastOfRun = next == null || next.senderId != m.senderId || next.kind == MessageKind.MISSED_CALL
-            Column(
-                modifier = Modifier.fillMaxWidth().animateItem().padding(top = if (firstOfRun) Spacing.sm else Spacing.xxs),
-                horizontalAlignment = if (mine) Alignment.End else Alignment.Start,
-            ) {
-                if (quoted != null) {
-                    QuotedMessage(
-                        who = if (quoted.senderId == myUserId) stringResource(R.string.chat_you) else peerUsername,
-                        text = if (quoted.kind == MessageKind.MISSED_CALL) stringResource(R.string.chat_missed_call_short) else quoted.text,
-                    )
-                }
-                Box {
-                    Bubble(m.text, mine = mine, firstOfRun = firstOfRun, lastOfRun = lastOfRun, onLongPress = { picking = true })
-                    if (picking) {
-                        ReactionPicker(
-                            chosen = onThis.find { it.userId == myUserId }?.emoji,
-                            alignEnd = mine,
-                            onPick = { emoji ->
-                                picking = false
-                                onReact(m.id, emoji)
-                            },
-                            onDismiss = { picking = false },
-                            onReply = {
-                                picking = false
-                                onReply(m)
-                            },
-                        )
+            Column(modifier = Modifier.fillMaxWidth().animateItem(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (prev == null || !sameDay(prev.createdAtEpochMs, m.createdAtEpochMs)) DayChip(m.createdAtEpochMs)
+                val mine = m.senderId == myUserId
+                when (m.kind) {
+                    MessageKind.MISSED_CALL -> MissedCallLine(m, mine = mine, onCallBack = onCallBack)
+                    MessageKind.DISAPPEAR -> DisappearLine(m, mine = mine, peerUsername = peerUsername)
+                    MessageKind.TEXT -> {
+                        val onThis = reactions[m.id].orEmpty()
+                        val quoted = m.replyToId?.let { id -> messages.find { it.id == id } }
+                        var picking by remember { mutableStateOf(false) }
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = if (mine) Alignment.End else Alignment.Start,
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            if (quoted != null) {
+                                QuotedMessage(
+                                    who = if (quoted.senderId == myUserId) stringResource(R.string.chat_you) else peerUsername,
+                                    text = if (quoted.kind == MessageKind.MISSED_CALL) stringResource(R.string.chat_missed_call_short) else quoted.text,
+                                )
+                            }
+                            Box {
+                                Bubble(m.text, mine = mine, onLongPress = { picking = true })
+                                if (picking) {
+                                    ReactionPicker(
+                                        chosen = onThis.find { it.userId == myUserId }?.emoji,
+                                        alignEnd = mine,
+                                        onPick = { emoji ->
+                                            picking = false
+                                            onReact(m.id, emoji)
+                                        },
+                                        onDismiss = { picking = false },
+                                        onReply = {
+                                            picking = false
+                                            onReply(m)
+                                        },
+                                    )
+                                }
+                            }
+                            if (onThis.isNotEmpty()) ReactionPill(onThis, onClick = { picking = true })
+                            MetaRow(
+                                time = DateUtils.formatDateTime(LocalContext.current, m.createdAtEpochMs, DateUtils.FORMAT_SHOW_TIME),
+                                status = when {
+                                    !mine -> if (disappearing) MetaStatus.DISAPPEARING else null
+                                    m.seq <= peerReadSeq -> MetaStatus.READ
+                                    else -> MetaStatus.SENT
+                                },
+                            )
+                        }
                     }
-                }
-                if (onThis.isNotEmpty()) ReactionPill(onThis, onClick = { picking = true })
-                if (lastOfRun) {
-                    Text(
-                        DateUtils.formatDateTime(LocalContext.current, m.createdAtEpochMs, DateUtils.FORMAT_SHOW_TIME),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xxs),
-                    )
                 }
             }
         }
         items(outgoing, key = { it.clientMessageId }) { o ->
             val sending = o.status == OutgoingStatus.SENDING
             Column(
-                modifier = Modifier.fillMaxWidth().animateItem().padding(top = Spacing.xxs),
+                modifier = Modifier.fillMaxWidth().animateItem(),
                 horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Bubble(o.text, mine = true, firstOfRun = false, lastOfRun = true, faded = sending, failed = !sending)
+                Bubble(o.text, mine = true, faded = sending, failed = !sending)
                 if (sending) {
-                    Text(
-                        stringResource(R.string.chat_sending),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = Spacing.sm, vertical = Spacing.xxs),
-                    )
+                    Text(stringResource(R.string.chat_sending), color = Ref.OnSurfaceVariant, fontSize = 11.sp, lineHeight = 14.sp, modifier = Modifier.padding(horizontal = 4.dp))
                 } else {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(14.dp))
-                        Text(
-                            stringResource(R.string.chat_not_sent),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.padding(start = Spacing.xs),
-                        )
-                        TextButton(onClick = { onRetry(o.clientMessageId) }) { Text(stringResource(R.string.action_retry)) }
-                        TextButton(onClick = { onDiscard(o.clientMessageId) }) { Text(stringResource(R.string.chat_discard)) }
+                        Icon(Icons.Filled.Warning, contentDescription = null, tint = Ref.Error, modifier = Modifier.size(14.dp))
+                        Text(stringResource(R.string.chat_not_sent), color = Ref.Error, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp))
+                        TextButton(onClick = { onRetry(o.clientMessageId) }) { Text(stringResource(R.string.action_retry), color = Ref.Primary) }
+                        TextButton(onClick = { onDiscard(o.clientMessageId) }) { Text(stringResource(R.string.chat_discard), color = Ref.Primary) }
                     }
                 }
             }
+        }
+    }
+}
+
+private enum class MetaStatus { SENT, READ, DISAPPEARING }
+
+/** Time under a message, with ✓ (sent), ✓✓ in blue (read) or ⏱ (will disappear). */
+@Composable
+private fun MetaRow(time: String, status: MetaStatus?) {
+    Row(
+        modifier = Modifier.padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(time, color = Ref.OnSurfaceVariant, fontSize = 11.sp, lineHeight = 14.sp, letterSpacing = 0.3.sp, fontWeight = FontWeight.Medium)
+        when (status) {
+            MetaStatus.SENT -> Icon(AppIcons.Done, contentDescription = stringResource(R.string.chat_status_sent), tint = Ref.OnSurfaceVariant, modifier = Modifier.size(14.dp))
+            MetaStatus.READ -> Icon(AppIcons.DoneAll, contentDescription = stringResource(R.string.chat_status_read), tint = Ref.Primary, modifier = Modifier.size(14.dp))
+            MetaStatus.DISAPPEARING -> Icon(AppIcons.Timer, contentDescription = stringResource(R.string.chat_status_disappearing), tint = Ref.OnSurfaceVariant, modifier = Modifier.size(12.dp))
+            null -> Unit
         }
     }
 }
@@ -553,11 +770,11 @@ private fun QuotedMessage(who: String, text: String) {
             .widthIn(max = 290.dp)
             .padding(bottom = 2.dp)
             .clip(RoundedCornerShape(10.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .background(Ref.Container)
             .padding(horizontal = 10.dp, vertical = 6.dp),
     ) {
-        Text(who, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-        Text(text, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(who, style = MaterialTheme.typography.labelSmall, color = Ref.Primary)
+        Text(text, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, color = Ref.OnSurfaceVariant)
     }
 }
 
@@ -584,45 +801,39 @@ private fun MissedCallLine(m: ChatMessage, mine: Boolean, onCallBack: (video: Bo
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier
                 .clip(RoundedCornerShape(50))
-                .background(MaterialTheme.colorScheme.surface)
+                .background(Ref.Container)
                 .then(if (mine) Modifier else Modifier.clickable(onClickLabel = stringResource(R.string.chat_call_back)) { onCallBack(video) })
                 .padding(horizontal = 14.dp, vertical = 8.dp),
         ) {
             Icon(
                 if (video) AppIcons.Videocam else Icons.Filled.Call,
                 contentDescription = null,
-                tint = if (mine) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+                tint = if (mine) Ref.OnSurfaceVariant else Ref.Error,
                 modifier = Modifier.size(16.dp),
             )
             Text(label, style = MaterialTheme.typography.labelMedium)
-            if (!mine) Text(stringResource(R.string.chat_call_back), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            if (!mine) Text(stringResource(R.string.chat_call_back), style = MaterialTheme.typography.labelMedium, color = Ref.Primary)
         }
     }
 }
 
 /**
- * Message bubbles (UI upgrade 2026-11-20; replaces the Snapchat-style bars): mine on the right in the accent
- * green, theirs on the left on the light surface. Corners tighten on the sender's side inside a run, so a
- * run reads as one block. At most about 78 % of the width, so long messages wrap instead of stretching.
+ * Message bubbles of the reference: theirs on the left in light grey, mine on the right in blue, 16 dp
+ * corners with a 4 dp corner next to the sender, at most 82 % of the width.
  */
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
 private fun Bubble(
     text: String,
     mine: Boolean,
-    firstOfRun: Boolean,
-    lastOfRun: Boolean,
     faded: Boolean = false,
     failed: Boolean = false,
     onLongPress: (() -> Unit)? = null,
 ) {
-    val colors = MaterialTheme.colorScheme
-    val big = Radii.bubble
-    val tight = Radii.bubbleTight
     val shape = if (mine) {
-        RoundedCornerShape(topStart = big, topEnd = if (firstOfRun) big else tight, bottomStart = big, bottomEnd = if (lastOfRun) big else tight)
+        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp)
     } else {
-        RoundedCornerShape(topStart = if (firstOfRun) big else tight, topEnd = big, bottomStart = if (lastOfRun) big else tight, bottomEnd = big)
+        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 16.dp)
     }
     val press = if (onLongPress != null) {
         Modifier.combinedClickable(onClick = {}, onLongClickLabel = stringResource(R.string.chat_react), onLongClick = onLongPress)
@@ -636,32 +847,33 @@ private fun Bubble(
         Text(
             text.trim(),
             fontSize = when (emojiCount) { 1 -> 48.sp; 2 -> 40.sp; else -> 34.sp },
-            color = colors.onSurface.copy(alpha = alpha),
-            modifier = Modifier.clip(shape).then(press).padding(horizontal = Spacing.xs),
+            color = Ref.OnSurface.copy(alpha = alpha),
+            modifier = Modifier.clip(shape).then(press).padding(horizontal = 4.dp),
         )
         return
     }
     val container = when {
-        failed -> colors.errorContainer
-        mine -> colors.primary
-        else -> colors.surface
+        failed -> Ref.ErrorContainer
+        mine -> Ref.Primary
+        else -> Ref.Container
     }
     val content = when {
-        failed -> colors.onErrorContainer
-        mine -> colors.onPrimary
-        else -> colors.onSurface
+        failed -> Ref.OnErrorContainer
+        mine -> Ref.OnPrimary
+        else -> Ref.OnSurface
     }
     BoxWithConstraints(modifier = Modifier.fillMaxWidth(), contentAlignment = if (mine) Alignment.CenterEnd else Alignment.CenterStart) {
         Text(
             text,
-            style = MaterialTheme.typography.bodyLarge,
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
             color = content.copy(alpha = alpha),
             modifier = Modifier
-                .widthIn(max = maxWidth * 0.78f)
+                .widthIn(max = maxWidth * 0.82f)
                 .clip(shape)
                 .background(container.copy(alpha = if (faded) 0.8f else 1f))
                 .then(press)
-                .padding(horizontal = 14.dp, vertical = 9.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
         )
     }
 }
@@ -679,14 +891,14 @@ private fun ReactionPicker(chosen: String?, alignEnd: Boolean, onPick: (String) 
         onDismissRequest = onDismiss,
         properties = PopupProperties(focusable = true),
     ) {
-        Surface(shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 6.dp) {
+        Surface(shape = RoundedCornerShape(28.dp), color = Ref.Surface, shadowElevation = 6.dp) {
             Row(modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                 QUICK_REACTIONS.forEach { emoji ->
                     Box(
                         modifier = Modifier
                             .size(44.dp)
                             .clip(CircleShape)
-                            .background(if (emoji == chosen) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent)
+                            .background(if (emoji == chosen) Ref.Container else Color.Transparent)
                             .clickable { onPick(emoji) },
                         contentAlignment = Alignment.Center,
                     ) { Text(emoji, fontSize = 26.sp) }
@@ -703,8 +915,8 @@ private fun ReactionPill(reactions: List<Reaction>, onClick: () -> Unit) {
     val counts = reactions.groupingBy { it.emoji }.eachCount()
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.background),
+        color = Ref.Surface,
+        border = BorderStroke(1.dp, Ref.OutlineVariant),
         shadowElevation = 1.dp,
         modifier = Modifier.padding(horizontal = 8.dp).offset(y = (-6).dp).clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick),
     ) {
@@ -717,51 +929,136 @@ private fun ReactionPill(reactions: List<Reaction>, onClick: () -> Unit) {
 }
 
 /**
- * A small pill under the header: messages do not stay (D-01/D-02). Tapping it opens a sheet with the full rule.
- * There are no expiry options to choose: the rule is fixed by the owner's decisions, so none are shown.
+ * Disappearing messages (owner's reference message_expiry_settings.html, 2026-11-20, without "7 Days"; D-30):
+ * the explanation, the choices as one bordered radio group with the current one marked "Currently active",
+ * and a pill button that sets the chosen timer for both people.
  */
 @Composable
-@OptIn(ExperimentalMaterial3Api::class)
-private fun DeletionRule() {
-    var open by remember { mutableStateOf(false) }
-    val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    Box(modifier = Modifier.fillMaxWidth().padding(top = Spacing.sm, bottom = Spacing.xs), contentAlignment = Alignment.Center) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier
-                .clip(RoundedCornerShape(50))
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f))
-                .clickable(onClickLabel = stringResource(R.string.chat_deletion_more)) { open = true }
-                .padding(horizontal = Spacing.md, vertical = 6.dp),
-        ) {
-            Icon(Icons.Filled.Lock, contentDescription = null, tint = muted, modifier = Modifier.size(13.dp))
-            Text(stringResource(R.string.chat_deletion_short), style = MaterialTheme.typography.labelMedium, color = muted)
-        }
-    }
-    if (open) {
-        ModalBottomSheet(onDismissRequest = { open = false }, containerColor = MaterialTheme.colorScheme.surface) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(start = Spacing.xxl, end = Spacing.xxl, bottom = Spacing.xxxl),
-                verticalArrangement = Arrangement.spacedBy(Spacing.md),
+private fun DisappearingScreen(peerUsername: String, current: Int?, onBack: () -> Unit, onSet: (Int?) -> Unit) {
+    BackHandler(onBack = onBack)
+    var chosen by remember(current) { mutableStateOf(current) }
+    Surface(modifier = Modifier.fillMaxSize(), color = Ref.Surface, contentColor = Ref.OnSurface) {
+        Column(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                RoundAction(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back), Color.Transparent, Ref.OnSurface, onBack)
+                Text(
+                    stringResource(R.string.expiry_title),
+                    color = Ref.OnSurface,
+                    fontSize = 18.sp,
+                    lineHeight = 24.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.semantics { heading() },
+                )
+            }
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Ref.OutlineVariant))
+            Column(
+                modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(24.dp),
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Ref.ContainerLow)
+                        .border(1.dp, Ref.OutlineVariant, RoundedCornerShape(12.dp))
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Icon(AppIcons.Timer, contentDescription = null, tint = Ref.Primary, modifier = Modifier.size(24.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(stringResource(R.string.expiry_how_title), color = Ref.OnSurface, fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.expiry_how_body, peerUsername), color = Ref.OnSurfaceVariant, fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = 0.1.sp)
+                    }
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        stringResource(R.string.expiry_duration),
+                        color = Ref.OnSurfaceVariant,
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp,
+                        letterSpacing = 0.2.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 4.dp),
+                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .border(1.dp, Ref.OutlineVariant, RoundedCornerShape(12.dp))
+                            .background(Ref.Surface)
+                            .selectableGroup(),
+                    ) {
+                        DISAPPEAR_CHOICES.forEachIndexed { i, seconds ->
+                            if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(Ref.OutlineVariant))
+                            val active = seconds == current
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(if (active) Ref.PrimaryContainer.copy(alpha = 0.4f) else Color.Transparent)
+                                    .selectable(selected = chosen == seconds, role = Role.RadioButton, onClick = { chosen = seconds })
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                val label = expiryChoiceLabel(seconds)
+                                if (active) {
+                                    Column {
+                                        Text(label, color = Ref.Primary, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold)
+                                        Text(stringResource(R.string.expiry_active), color = Ref.OnSurfaceVariant, fontSize = 12.sp, lineHeight = 16.sp)
+                                    }
+                                } else {
+                                    Text(label, color = Ref.OnSurface, fontSize = 16.sp, lineHeight = 24.sp)
+                                }
+                                RadioButton(
+                                    selected = chosen == seconds,
+                                    onClick = null,
+                                    colors = RadioButtonDefaults.colors(selectedColor = Ref.Primary, unselectedColor = Ref.Outline),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Ref.OutlineVariant))
+            Box(modifier = Modifier.fillMaxWidth().background(Ref.Surface).padding(16.dp)) {
                 Box(
-                    modifier = Modifier.size(44.dp).background(MaterialTheme.colorScheme.background, CircleShape),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(Ref.Primary)
+                        .clickable(role = Role.Button, onClick = { onSet(chosen) })
+                        .padding(horizontal = 24.dp, vertical = 12.dp),
                     contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Filled.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }
-                Text(stringResource(R.string.chat_deletion_sheet_title), style = MaterialTheme.typography.titleLarge, modifier = Modifier.semantics { heading() })
-                Text(stringResource(R.string.chat_deletion_rule), style = MaterialTheme.typography.bodyMedium, color = muted)
-                Text(stringResource(R.string.chat_deletion_sheet_note), style = MaterialTheme.typography.bodySmall, color = muted)
-                PrimaryButton(stringResource(R.string.chat_deletion_ok), onClick = { open = false })
+                ) {
+                    Text(
+                        if (chosen == null) stringResource(R.string.expiry_button_off) else stringResource(R.string.expiry_button_set, expiryChoiceLabel(chosen)),
+                        color = Ref.OnPrimary,
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp,
+                        letterSpacing = 0.1.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun CallButton(icon: ImageVector, description: String, onClick: () -> Unit) {
-    VaultIconButton(icon, description, onClick, container = MaterialTheme.colorScheme.background, size = 40.dp)
-}
+private fun expiryChoiceLabel(seconds: Int?): String = stringResource(
+    when (seconds) {
+        null -> R.string.expiry_off
+        60 -> R.string.expiry_1m
+        300 -> R.string.expiry_5m
+        3600 -> R.string.expiry_1h
+        else -> R.string.expiry_24h
+    },
+)
 
 @Composable
 private fun noticeText(notice: ChatNotice?): Pair<BannerKind, String>? = when (notice) {

@@ -51,7 +51,16 @@ data class HistoryDto(
     val hasMore: Boolean,
     // Absent from servers older than D-25.
     val reactions: List<ReactionDto> = emptyList(),
+    // Absent from servers older than D-30 (2026-11-20).
+    val disappearSeconds: Int? = null,
+    val peerReadSeq: Long = 0,
 )
+
+@Serializable
+data class DisappearBody(val seconds: Int?)
+
+@Serializable
+data class DisappearDto(val disappearSeconds: Int? = null)
 
 @Serializable
 data class ReactionBody(val emoji: String)
@@ -67,7 +76,11 @@ data class ReadBody(val seq: Long)
 
 fun MessageDto.toDomain() = ChatMessage(
     id, seq, senderId, text, Instant.parse(createdAt).toEpochMilli(),
-    kind = if (kind == "missed_call") MessageKind.MISSED_CALL else MessageKind.TEXT,
+    kind = when (kind) {
+        "missed_call" -> MessageKind.MISSED_CALL
+        "disappear" -> MessageKind.DISAPPEAR
+        else -> MessageKind.TEXT
+    },
     replyToId = replyToId,
 )
 
@@ -91,7 +104,11 @@ class RemoteChatRepository(private val http: HttpJson, private val caller: Autho
         val query = "afterSeq=$afterSeq" + (epoch?.let { e -> "&epoch=$e" } ?: "")
         http.get("${base(conversationId)}/messages?$query", HistoryDto.serializer(), it)
     }.map { h ->
-        HistoryPage(h.epoch, h.cleared, h.items.map { m -> m.toDomain() }, h.hasMore, h.reactions.map { Reaction(it.messageId, it.userId, it.emoji) })
+        HistoryPage(
+            h.epoch, h.cleared, h.items.map { m -> m.toDomain() }, h.hasMore, h.reactions.map { Reaction(it.messageId, it.userId, it.emoji) },
+            disappearSeconds = h.disappearSeconds,
+            peerReadSeq = h.peerReadSeq,
+        )
     }
 
     override suspend fun send(conversationId: String, clientMessageId: String, epoch: Long, text: String, replyToId: String?) = caller.call {
@@ -110,6 +127,10 @@ class RemoteChatRepository(private val http: HttpJson, private val caller: Autho
         val path = "${base(conversationId)}/messages/$messageId/reaction"
         if (emoji == null) http.delete(path, it) else http.put<ReactionBody, Unit>(path, ReactionBody(emoji), ReactionBody.serializer(), null, it)
     }.map { }
+
+    override suspend fun setDisappearing(conversationId: String, seconds: Int?) = caller.call {
+        http.put("${base(conversationId)}/disappearing", DisappearBody(seconds), DisappearBody.serializer(), DisappearDto.serializer(), it)
+    }.map { it.disappearSeconds }
 
     private inline fun <T, R> ApiResult<T>.map(transform: (T) -> R): ChatResult<R> = when (this) {
         is ApiResult.Ok -> ChatResult.Ok(transform(value))

@@ -48,6 +48,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.material3.Icon
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -78,6 +81,8 @@ import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import app.vaultchat.R
+import app.vaultchat.platform.snap.SnapSaver
+import app.vaultchat.ui.components.AppIcons
 import app.vaultchat.domain.permissions.AppPermission
 import app.vaultchat.domain.permissions.PermissionStatus
 import app.vaultchat.domain.snap.SnapFailure
@@ -124,6 +129,7 @@ fun SnapCameraScreen(
     var taken by remember { mutableStateOf<Taken?>(null) }
     var sending by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
+    var saving by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     var recipients by remember { mutableStateOf<List<Connection>>(emptyList()) }
     LaunchedEffect(Unit) { recipients = loadRecipients() }
@@ -203,6 +209,30 @@ fun SnapCameraScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     TextButton(onClick = ::discard, enabled = !sending) { Text(stringResource(R.string.snap_retake), color = VaultGreen.Mint) }
+                    // Save your own photo or video to the phone (owner, 2026-11-20). Received snaps have no Save.
+                    val savedText = stringResource(R.string.snap_saved)
+                    val saveFailedText = stringResource(R.string.snap_save_failed)
+                    TextButton(
+                        enabled = !sending && !saving,
+                        onClick = {
+                            val item = taken ?: return@TextButton
+                            saving = true
+                            scope.launch {
+                                val ok = withContext(Dispatchers.IO) {
+                                    when (item) {
+                                        is Taken.Photo -> SnapSaver.savePhoto(context, item.jpeg)
+                                        is Taken.Video -> SnapSaver.saveVideo(context, item.file)
+                                    }
+                                }
+                                saving = false
+                                notice = if (ok) savedText else saveFailedText
+                            }
+                        },
+                    ) {
+                        Icon(AppIcons.Download, contentDescription = null, tint = VaultGreen.Mint, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.snap_save), color = VaultGreen.Mint)
+                    }
                     Button(
                         enabled = !sending,
                         colors = ButtonDefaults.buttonColors(containerColor = VaultGreen.Sage, contentColor = VaultGreen.Deepest),

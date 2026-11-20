@@ -122,9 +122,11 @@ export async function chatRoutes(app: FastifyInstance, opts: { auth: AuthService
           200: {
             type: "object",
             additionalProperties: false,
-            required: ["epoch", "cleared", "items", "hasMore", "reactions"],
+            required: ["epoch", "disappearSeconds", "peerReadSeq", "cleared", "items", "hasMore", "reactions"],
             properties: {
               epoch: { type: "integer" },
+              disappearSeconds: { type: ["integer", "null"] },
+              peerReadSeq: { type: "integer" },
               cleared: { type: "boolean" },
               items: { type: "array", items: messageSchema },
               hasMore: { type: "boolean" },
@@ -143,6 +145,28 @@ export async function chatRoutes(app: FastifyInstance, opts: { auth: AuthService
       });
       return { ...h, items: h.items.map(messageJson) };
     },
+  );
+
+  // Disappearing timer (D-30): null = Off, or 60, 300, 3600, 86400 seconds after seen; applies to both people.
+  app.put<{ Params: { id: string }; Body: { seconds: number | null } }>(
+    "/conversations/:id/disappearing",
+    {
+      onRequest: user,
+      config: { rateLimit: { max: 20, timeWindow: MINUTE } },
+      schema: {
+        params: idParams,
+        body: {
+          type: "object",
+          additionalProperties: false,
+          required: ["seconds"],
+          properties: { seconds: { anyOf: [{ type: "null" }, { type: "integer", enum: [60, 300, 3600, 86400] }] } },
+        },
+        response: {
+          200: { type: "object", additionalProperties: false, required: ["disappearSeconds"], properties: { disappearSeconds: { type: ["integer", "null"] } } },
+        },
+      },
+    },
+    async (request) => chat.setDisappearing(authOf(request).user.id, request.params.id, request.body.seconds),
   );
 
   // "Typing…": relayed to the other person's open app; nothing is stored.
