@@ -82,6 +82,19 @@ object AppIcons {
         icon("Download", "M19,9h-4V3H9v6H5l7,7 7,-7zM5,18v2h14v-2H5z")
     }
 
+    /** Material "near_me" (centre the Map on me). */
+    val NearMe: ImageVector by lazy {
+        icon("NearMe", "M21,3L3,10.53v0.98l6.84,2.65L12.48,21h0.98L21,3z")
+    }
+
+    /** Material "group" (show everyone on the Map). */
+    val Group: ImageVector by lazy {
+        icon(
+            "Group",
+            "M16,11c1.66,0 2.99,-1.34 2.99,-3S17.66,5 16,5c-1.66,0 -3,1.34 -3,3s1.34,3 3,3zM8,11c1.66,0 2.99,-1.34 2.99,-3S9.66,5 8,5C6.34,5 5,6.34 5,8s1.34,3 3,3zM8,13c-2.33,0 -7,1.17 -7,3.5V19h14v-2.5c0,-2.33 -4.67,-3.5 -7,-3.5zM16,13c-0.29,0 -0.62,0.02 -0.97,0.05 1.16,0.84 1.97,1.97 1.97,3.45V19h6v-2.5c0,-2.33 -4.67,-3.5 -7,-3.5z",
+        )
+    }
+
     /** Material "map". */
     val Map: ImageVector by lazy {
         icon(
