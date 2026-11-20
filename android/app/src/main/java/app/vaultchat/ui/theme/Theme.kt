@@ -1,7 +1,9 @@
 package app.vaultchat.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -68,17 +70,31 @@ private val DarkColors = darkColorScheme(
 
 private val AppTypography = Typography().let { base ->
     base.copy(
-        headlineMedium = base.headlineMedium.copy(fontWeight = FontWeight.SemiBold),
+        // Calm hierarchy: one bold title size per screen, medium-weight names, readable body text.
+        headlineMedium = base.headlineMedium.copy(fontWeight = FontWeight.SemiBold, letterSpacing = (-0.3).sp),
+        headlineSmall = base.headlineSmall.copy(fontWeight = FontWeight.SemiBold, letterSpacing = (-0.2).sp),
+        titleLarge = base.titleLarge.copy(fontWeight = FontWeight.SemiBold),
         titleMedium = base.titleMedium.copy(fontWeight = FontWeight.Medium),
+        bodyLarge = base.bodyLarge.copy(lineHeight = 22.sp, letterSpacing = 0.15.sp),
         labelLarge = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.1.sp),
     )
 }
+
+// One set of corner radii for the whole app (docs/ui-upgrade); screens use MaterialTheme.shapes or Radii.
+private val AppShapes = Shapes(
+    extraSmall = RoundedCornerShape(Radii.sm),
+    small = RoundedCornerShape(Radii.sm),
+    medium = RoundedCornerShape(Radii.md),
+    large = RoundedCornerShape(Radii.lg),
+    extraLarge = RoundedCornerShape(Radii.sheet),
+)
 
 @Composable
 fun VaultChatTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = if (darkTheme) DarkColors else LightColors,
         typography = AppTypography,
+        shapes = AppShapes,
         content = content,
     )
 }

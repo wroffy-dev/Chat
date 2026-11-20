@@ -1,6 +1,10 @@
 package app.vaultchat.ui.home
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.material3.ripple
+import androidx.compose.runtime.remember
+import app.vaultchat.ui.components.pressScale
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,11 +48,23 @@ fun VaultBottomBar(selected: BottomTab, onChat: () -> Unit, onCamera: () -> Unit
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Tab(AppIcons.Chat, stringResource(R.string.tab_chat), selected == BottomTab.CHAT, onChat)
+            // The round camera shrinks a little under the finger (UI upgrade): quiet, tactile feedback.
+            val interaction = remember { MutableInteractionSource() }
             Surface(
                 shape = CircleShape,
                 color = colors.primary,
                 contentColor = colors.onPrimary,
-                modifier = Modifier.size(60.dp).clickable(onClickLabel = stringResource(R.string.tab_camera), role = Role.Button, onClick = onCamera),
+                shadowElevation = 2.dp,
+                modifier = Modifier
+                    .size(60.dp)
+                    .pressScale(interaction)
+                    .clickable(
+                        interactionSource = interaction,
+                        indication = ripple(bounded = true),
+                        onClickLabel = stringResource(R.string.tab_camera),
+                        role = Role.Button,
+                        onClick = onCamera,
+                    ),
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(AppIcons.PhotoCamera, contentDescription = stringResource(R.string.tab_camera), modifier = Modifier.size(28.dp))

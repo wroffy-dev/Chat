@@ -1,5 +1,12 @@
 package app.vaultchat.ui.call
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import app.vaultchat.ui.components.SignalBars
+import app.vaultchat.ui.theme.Sizes
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -403,13 +410,27 @@ fun CallScreen(
                         liveRegion = LiveRegionMode.Polite
                     },
                 )
+                // Connection quality from the call's real statistics (round-trip time and packet loss);
+                // nothing is shown until the first sample, and nothing is estimated.
+                val quality = if (state.phase == CallPhase.ACTIVE || state.phase == CallPhase.RECONNECTING) qualityLevel(liveStats) else null
+                if (quality != null) {
+                    Spacer(Modifier.height(6.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        SignalBars(quality, label = stringResource(qualityLabel(quality)), color = VaultGreen.Mint)
+                        Text(stringResource(qualityLabel(quality)), style = MaterialTheme.typography.labelMedium, color = VaultGreen.Mint.copy(alpha = 0.75f))
+                    }
+                }
                 if (peerMuted) {
                     Spacer(Modifier.height(8.dp))
                     MutedPill(stringResource(R.string.call_peer_muted, state.peerUsername))
                 }
 
                 Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    if (!showVideo) InitialsAvatar(state.peerUsername.ifEmpty { "?" }, size = 128.dp)
+                    if (!showVideo) {
+                        // A soft ring breathes around the avatar while the call is ringing or connecting.
+                        val waiting = state.phase in setOf(CallPhase.STARTING, CallPhase.RINGING_OUT, CallPhase.RINGING_IN, CallPhase.CONNECTING, CallPhase.RECONNECTING)
+                        CallAvatar(state.peerUsername.ifEmpty { "?" }, pulsing = waiting)
+                    }
                 }
 
                 when {
@@ -490,6 +511,57 @@ fun CallScreen(
 }
 
 private const val CONTROLS_HIDE_MS = 4_000L
+
+/** The large avatar of a voice call (or a video call without video), with a gentle pulse while waiting. */
+@Composable
+private fun CallAvatar(name: String, pulsing: Boolean) {
+    val transition = rememberInfiniteTransition(label = "callPulse")
+    val pulse by transition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.18f,
+        animationSpec = infiniteRepeatable(tween(1_200), RepeatMode.Reverse),
+        label = "ring",
+    )
+    Box(contentAlignment = Alignment.Center) {
+        if (pulsing) {
+            Box(
+                Modifier
+                    .size(Sizes.avatarCall)
+                    .graphicsLayer {
+                        scaleX = pulse
+                        scaleY = pulse
+                        alpha = (1.18f - pulse) / 0.18f * 0.35f
+                    }
+                    .background(VaultGreen.Sage, CircleShape),
+            )
+        }
+        InitialsAvatar(name, size = Sizes.avatarCall)
+    }
+}
+
+/**
+ * 1 (poor) to 3 (good) from the latest sample: round-trip time and the share of packets lost so far.
+ * Null without a usable sample.
+ */
+private fun qualityLevel(s: StatsSample?): Int? {
+    if (s == null) return null
+    val rtt = s.rttMs
+    val total = s.packetsLost + s.packetsReceived
+    if (rtt == null && total == 0L) return null
+    val loss = if (total > 0) s.packetsLost.toDouble() / total else 0.0
+    val r = rtt ?: 0.0
+    return when {
+        r < 150 && loss < 0.02 -> 3
+        r < 350 && loss < 0.06 -> 2
+        else -> 1
+    }
+}
+
+private fun qualityLabel(level: Int): Int = when (level) {
+    3 -> R.string.call_quality_good
+    2 -> R.string.call_quality_fair
+    else -> R.string.call_quality_poor
+}
 
 /** Largest screen (view) zoom; the camera zoom has its own levels in [CallController]. */
 private const val MAX_SCREEN_ZOOM = 5f

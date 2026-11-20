@@ -1,6 +1,10 @@
 package app.vaultchat.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -27,13 +31,20 @@ private val AvatarColors = listOf(
  * comes from the username, so it stays the same everywhere. Decorative for screen readers.
  */
 @Composable
-fun InitialsAvatar(name: String, modifier: Modifier = Modifier, size: Dp = 44.dp) {
+fun InitialsAvatar(name: String, modifier: Modifier = Modifier, size: Dp = 44.dp, highlighted: Boolean = false) {
     val initial = name.firstOrNull { it.isLetterOrDigit() }?.uppercaseChar()?.toString() ?: "?"
     val color = AvatarColors[Math.floorMod(name.hashCode(), AvatarColors.size)]
+    // A ring in the accent colour marks something new from this person (a waiting snap), like a story ring.
+    val ring = if (highlighted) Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CircleShape).padding(3.dp) else Modifier
     Box(
-        modifier = modifier.size(size).background(color, CircleShape).clearAndSetSemantics { },
+        modifier = modifier.size(size).then(ring).clearAndSetSemantics { },
         contentAlignment = Alignment.Center,
     ) {
-        Text(initial, color = VaultGreen.Deepest, fontWeight = FontWeight.SemiBold, fontSize = (size.value * 0.4f).sp)
+        Box(
+            modifier = Modifier.fillMaxSize().background(color, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(initial, color = VaultGreen.Deepest, fontWeight = FontWeight.SemiBold, fontSize = (size.value * 0.38f).sp)
+        }
     }
 }
