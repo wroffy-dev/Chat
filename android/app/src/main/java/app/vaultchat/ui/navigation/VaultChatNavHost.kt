@@ -71,7 +71,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
-import app.vaultchat.ui.settings.SettingsScreen
 import app.vaultchat.ui.theme.Motion
 
 @Serializable
@@ -86,9 +85,6 @@ data class ChangePasswordRoute(val forced: Boolean)
 @Serializable
 data object InboxRoute
 
-/** Settings (UI upgrade, 2026-11-20): password, notification and permission pages, version. */
-@Serializable
-data object SettingsRoute
 
 @Serializable
 data object ShowQrRoute
@@ -153,8 +149,8 @@ fun VaultChatNavHost(container: AppContainer) {
     val context = LocalContext.current
     val backStack by navController.currentBackStackEntryAsState()
     val onCallScreen = backStack?.destination?.route?.contains("CallRoute") == true
-    // Screens of a signed-in user: calls ring and live updates run on all of them (Map and Settings too).
-    val signedIn = backStack?.destination?.route?.let { r -> listOf("HomeRoute", "InboxRoute", "ShowQrRoute", "ScanQrRoute", "ChatRoute", "MapRoute", "SettingsRoute").any { r.contains(it) } } == true
+    // Screens of a signed-in user: calls ring and live updates run on all of them (the Map too).
+    val signedIn = backStack?.destination?.route?.let { r -> listOf("HomeRoute", "InboxRoute", "ShowQrRoute", "ScanQrRoute", "ChatRoute", "MapRoute").any { r.contains(it) } } == true
     // Live change signals while signed in. Not tied to the screen's lifecycle, so an incoming call is
     // still noticed with the screen off while the app is open (owner request 2026-11-03).
     DisposableEffect(signedIn) {
@@ -273,14 +269,6 @@ fun VaultChatNavHost(container: AppContainer) {
                 onOpenCamera = { navController.navigate(SnapCameraRoute()) },
                 onSnapTo = { c -> navController.navigate(SnapCameraRoute(c.id)) },
                 onOpenMap = { navController.navigate(MapRoute) { launchSingleTop = true } },
-                onOpenSettings = { navController.navigate(SettingsRoute) { launchSingleTop = true } },
-            )
-        }
-        composable<SettingsRoute> {
-            SettingsScreen(
-                username = container.authRepository.currentUser()?.username.orEmpty(),
-                onBack = { navController.popBackStack() },
-                onChangePassword = { navController.navigate(ChangePasswordRoute(forced = false)) },
             )
         }
         composable<ChatRoute> { entry ->

@@ -9,6 +9,8 @@ message delivery and notification infrastructure are untouched.
 Login, change password, Home (chat list), Chat, Call (voice and video, minimised call, walkie-talkie dialog),
 Map, Snap camera and viewer, Inbox / Show QR / Scan QR, location gate, update and crash banners (audit §1).
 
+> **Update 2026-11-20 (owner):** the Settings button and screen were removed after this report; the rest stands.
+
 ## Screens redesigned
 
 | Screen | What changed |

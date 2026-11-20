@@ -20,7 +20,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.selected
@@ -123,8 +122,6 @@ fun HomeScreen(
     onSnapTo: (Connection) -> Unit = {},
     /** The Map tab: connected people's latest locations (D-06 as widened 2026-11-19). */
     onOpenMap: () -> Unit = {},
-    /** Settings (UI upgrade, 2026-11-20): version, notifications, password; no sign-out. */
-    onOpenSettings: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -169,7 +166,6 @@ fun HomeScreen(
                         searching = true
                     }
                 },
-                onSettings = onOpenSettings,
                 onConnect = onOpenInbox,
             )
             UpdateBanner(updater, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
@@ -215,11 +211,11 @@ fun HomeScreen(
 }
 
 /**
- * The app's title with three quiet actions: search (expands the search field), Settings and "+" to connect
- * with someone. No sign-out here (owner request 2026-11-02).
+ * The app's title with two quiet actions: search (expands the search field) and "+" to connect with someone.
+ * No Settings button (removed by the owner, 2026-11-20) and no sign-out (owner request 2026-11-02).
  */
 @Composable
-private fun Header(searching: Boolean, onSearch: () -> Unit, onSettings: () -> Unit, onConnect: () -> Unit) {
+private fun Header(searching: Boolean, onSearch: () -> Unit, onConnect: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(start = Spacing.xl, end = Spacing.sm, top = Spacing.md, bottom = Spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
@@ -235,7 +231,6 @@ private fun Header(searching: Boolean, onSearch: () -> Unit, onSettings: () -> U
             contentDescription = stringResource(if (searching) R.string.home_search_close else R.string.home_search_hint),
             onClick = onSearch,
         )
-        VaultIconButton(Icons.Filled.Settings, stringResource(R.string.settings_title), onSettings)
         VaultIconButton(
             Icons.Filled.Add,
             stringResource(R.string.home_connect_new),
