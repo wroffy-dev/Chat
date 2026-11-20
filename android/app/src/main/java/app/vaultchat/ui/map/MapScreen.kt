@@ -2,16 +2,9 @@ package app.vaultchat.ui.map
 
 import android.graphics.BitmapFactory
 import android.text.format.DateUtils
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -31,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,11 +39,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -103,8 +93,9 @@ private sealed interface MapLoad {
     data object Offline : MapLoad
 }
 
-// The dark map of the owner's reference (2026-11-20): navy ground, round buttons, round markers.
-private val MapGround = Color(0xFF1C2236)
+// The owner's reference (2026-11-20): round buttons and round markers; the map itself stays light (owner,
+// same day: "Map ko light hi rhne do"), as OpenStreetMap draws it.
+private val MapGround = Color(0xFFE5E3DF)
 private val DarkButton = Color(0xFF262D44)
 private val LabelFill = Color(0xF0121626)
 private val MeBlue = Color(0xFF1E88FF)
@@ -116,30 +107,9 @@ private val PersonColors = listOf(
 )
 
 /**
- * OpenStreetMap's light tiles turned into the reference's navy map while drawing: each pixel's brightness is
- * stretched onto navy, so white roads come out light slate, the ground dark navy and buildings and water
- * darker still. The same tiles from the same server, so no new map provider sees anything.
- */
-private val DarkTiles: ColorFilter = run {
-    // Brightness 255 (roads) becomes (80, 92, 130); brightness 210 (buildings) becomes (22, 26, 44).
-    val road = floatArrayOf(80f, 92f, 130f)
-    val building = floatArrayOf(22f, 26f, 44f)
-    val m = FloatArray(20)
-    for (r in 0..2) {
-        val k = (road[r] - building[r]) / 45f
-        m[r * 5] = 0.2126f * k
-        m[r * 5 + 1] = 0.7152f * k
-        m[r * 5 + 2] = 0.0722f * k
-        m[r * 5 + 4] = road[r] - k * 255f
-    }
-    m[18] = 1f
-    ColorFilter.colorMatrix(ColorMatrix(m))
-}
-
-/**
  * The Map tab (owner, 2026-11-19; D-06 widened; look from the owner's reference 2026-11-20): the latest
  * location of each connected person who agreed to the current location consent, and the user's own, as round
- * markers on a dark map. Only the latest point is shown, never a history. Names are not listed under the map;
+ * markers on the map. Only the latest point is shown, never a history. Names are not listed under the map;
  * tapping a marker shows that person's name and how long ago. Map pictures are OpenStreetMap tiles, fetched
  * straight from tile.openstreetmap.org (that server sees which area is viewed, not who is on it).
  */
@@ -158,7 +128,7 @@ fun MapScreen(api: LocationApi, onChat: () -> Unit, onCamera: () -> Unit) {
         Column(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
             Box(modifier = Modifier.weight(1f).fillMaxWidth().background(MapGround)) {
                 when (val l = load) {
-                    MapLoad.Loading -> CircularProgressIndicator(color = Color.White, modifier = Modifier.align(Alignment.Center))
+                    MapLoad.Loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                     MapLoad.SharingOff -> Message(stringResource(R.string.map_sharing_off))
                     MapLoad.Offline -> Message(stringResource(R.string.server_unreachable))
                     is MapLoad.Ready -> TileMap(l.pins)
@@ -179,7 +149,7 @@ fun MapScreen(api: LocationApi, onChat: () -> Unit, onCamera: () -> Unit) {
 @Composable
 private fun Message(text: String) {
     Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-        Text(text, fontSize = 16.sp, lineHeight = 22.sp, color = Color.White.copy(alpha = 0.85f), textAlign = TextAlign.Center)
+        Text(text, fontSize = 16.sp, lineHeight = 22.sp, color = Color(0xFF333333), textAlign = TextAlign.Center)
     }
 }
 
@@ -217,7 +187,7 @@ private fun mercatorY(lat: Double): Double {
 private const val MIN_ZOOM = 2.0
 private const val MAX_ZOOM = 18.0
 
-/** A pannable, pinch-zoomable dark map of OpenStreetMap tiles with the markers drawn on top. */
+/** A pannable, pinch-zoomable map of OpenStreetMap tiles with the markers drawn on top. */
 @Composable
 private fun TileMap(pins: List<Pin>) {
     val density = LocalDensity.current
@@ -302,7 +272,6 @@ private fun TileMap(pins: List<Pin>) {
                     image,
                     dstOffset = IntOffset(x.toInt(), y.toInt()),
                     dstSize = IntSize((x + ts).toInt() - x.toInt(), (y + ts).toInt() - y.toInt()),
-                    colorFilter = DarkTiles,
                 )
             }
         }
@@ -359,11 +328,11 @@ private fun TileMap(pins: List<Pin>) {
         Text(
             stringResource(R.string.map_attribution),
             fontSize = 10.sp,
-            color = Color.White.copy(alpha = 0.75f),
+            color = Color(0xFF333333),
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(8.dp)
-                .background(Color.Black.copy(alpha = 0.35f), RoundedCornerShape(4.dp))
+                .background(Color.White.copy(alpha = 0.7f), RoundedCornerShape(4.dp))
                 .padding(horizontal = 4.dp, vertical = 1.dp),
         )
     }
@@ -377,12 +346,12 @@ private fun initials(name: String): String {
 
 /**
  * A marker placed so that its round part sits on the point (px, py). People are a coloured circle with their
- * initials and a white ring; I am a blue dot with a soft pulse. Tapping shows the name and "x min ago" above.
+ * initials and a white ring; I am a round marker in the theme's colour with "M". Tapping shows the name and "x min ago" above.
  */
 @Composable
 private fun Marker(pin: Pin, selected: Boolean, ago: String, onClick: () -> Unit, px: Int, py: Int) {
     val me = pin.name == null
-    val anchor: Dp = if (me) 28.dp else 27.dp
+    val anchor: Dp = if (me) 24.dp else 27.dp
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.layout { measurable, constraints ->
@@ -406,18 +375,22 @@ private fun Marker(pin: Pin, selected: Boolean, ago: String, onClick: () -> Unit
             Spacer(Modifier.height(6.dp))
         }
         if (me) {
-            val pulse by rememberInfiniteTransition(label = "me").animateFloat(
-                initialValue = 0.6f,
-                targetValue = 1f,
-                animationSpec = infiniteRepeatable(tween(1_400, easing = LinearEasing), RepeatMode.Reverse),
-                label = "pulse",
-            )
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.size(56.dp).clip(CircleShape).clickable(onClickLabel = stringResource(R.string.map_me), onClick = onClick),
+            // Me as before v162 (owner, 2026-11-20): a round marker in the theme's own colour with "M".
+            val colors = MaterialTheme.colorScheme
+            Surface(
+                onClick = onClick,
+                shape = CircleShape,
+                color = colors.tertiary,
+                contentColor = colors.onTertiary,
+                shadowElevation = 6.dp,
+                modifier = Modifier.size(48.dp),
             ) {
-                Box(Modifier.size(56.dp).scale(pulse).background(MeBlue.copy(alpha = 0.25f), CircleShape))
-                Box(Modifier.size(22.dp).border(3.dp, Color.White, CircleShape).background(MeBlue, CircleShape))
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.fillMaxSize().border(3.dp, if (selected) MeBlue else Color.White, CircleShape),
+                ) {
+                    Text(stringResource(R.string.map_me).take(1).uppercase(), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = colors.onTertiary)
+                }
             }
         } else {
             val name = pin.name.orEmpty()
