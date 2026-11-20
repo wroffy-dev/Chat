@@ -119,8 +119,14 @@ fun SnapViewerScreen(repo: SnapRepository, snapIds: List<String>, onClose: () ->
                         // Photos close by themselves after a few seconds or on a tap; videos when they end.
                         Box(modifier = Modifier.fillMaxSize().clickable { stage = Stage.AFTER }) {
                             if (current.kind == SnapKind.PHOTO) {
-                                val bitmap = remember(showing) { BitmapFactory.decodeByteArray(current.bytes, 0, current.bytes.size) }
-                                if (bitmap != null) Image(bitmap.asImageBitmap(), contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
+                                // Decoded off the main thread, so opening a snap does not stutter.
+                                var bitmap by remember(showing) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+                                LaunchedEffect(showing) {
+                                    bitmap = withContext(Dispatchers.Default) {
+                                        BitmapFactory.decodeByteArray(current.bytes, 0, current.bytes.size)?.asImageBitmap()
+                                    }
+                                }
+                                bitmap?.let { Image(it, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()) }
                                 var progress by remember(showing) { mutableFloatStateOf(1f) }
                                 LaunchedEffect(showing) {
                                     val steps = SnapRules.PHOTO_SECONDS * 10
