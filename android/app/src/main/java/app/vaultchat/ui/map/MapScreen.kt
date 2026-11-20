@@ -48,8 +48,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -103,8 +101,9 @@ private sealed interface MapLoad {
     data object Offline : MapLoad
 }
 
-// The dark map of the owner's reference (2026-11-20): navy ground, round buttons, round markers.
-private val MapGround = Color(0xFF1C2236)
+// The owner's reference (2026-11-20): round buttons and round markers; the map itself stays light (owner,
+// same day: "Map ko light hi rhne do"), as OpenStreetMap draws it.
+private val MapGround = Color(0xFFE5E3DF)
 private val DarkButton = Color(0xFF262D44)
 private val LabelFill = Color(0xF0121626)
 private val MeBlue = Color(0xFF1E88FF)
@@ -116,30 +115,9 @@ private val PersonColors = listOf(
 )
 
 /**
- * OpenStreetMap's light tiles turned into the reference's navy map while drawing: each pixel's brightness is
- * stretched onto navy, so white roads come out light slate, the ground dark navy and buildings and water
- * darker still. The same tiles from the same server, so no new map provider sees anything.
- */
-private val DarkTiles: ColorFilter = run {
-    // Brightness 255 (roads) becomes (80, 92, 130); brightness 210 (buildings) becomes (22, 26, 44).
-    val road = floatArrayOf(80f, 92f, 130f)
-    val building = floatArrayOf(22f, 26f, 44f)
-    val m = FloatArray(20)
-    for (r in 0..2) {
-        val k = (road[r] - building[r]) / 45f
-        m[r * 5] = 0.2126f * k
-        m[r * 5 + 1] = 0.7152f * k
-        m[r * 5 + 2] = 0.0722f * k
-        m[r * 5 + 4] = road[r] - k * 255f
-    }
-    m[18] = 1f
-    ColorFilter.colorMatrix(ColorMatrix(m))
-}
-
-/**
  * The Map tab (owner, 2026-11-19; D-06 widened; look from the owner's reference 2026-11-20): the latest
  * location of each connected person who agreed to the current location consent, and the user's own, as round
- * markers on a dark map. Only the latest point is shown, never a history. Names are not listed under the map;
+ * markers on the map. Only the latest point is shown, never a history. Names are not listed under the map;
  * tapping a marker shows that person's name and how long ago. Map pictures are OpenStreetMap tiles, fetched
  * straight from tile.openstreetmap.org (that server sees which area is viewed, not who is on it).
  */
@@ -158,7 +136,7 @@ fun MapScreen(api: LocationApi, onChat: () -> Unit, onCamera: () -> Unit) {
         Column(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
             Box(modifier = Modifier.weight(1f).fillMaxWidth().background(MapGround)) {
                 when (val l = load) {
-                    MapLoad.Loading -> CircularProgressIndicator(color = Color.White, modifier = Modifier.align(Alignment.Center))
+                    MapLoad.Loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                     MapLoad.SharingOff -> Message(stringResource(R.string.map_sharing_off))
                     MapLoad.Offline -> Message(stringResource(R.string.server_unreachable))
                     is MapLoad.Ready -> TileMap(l.pins)
@@ -179,7 +157,7 @@ fun MapScreen(api: LocationApi, onChat: () -> Unit, onCamera: () -> Unit) {
 @Composable
 private fun Message(text: String) {
     Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-        Text(text, fontSize = 16.sp, lineHeight = 22.sp, color = Color.White.copy(alpha = 0.85f), textAlign = TextAlign.Center)
+        Text(text, fontSize = 16.sp, lineHeight = 22.sp, color = Color(0xFF333333), textAlign = TextAlign.Center)
     }
 }
 
@@ -217,7 +195,7 @@ private fun mercatorY(lat: Double): Double {
 private const val MIN_ZOOM = 2.0
 private const val MAX_ZOOM = 18.0
 
-/** A pannable, pinch-zoomable dark map of OpenStreetMap tiles with the markers drawn on top. */
+/** A pannable, pinch-zoomable map of OpenStreetMap tiles with the markers drawn on top. */
 @Composable
 private fun TileMap(pins: List<Pin>) {
     val density = LocalDensity.current
@@ -302,7 +280,6 @@ private fun TileMap(pins: List<Pin>) {
                     image,
                     dstOffset = IntOffset(x.toInt(), y.toInt()),
                     dstSize = IntSize((x + ts).toInt() - x.toInt(), (y + ts).toInt() - y.toInt()),
-                    colorFilter = DarkTiles,
                 )
             }
         }
@@ -359,11 +336,11 @@ private fun TileMap(pins: List<Pin>) {
         Text(
             stringResource(R.string.map_attribution),
             fontSize = 10.sp,
-            color = Color.White.copy(alpha = 0.75f),
+            color = Color(0xFF333333),
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(8.dp)
-                .background(Color.Black.copy(alpha = 0.35f), RoundedCornerShape(4.dp))
+                .background(Color.White.copy(alpha = 0.7f), RoundedCornerShape(4.dp))
                 .padding(horizontal = 4.dp, vertical = 1.dp),
         )
     }
