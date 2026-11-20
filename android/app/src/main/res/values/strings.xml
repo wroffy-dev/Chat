@@ -325,4 +325,6 @@
     <string name="snap_save">Save</string>
     <string name="snap_saved">Saved to your gallery</string>
     <string name="snap_save_failed">Could not save it</string>
+    <string name="chat_chars_left">%1$d characters left</string>
+    <string name="chat_to_newest">Go to the newest message</string>
 </resources>
