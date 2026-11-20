@@ -122,6 +122,19 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import app.vaultchat.domain.chat.DISAPPEAR_CHOICES
 import app.vaultchat.ui.theme.Ref
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import kotlinx.coroutines.launch
 import app.vaultchat.R
 import app.vaultchat.domain.chat.EmojiEffects
 import kotlinx.coroutines.delay
@@ -304,6 +317,7 @@ fun ChatScreen(
                     myUserId = myUserId,
                     peerReadSeq = state.peerReadSeq,
                     disappearing = state.disappearSeconds != null,
+                    peerTyping = state.peerTyping,
                     onRetry = controller::retry,
                     onDiscard = controller::discard,
                     modifier = Modifier.weight(1f),
@@ -311,12 +325,22 @@ fun ChatScreen(
             }
 
             val tooLong = ChatText.tooLong(draft.trim())
+            // Near the limit, how many characters are left (owner 2026-11-20: a better typing experience).
+            val left = ChatText.MAX_CODE_POINTS - ChatText.codePoints(draft.trim())
             if (tooLong) {
                 Text(
                     stringResource(R.string.chat_too_long, ChatText.MAX_CODE_POINTS),
                     fontSize = 12.sp,
                     color = Ref.Error,
                     modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            } else if (left <= 200) {
+                Text(
+                    stringResource(R.string.chat_chars_left, left),
+                    fontSize = 12.sp,
+                    color = Ref.OnSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    textAlign = TextAlign.End,
                 )
             }
             replyTo?.let { target ->
@@ -366,6 +390,7 @@ fun ChatScreen(
                         modifier = Modifier.weight(1f),
                     )
                     val canSend = state.phase == ChatPhase.OPEN && draft.isNotBlank() && !tooLong
+                    val haptics = LocalHapticFeedback.current
                     RoundAction(
                         icon = AppIcons.ArrowUpward,
                         description = stringResource(R.string.chat_send),
@@ -375,6 +400,8 @@ fun ChatScreen(
                         onClick = {
                             val effect = EmojiEffects.effectFor(draft)
                             if (controller.send(draft, replyTo?.id)) {
+                                // A light tap under the finger: the message is on its way.
+                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 // The sender sees the effect at once, as in Apple Messages.
                                 effect?.let { burst = "sent-${System.nanoTime()}" to it }
                                 draft = ""
@@ -421,9 +448,12 @@ private fun PrivateTextInput(
             EditText(context).apply {
                 setOnFocusChangeListener { _, has -> focused = has }
                 imeOptions = EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING
-                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+                // Autocorrect and suggestions on (typing is easier); the keyboard is still asked not to learn.
+                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+                    InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or InputType.TYPE_TEXT_FLAG_AUTO_CORRECT
                 maxLines = 5
-                textSize = 14f
+                textSize = 16f
+                setLineSpacing(0f, 1.1f)
                 isSaveEnabled = false
                 background = null
                 addTextChangedListener(
@@ -646,6 +676,7 @@ private fun DisappearLine(m: ChatMessage, mine: Boolean, peerUsername: String) {
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun MessageList(
     messages: List<ChatMessage>,
     outgoing: List<Outgoing>,
@@ -657,18 +688,51 @@ private fun MessageList(
     myUserId: String,
     peerReadSeq: Long,
     disappearing: Boolean,
+    peerTyping: Boolean,
     onRetry: (String) -> Unit,
     onDiscard: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
     val total = messages.size + outgoing.size
-    // Opening a chat jumps straight to the newest message; only new messages after that scroll smoothly.
+    // The list's last row: the "typing" bubble when it shows, else the newest message.
+    val lastIndex = total - 1 + if (peerTyping) 1 else 0
+    // "At the bottom" = the last row is on screen; then new messages and the typing bubble follow along.
+    val atBottom by remember {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: -1
+            lastVisible >= info.totalItemsCount - 2
+        }
+    }
+    var unseen by remember { mutableIntStateOf(0) }
+    var lastTotal by remember { mutableIntStateOf(total) }
+    var lastOutgoing by remember { mutableIntStateOf(outgoing.size) }
+    // Opening a chat jumps straight to the newest message. After that, a new message scrolls into view when
+    // you are at the bottom or it is yours; while you read older ones it is counted on the ↓ button instead.
     var placed by remember { mutableStateOf(false) }
-    LaunchedEffect(total) {
+    LaunchedEffect(total, peerTyping) {
         if (total == 0) return@LaunchedEffect
-        if (placed) listState.animateScrollToItem(total - 1) else listState.scrollToItem(total - 1)
+        val mineAdded = outgoing.size > lastOutgoing
+        val added = (total - lastTotal).coerceAtLeast(0)
+        lastTotal = total
+        lastOutgoing = outgoing.size
+        when {
+            !placed -> listState.scrollToItem(lastIndex)
+            atBottom || mineAdded -> {
+                unseen = 0
+                listState.animateScrollToItem(lastIndex)
+            }
+            else -> unseen += added
+        }
         placed = true
+    }
+    LaunchedEffect(atBottom) { if (atBottom) unseen = 0 }
+    // The keyboard opening shrinks the list: keep the newest message in view above it.
+    val imeVisible = WindowInsets.isImeVisible
+    LaunchedEffect(imeVisible) {
+        if (imeVisible && placed && total > 0) listState.animateScrollToItem(lastIndex)
     }
     if (total == 0) {
         Column(
@@ -684,9 +748,10 @@ private fun MessageList(
         }
         return
     }
+    Box(modifier = modifier.fillMaxWidth()) {
     LazyColumn(
         state = listState,
-        modifier = modifier.fillMaxWidth().background(Ref.Surface),
+        modifier = Modifier.fillMaxSize().background(Ref.Surface),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -766,6 +831,51 @@ private fun MessageList(
                 }
             }
         }
+        if (peerTyping) {
+            item(key = "typing") {
+                // The other person is typing: three dots in a bubble, as in Apple Messages.
+                Box(Modifier.fillMaxWidth().animateItem(), contentAlignment = Alignment.CenterStart) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 16.dp))
+                            .background(Ref.Container)
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                    ) { TypingDots(color = Ref.OnSurfaceVariant) }
+                }
+            }
+        }
+    }
+    // Reading older messages: a round ↓ button brings you back to the newest, with how many came meanwhile.
+    AnimatedVisibility(
+        visible = !atBottom,
+        enter = fadeIn(tween(Motion.FAST)) + scaleIn(tween(Motion.FAST), initialScale = 0.8f),
+        exit = fadeOut(tween(Motion.FAST)) + scaleOut(tween(Motion.FAST), targetScale = 0.8f),
+        modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+    ) {
+        Box {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .shadow(4.dp, CircleShape)
+                    .clip(CircleShape)
+                    .background(Ref.ContainerLow)
+                    .clickable(role = Role.Button, onClickLabel = stringResource(R.string.chat_to_newest)) {
+                        unseen = 0
+                        scope.launch { listState.animateScrollToItem(lastIndex) }
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Filled.KeyboardArrowDown, contentDescription = stringResource(R.string.chat_to_newest), tint = Ref.Primary)
+            }
+            if (unseen > 0) {
+                Box(
+                    modifier = Modifier.align(Alignment.TopEnd).offset(x = 4.dp, y = (-4).dp)
+                        .size(18.dp).background(Ref.Primary, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) { Text(if (unseen > 9) "9+" else "$unseen", color = Ref.OnPrimary, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+            }
+        }
+    }
     }
 }
 
