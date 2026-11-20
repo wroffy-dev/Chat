@@ -23,7 +23,7 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 private const val DURATION_MS = 2_800
-private const val PIECES = 26
+private const val PIECES = 18
 
 /** One emoji of the effect: where it starts, how big it is, when it leaves and how it sways. */
 private class Piece(val emoji: String, val x: Float, val sizeSp: Float, val delay: Float, val sway: Float, val spin: Float, val speed: Float)
@@ -73,11 +73,12 @@ fun EmojiBurst(effect: EmojiEffects.Effect, key: Any, onDone: () -> Unit) {
                     translationX = p.x * (widthPx - 60f) + sin(t * PI.toFloat() * 3f) * p.sway
                     translationY = if (effect.motion == EmojiEffects.Motion.RISE) heightPx - t * travel else -80f + t * travel
                     rotationZ = p.spin * t
-                    // Grow in quickly, fade out near the end.
-                    val scale = (t * 6f).coerceAtMost(1f)
+                    // Grow in quickly, fade out near the end. Never a near-zero scale: text drawn through an
+                    // almost-degenerate matrix is a suspect in a native crash on Android 16 (realme, v158).
+                    val scale = (0.4f + t * 4f).coerceAtMost(1f)
                     scaleX = scale
                     scaleY = scale
-                    alpha = if (t <= 0f) 0f else (1f - ((t - 0.75f) / 0.25f).coerceIn(0f, 1f))
+                    alpha = if (t <= 0f || t >= 1f) 0f else (1f - ((t - 0.75f) / 0.25f).coerceIn(0f, 1f))
                 },
             ) {
                 Text(p.emoji, fontSize = p.sizeSp.sp)

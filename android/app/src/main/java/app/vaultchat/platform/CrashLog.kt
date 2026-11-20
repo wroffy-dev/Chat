@@ -20,7 +20,7 @@ import java.util.TimeZone
 object CrashLog {
     private const val FILE = "last_crash.txt"
     private const val SEEN = "last_crash_seen_ms"
-    private const val MAX_CHARS = 6_000
+    private const val MAX_CHARS = 12_000
 
     fun install(context: Context) {
         val app = context.applicationContext
@@ -63,7 +63,18 @@ object CrashLog {
             buildString {
                 appendLine(header(context, info.timestamp, "native crash: ${info.description ?: "–"}"))
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    info.traceInputStream?.use { append(readableStrings(it.readBytes())) }
+                    info.traceInputStream?.use { stream ->
+                        val text = readableStrings(stream.readBytes())
+                        // The crashing thread is the one that called abort(); show it first, because the log
+                        // is cut at MAX_CHARS and the threads come in no useful order.
+                        val at = text.indexOf("abort")
+                        if (at > 0) {
+                            appendLine("--- crashing thread (around abort) ---")
+                            appendLine(text.substring((at - 1_500).coerceAtLeast(0), (at + 2_500).coerceAtMost(text.length)))
+                            appendLine("--- all threads ---")
+                        }
+                        append(text)
+                    }
                 }
             }.take(MAX_CHARS)
         } catch (_: Throwable) {
