@@ -19,6 +19,26 @@ object EmojiEffects {
     private val STARS = Effect(listOf("⭐", "✨", "🌟"), Motion.FALL)
     private val FLOWERS = Effect(listOf("🌹", "🌸", "🌺"), Motion.FALL)
     private val THUMBS = Effect(listOf("👍"), Motion.RISE)
+    private val TEARS = Effect(listOf("💧", "😢"), Motion.FALL)
+    private val RAIN = Effect(listOf("💧", "☔"), Motion.FALL)
+    private val SNOW = Effect(listOf("❄️", "☃️"), Motion.FALL)
+    private val MONEY = Effect(listOf("💸", "💰", "💵"), Motion.FALL)
+    private val MUSIC = Effect(listOf("🎵", "🎶"), Motion.RISE)
+    private val SLEEP = Effect(listOf("💤"), Motion.RISE)
+    private val ANGRY = Effect(listOf("💢", "😡"), Motion.RISE)
+    private val CLAP = Effect(listOf("👏"), Motion.RISE)
+    private val PRAY = Effect(listOf("🙏", "✨"), Motion.RISE)
+    private val HUNDRED = Effect(listOf("💯"), Motion.RISE)
+    private val ROCKET = Effect(listOf("🚀"), Motion.RISE)
+    private val CHEERS = Effect(listOf("🥂", "🍾", "✨"), Motion.FALL)
+    private val SUNNY = Effect(listOf("🌈", "☀️"), Motion.FALL)
+    private val NIGHT = Effect(listOf("🌙", "⭐", "✨"), Motion.FALL)
+    private val SPOOKY = Effect(listOf("👻", "🎃"), Motion.RISE)
+    private val KISS = Effect(listOf("💋", "❤️"), Motion.RISE)
+    private val BROKEN = Effect(listOf("💔"), Motion.FALL)
+    private val LEAVES = Effect(listOf("🍁", "🍂"), Motion.FALL)
+    private val BUTTERFLY = Effect(listOf("🦋"), Motion.RISE)
+    private val GIFT = Effect(listOf("🎁", "🎀", "✨"), Motion.FALL)
 
     /** Emoji (without variation selectors or skin tones) and their effect, checked in this order. */
     private val TRIGGERS: List<Pair<String, Effect>> = listOf(
@@ -36,9 +56,33 @@ object EmojiEffects {
         "⭐" to STARS, "🌟" to STARS, "✨" to STARS,
         "🌹" to FLOWERS, "🌸" to FLOWERS, "💐" to FLOWERS,
         "👍" to THUMBS,
+        // More moods and moments (owner 2026-11-20: "jitne bhi single emojis pr kr skte ho").
+        "💔" to BROKEN,
+        "💋" to KISS, "😗" to KISS, "😙" to KISS, "😚" to KISS,
+        "😢" to TEARS, "😭" to TEARS, "🥺" to TEARS, "😿" to TEARS,
+        "🌧" to RAIN, "☔" to RAIN, "⛈" to RAIN, "💧" to RAIN,
+        "❄" to SNOW, "☃" to SNOW, "⛄" to SNOW, "🥶" to SNOW,
+        "💰" to MONEY, "💸" to MONEY, "💵" to MONEY, "🤑" to MONEY, "💲" to MONEY,
+        "🎵" to MUSIC, "🎶" to MUSIC, "🎤" to MUSIC, "🎧" to MUSIC,
+        "😴" to SLEEP, "💤" to SLEEP, "🥱" to SLEEP,
+        "😡" to ANGRY, "😠" to ANGRY, "🤬" to ANGRY, "💢" to ANGRY,
+        "👏" to CLAP, "🙌" to CLAP,
+        "🙏" to PRAY,
+        "💯" to HUNDRED,
+        "🚀" to ROCKET,
+        "🥂" to CHEERS, "🍾" to CHEERS, "🍻" to CHEERS,
+        "🌈" to SUNNY, "☀" to SUNNY, "🌞" to SUNNY,
+        "🌙" to NIGHT, "🌛" to NIGHT, "🌌" to NIGHT,
+        "👻" to SPOOKY, "🎃" to SPOOKY,
+        "🍁" to LEAVES, "🍂" to LEAVES, "🍃" to LEAVES,
+        "🦋" to BUTTERFLY,
+        "🎁" to GIFT,
     )
 
-    /** The effect for [text], or null when it is not an emoji-only message with an effect. */
+    /**
+     * The effect for [text], or null when it is not a message of only 1 to 3 emoji. Emoji with an effect of
+     * their own get it; any other emoji floats up the screen itself (owner 2026-11-20: every emoji has one).
+     */
     fun effectFor(text: String): Effect? {
         val trimmed = text.trim()
         val count = EmojiText.count(trimmed) ?: return null
@@ -49,6 +93,7 @@ object EmojiEffects {
             .mapNotNull { (emoji, effect) -> plain.indexOf(emoji).takeIf { it >= 0 }?.let { it to effect } }
             .minByOrNull { it.first }
             ?.second
+            ?: Effect(trimmed.split(' ').filter { it.isNotBlank() }, Motion.RISE)
     }
 
     /** Drops variation selectors and skin-tone modifiers, so "❤️" and "👍🏽" match "❤" and "👍". */
