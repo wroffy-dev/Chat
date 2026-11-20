@@ -285,4 +285,17 @@
     <!-- UI upgrade (2026-11-20) -->
     <string name="home_search_close">Close search</string>
     <string name="home_search_clear">Clear search</string>
+    <!-- Login in the owner's reference design (2026-11-20) -->
+    <string name="login_brand">VaultChat</string>
+    <string name="login_private_access">Private Access</string>
+    <string name="login_heading">Sign in to your vault</string>
+    <string name="login_intro">Enter your assigned username and passphrase. Access is limited to paired members.</string>
+    <string name="login_username_hint">Assigned by your workspace administrator</string>
+    <string name="login_passphrase">Passphrase</string>
+    <string name="login_passphrase_placeholder">Enter your passphrase</string>
+    <string name="login_sign_in">Sign in</string>
+    <string name="login_show_passphrase">Show passphrase</string>
+    <string name="login_hide_passphrase">Hide passphrase</string>
+    <string name="login_no_registration">No public registration.</string>
+    <string name="login_version">VaultChat Android v%1$s</string>
 </resources>
