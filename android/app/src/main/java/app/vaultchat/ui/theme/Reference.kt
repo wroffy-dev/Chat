@@ -1,27 +1,35 @@
 package app.vaultchat.ui.theme
 
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 /**
- * Light colours of the owner's reference screens (chat_conversation.html, message_expiry_settings.html,
- * login.html; 2026-11-20). The chat and its disappearing-messages screen use them exactly, as the
- * reference shows, in light and dark mode.
+ * Colours of the owner's reference screens (chat_conversation.html, message_expiry_settings.html;
+ * 2026-11-20), mapped onto the app's own green theme (owner, 2026-11-20: "core app ke green UI mein"). The
+ * layouts follow the references; the colours come from [VaultChatTheme], so light and dark mode both work.
  */
 object Ref {
-    val Primary = Color(0xFF254EDB)
-    val OnPrimary = Color.White
-    val PrimaryContainer = Color(0xFFE8EEFF)
-    val OnPrimaryContainer = Color(0xFF10236B)
-    val Surface = Color.White
-    val OnSurface = Color(0xFF111318)
-    val OnSurfaceVariant = Color(0xFF525B6C)
-    val ContainerLow = Color(0xFFF8F9FB)
-    val Container = Color(0xFFF1F3F7)
-    val ContainerHigh = Color(0xFFE6E9F0)
-    val Outline = Color(0xFF737C8C)
-    val OutlineVariant = Color(0xFFDCE1EA)
-    val Teal = Color(0xFF0F766E)
-    val Error = Color(0xFFC81E1E)
-    val ErrorContainer = Color(0xFFFEE2E2)
-    val OnErrorContainer = Color(0xFF7F1D1D)
+    val Primary: Color @Composable get() = MaterialTheme.colorScheme.primary
+    val OnPrimary: Color @Composable get() = MaterialTheme.colorScheme.onPrimary
+    val PrimaryContainer: Color @Composable get() = MaterialTheme.colorScheme.primaryContainer
+    val OnPrimaryContainer: Color @Composable get() = MaterialTheme.colorScheme.onPrimaryContainer
+
+    /** The screen itself: mint in light mode, the darkest green in dark mode. */
+    val Surface: Color @Composable get() = MaterialTheme.colorScheme.background
+    val OnSurface: Color @Composable get() = MaterialTheme.colorScheme.onBackground
+    val OnSurfaceVariant: Color @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
+
+    /** Panels, received bubbles and inputs: near-white on mint, dark green on the darkest green. */
+    val ContainerLow: Color @Composable get() = MaterialTheme.colorScheme.surface
+    val Container: Color @Composable get() = MaterialTheme.colorScheme.surface
+    val ContainerHigh: Color @Composable get() = MaterialTheme.colorScheme.surfaceVariant
+    val Outline: Color @Composable get() = MaterialTheme.colorScheme.outline
+    val OutlineVariant: Color @Composable get() = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+
+    /** The reference's teal accent (privacy strip, typing). */
+    val Teal: Color @Composable get() = MaterialTheme.colorScheme.secondary
+    val Error: Color @Composable get() = MaterialTheme.colorScheme.error
+    val ErrorContainer: Color @Composable get() = MaterialTheme.colorScheme.errorContainer
+    val OnErrorContainer: Color @Composable get() = MaterialTheme.colorScheme.onErrorContainer
 }

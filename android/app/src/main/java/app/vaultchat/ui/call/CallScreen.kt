@@ -626,16 +626,17 @@ fun CallScreen(
 
 private const val CONTROLS_HIDE_MS = 4_000L
 
-// Colours of the owner's reference video-call design (active_video_call.html, 2026-11-20), dark scheme.
-private val RefSurface = Color(0xFF111317)
-private val RefOnSurface = Color(0xFFF1F3F6)
-private val RefOnSurfaceVariant = Color(0xFF9BA3B4)
-private val RefContainer = Color(0xFF1E222B)
-private val RefContainerHigh = Color(0xFF272C37)
-private val RefOutlineVariant = Color(0xFF2E3442)
+// The reference video-call layout (active_video_call.html, 2026-11-20) in the app's dark greens (owner,
+// 2026-11-20: "core app ke green UI mein"); red stays for ending the call.
+private val RefSurface = VaultGreen.Deepest
+private val RefOnSurface = VaultGreen.Mint
+private val RefOnSurfaceVariant = VaultGreen.Sage
+private val RefContainer = VaultGreen.Deep
+private val RefContainerHigh = VaultGreen.Forest
+private val RefOutlineVariant = VaultGreen.Pine
 private val RefError = Color(0xFFC81E1E)
-private val RefSuccess = Color(0xFF16803C)
-private val RefWarning = Color(0xFFB45309)
+private val RefSuccess = VaultGreen.Sage
+private val RefWarning = Color(0xFFE0A33A)
 
 /** "720p · 30 fps" of the video being received, from the call statistics; null until known. */
 private fun resolutionText(s: StatsSample?): String? {

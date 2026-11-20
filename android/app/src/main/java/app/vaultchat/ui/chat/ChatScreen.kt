@@ -123,6 +123,8 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import app.vaultchat.domain.chat.DISAPPEAR_CHOICES
 import app.vaultchat.ui.theme.Ref
 import app.vaultchat.R
+import app.vaultchat.domain.chat.EmojiEffects
+import kotlinx.coroutines.delay
 import app.vaultchat.domain.chat.ChatMessage
 import app.vaultchat.domain.chat.ChatNotice
 import app.vaultchat.domain.chat.ChatPhase
@@ -205,6 +207,26 @@ fun ChatScreen(
             if (draft.isBlank()) draft = it
             controller.draftRestored()
         }
+    }
+
+    // Emoji effects (owner request 2026-11-20, like Apple Messages): a new heart, 🎉, 🔥… plays once over the
+    // chat on both phones. Messages already there when the chat opens do not replay.
+    var burst by remember { mutableStateOf<Pair<String, EmojiEffects.Effect>?>(null) }
+    var lastSeenSeq by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(Unit) {
+        delay(1_500)
+        if (lastSeenSeq == null) lastSeenSeq = state.messages.maxOfOrNull { it.seq } ?: 0L
+    }
+    LaunchedEffect(state.messages) {
+        val top = state.messages.maxOfOrNull { it.seq } ?: return@LaunchedEffect
+        val seen = lastSeenSeq
+        if (seen == null) {
+            lastSeenSeq = top
+            return@LaunchedEffect
+        }
+        val fresh = state.messages.lastOrNull { it.seq > seen && it.senderId != myUserId && it.kind == MessageKind.TEXT }
+        fresh?.let { m -> EmojiEffects.effectFor(m.text)?.let { burst = m.id to it } }
+        lastSeenSeq = maxOf(seen, top)
     }
 
     // The disappearing-messages screen (owner's reference, 2026-11-20) opens over the chat, so the chat stays
@@ -351,7 +373,10 @@ fun ChatScreen(
                         tint = Ref.OnPrimary,
                         enabled = canSend,
                         onClick = {
+                            val effect = EmojiEffects.effectFor(draft)
                             if (controller.send(draft, replyTo?.id)) {
+                                // The sender sees the effect at once, as in Apple Messages.
+                                effect?.let { burst = "sent-${System.nanoTime()}" to it }
                                 draft = ""
                                 replyTo = null
                             }
@@ -360,6 +385,7 @@ fun ChatScreen(
                 }
             }
         }
+        burst?.let { (key, effect) -> EmojiBurst(effect, key) { if (burst?.first == key) burst = null } }
     }
 }
 
