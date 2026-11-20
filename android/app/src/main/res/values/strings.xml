@@ -285,4 +285,44 @@
     <!-- UI upgrade (2026-11-20) -->
     <string name="home_search_close">Close search</string>
     <string name="home_search_clear">Clear search</string>
+    <!-- Login in the owner's reference design (2026-11-20) -->
+    <string name="login_brand">VaultChat</string>
+    <string name="login_private_access">Private Access</string>
+    <string name="login_heading">Sign in to your vault</string>
+    <string name="login_intro">Enter your assigned username and passphrase. Access is limited to paired members.</string>
+    <string name="login_username_hint">Assigned by your workspace administrator</string>
+    <string name="login_passphrase">Passphrase</string>
+    <string name="login_passphrase_placeholder">Enter your passphrase</string>
+    <string name="login_sign_in">Sign in</string>
+    <string name="login_show_passphrase">Show passphrase</string>
+    <string name="login_hide_passphrase">Hide passphrase</string>
+    <string name="login_no_registration">No public registration.</string>
+    <string name="login_version">VaultChat Android v%1$s</string>
+    <!-- Chat in the owner's reference design and disappearing messages (2026-11-20, D-30) -->
+    <string name="chat_message_hint">Message %1$s…</string>
+    <string name="chat_options">Conversation options</string>
+    <string name="chat_strip_private">Private chat · screenshots blocked</string>
+    <string name="chat_today">Today</string>
+    <string name="chat_status_sent">Sent</string>
+    <string name="chat_status_read">Read</string>
+    <string name="chat_status_disappearing">Will disappear after it is read</string>
+    <string name="expiry_title">Disappearing messages</string>
+    <string name="expiry_how_title">How message expiry works</string>
+    <string name="expiry_how_body">Messages in this conversation with %1$s are deleted for both of you once the selected time has passed after they are read. With Off, read messages are deleted when either of you leaves the chat. Unread messages are deleted 24 hours after they were sent.</string>
+    <string name="expiry_duration">Expiry duration</string>
+    <string name="expiry_active">Currently active</string>
+    <string name="expiry_off">Off</string>
+    <string name="expiry_1m">1 Minute</string>
+    <string name="expiry_5m">5 Minutes</string>
+    <string name="expiry_1h">1 Hour</string>
+    <string name="expiry_24h">24 Hours</string>
+    <string name="expiry_button_set">Set %1$s expiry</string>
+    <string name="expiry_button_off">Turn off expiry</string>
+    <string name="expiry_pill">%1$s expiry</string>
+    <string name="expiry_pill_off">Expiry off</string>
+    <string name="expiry_line_set">%1$s set disappearing messages to %2$s</string>
+    <string name="expiry_line_off">%1$s turned off disappearing messages</string>
+    <string name="snap_save">Save</string>
+    <string name="snap_saved">Saved to your gallery</string>
+    <string name="snap_save_failed">Could not save it</string>
 </resources>

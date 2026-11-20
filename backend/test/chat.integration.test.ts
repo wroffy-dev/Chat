@@ -203,6 +203,51 @@ describe.skipIf(!TEST_DB_URL)("chat (PostgreSQL)", () => {
     expect(texts(await history(alice, conv))).toEqual([]);
   });
 
+  it("D-30: a disappearing timer set by one person applies to both, replaces the exit rule and deletes after seen", async () => {
+    const { alice, bob, conv } = await pair();
+    clockMs = Date.now();
+    const off = await history(alice, conv);
+    expect(off.disappearSeconds).toBeNull();
+    expect(off.peerReadSeq).toBe(0);
+
+    // Only the offered choices.
+    expect((await req(alice, "PUT", `/conversations/${conv}/disappearing`, { seconds: 120 })).statusCode).toBe(400);
+    const set = await req(alice, "PUT", `/conversations/${conv}/disappearing`, { seconds: 300 });
+    expect(set.json()).toEqual({ disappearSeconds: 300 });
+    const h = await history(bob, conv);
+    expect(h.disappearSeconds).toBe(300);
+    // A line says who changed it.
+    expect(h.items.map((m: { kind: string; text: string }) => [m.kind, m.text])).toEqual([["disappear", "300"]]);
+    // Setting the same value again adds nothing.
+    await req(bob, "PUT", `/conversations/${conv}/disappearing`, { seconds: 300 });
+    expect((await history(bob, conv)).items).toHaveLength(1);
+
+    await send(alice, conv, "hello"); // seq 2
+    await req(bob, "POST", `/conversations/${conv}/read`, { seq: 2 });
+    expect((await history(alice, conv)).peerReadSeq).toBe(2);
+    // With a timer, leaving deletes nothing.
+    await leave(bob, conv);
+    expect(texts(await history(alice, conv))).toContain("hello");
+
+    // 5 minutes after Bob saw it, it is gone for both.
+    advance(299_000);
+    expect((await chat.sweep()).timerDeleted).toBe(0);
+    advance(2_000);
+    expect((await chat.sweep()).timerDeleted).toBeGreaterThan(0);
+    expect(texts(await history(alice, conv))).not.toContain("hello");
+    expect(texts(await history(bob, conv))).not.toContain("hello");
+
+    // Unseen messages wait for their recipient.
+    const epochNow = (await history(bob, conv)).epoch;
+    expect((await send(bob, conv, "unseen", epochNow)).statusCode).toBe(201);
+    advance(600_000);
+    await chat.sweep();
+    expect(texts(await history(alice, conv))).toContain("unseen");
+
+    // Back to Off: the exit rule applies again.
+    expect((await req(bob, "PUT", `/conversations/${conv}/disappearing`, { seconds: null })).json()).toEqual({ disappearSeconds: null });
+  });
+
   it("a read cursor never covers messages sent after it", async () => {
     const { alice, bob, conv } = await pair();
     await send(alice, conv, "seen");
@@ -254,12 +299,12 @@ describe.skipIf(!TEST_DB_URL)("chat (PostgreSQL)", () => {
     advance(40_000);
     expect((await req(bob, "POST", `/conversations/${conv}/heartbeat`, { leaseId: lease })).statusCode).toBe(204);
     advance(40_000);
-    expect(await chat.sweep()).toEqual({ expiredLeases: 0, backstopDeleted: 0 });
+    expect(await chat.sweep()).toEqual({ expiredLeases: 0, backstopDeleted: 0, timerDeleted: 0 });
     expect(texts(await history(alice, conv))).toEqual(["hello"]);
 
     // Bob's phone goes quiet (background, crash, no network): after 60 s the server exits for him.
     advance(61_000);
-    expect(await chat.sweep()).toEqual({ expiredLeases: 1, backstopDeleted: 0 });
+    expect(await chat.sweep()).toEqual({ expiredLeases: 1, backstopDeleted: 0, timerDeleted: 0 });
     expect(texts(await history(alice, conv))).toEqual([]);
     const hb = await req(bob, "POST", `/conversations/${conv}/heartbeat`, { leaseId: lease });
     expect(hb.statusCode).toBe(409);
@@ -284,7 +329,7 @@ describe.skipIf(!TEST_DB_URL)("chat (PostgreSQL)", () => {
     advance(23 * 3600_000);
     await send(bob, conv, "newer", 0);
     advance(3600_000 + 1000);
-    expect(await chat.sweep()).toEqual({ expiredLeases: 0, backstopDeleted: 1 });
+    expect(await chat.sweep()).toEqual({ expiredLeases: 0, backstopDeleted: 1, timerDeleted: 0 });
     const h = await history(bob, conv, "?epoch=0");
     expect(h).toMatchObject({ epoch: 1, cleared: true });
     expect(texts(h)).toEqual(["newer"]);

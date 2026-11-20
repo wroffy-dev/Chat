@@ -1,5 +1,14 @@
 package app.vaultchat.ui.call
 
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -240,7 +249,15 @@ fun CallScreen(
     val maxPipX = with(density) { (config.screenWidthDp.dp - 112.dp - 32.dp).toPx() }.coerceAtLeast(0f)
     val maxPipY = with(density) { (config.screenHeightDp.dp - 160.dp - 96.dp).toPx() }.coerceAtLeast(0f)
 
-    Surface(modifier = Modifier.fillMaxSize(), color = VaultGreen.Deepest, contentColor = VaultGreen.Mint) {
+    // A connected video call uses the owner's reference layout (2026-11-20, active_video_call.html): the
+    // picture full screen under a dark gradient, a header with minimise, name and the live resolution, the
+    // self view bottom-right and one bar of round controls. Voice calls, ringing and ended stay as before.
+    val videoLayout = kind == CallKind.VIDEO && state.phase in setOf(CallPhase.CONNECTING, CallPhase.ACTIVE, CallPhase.RECONNECTING)
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = if (videoLayout) RefSurface else VaultGreen.Deepest,
+        contentColor = if (videoLayout) RefOnSurface else VaultGreen.Mint,
+    ) {
         Box(
             modifier = Modifier.fillMaxSize().pointerInput(Unit) {
                 // Sees every touch before the buttons do, without consuming it, so a button press
@@ -296,7 +313,43 @@ fun CallScreen(
                 selfShown -> localVideo
                 else -> null
             }
-            if (smallTrack != null) {
+            if (videoLayout) {
+                // Darker at the top and bottom so the header and controls read over any picture.
+                Box(
+                    Modifier.fillMaxSize().background(
+                        Brush.verticalGradient(
+                            0f to RefSurface.copy(alpha = 0.7f),
+                            0.5f to Color.Transparent,
+                            1f to RefSurface.copy(alpha = 0.85f),
+                        ),
+                    ),
+                )
+                if (!showVideo) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CallAvatar(state.peerUsername.ifEmpty { "?" }, pulsing = state.phase != CallPhase.ACTIVE)
+                    }
+                }
+                if (smallTrack != null) {
+                    RefSelfView(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .safeDrawingPadding()
+                            .padding(end = 16.dp, bottom = 112.dp)
+                            .offset { IntOffset(pipOffset.x.roundToInt(), pipOffset.y.roundToInt()) },
+                        content = { VideoView(room, smallTrack, mirror = !selfIsBig && localFront, modifier = Modifier.fillMaxSize()) },
+                        onDrag = { drag ->
+                            pipOffset = Offset(
+                                (pipOffset.x + drag.x).coerceIn(-maxPipX, 0f),
+                                (pipOffset.y + drag.y).coerceIn(-maxPipY, 0f),
+                            )
+                        },
+                        canSwap = showVideo && selfShown,
+                        onSwap = { selfBig = !selfBig },
+                        onSwitchCamera = viewModel.controller::switchCamera,
+                        switchEnabled = state.cameraOn,
+                    )
+                }
+            } else if (smallTrack != null) {
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
@@ -381,13 +434,74 @@ fun CallScreen(
                 }
             }
             // Minimise (owner request 2026-11-13): back to the chat with the call still running.
-            if (onMinimize != null && controlsVisible && state.phase in setOf(CallPhase.ACTIVE, CallPhase.RECONNECTING, CallPhase.CONNECTING)) {
+            if (!videoLayout && onMinimize != null && controlsVisible && state.phase in setOf(CallPhase.ACTIVE, CallPhase.RECONNECTING, CallPhase.CONNECTING)) {
                 FilledTonalButton(
                     onClick = onMinimize,
                     modifier = Modifier.align(Alignment.TopStart).safeDrawingPadding().padding(12.dp),
                 ) { Text(stringResource(R.string.call_minimize)) }
             }
-            AnimatedVisibility(visible = controlsVisible, enter = fadeIn(), exit = fadeOut()) {
+            if (videoLayout) {
+                AnimatedVisibility(visible = controlsVisible, enter = fadeIn(), exit = fadeOut()) {
+                    Column(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
+                        val phase = phaseText(state.phase, state.endReason, incoming)
+                        val quality = qualityLevel(liveStats)
+                        RefHeader(
+                            name = state.peerUsername.ifEmpty { "…" },
+                            status = when {
+                                state.phase != CallPhase.ACTIVE -> phase
+                                elapsed != null && quality != null -> "$elapsed · ${stringResource(qualityLabel(quality))}"
+                                elapsed != null -> elapsed
+                                else -> phase
+                            },
+                            phase = phase,
+                            onMinimize = onMinimize,
+                            resolution = resolutionText(liveStats),
+                            quality = quality,
+                        )
+                        if (peerMuted) {
+                            MutedPill(stringResource(R.string.call_peer_muted, state.peerUsername), Modifier.align(Alignment.CenterHorizontally))
+                        }
+                        Spacer(Modifier.weight(1f))
+                        RefControls(
+                            micOn = state.micOn,
+                            cameraOn = state.cameraOn,
+                            speakerOn = state.speakerOn,
+                            onMic = viewModel.controller::toggleMicrophone,
+                            onCamera = viewModel.controller::toggleCamera,
+                            onSpeaker = viewModel.controller::toggleSpeaker,
+                            onEnd = viewModel.controller::hangup,
+                            menu = { dismiss ->
+                                // Everything the old controls had stays one tap away under the switch button.
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.call_switch_my_camera)) },
+                                    enabled = state.cameraOn,
+                                    onClick = { dismiss(); viewModel.controller.switchCamera() },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.call_switch_their_camera)) },
+                                    enabled = showVideo,
+                                    onClick = { dismiss(); viewModel.controller.switchPeerCamera(); sentFlips++ },
+                                )
+                                HorizontalDivider()
+                                ZoomRow(stringResource(R.string.call_zoom_my_camera), state.cameraZoom, enabled = state.cameraOn) {
+                                    dismiss(); viewModel.controller.setMyCameraZoom(it)
+                                }
+                                ZoomRow(stringResource(R.string.call_zoom_their_camera), state.peerCameraZoom, enabled = showVideo) {
+                                    dismiss(); viewModel.controller.setPeerCameraZoom(it); sentZooms++
+                                }
+                                if (viewModel.controller.noiseReductionAvailable) {
+                                    HorizontalDivider()
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(if (state.noiseReduction) R.string.call_noise_filter_on else R.string.call_noise_filter_off)) },
+                                        onClick = { dismiss(); viewModel.controller.toggleNoiseReduction() },
+                                    )
+                                }
+                            },
+                            onMenuOpen = { switchMenuOpen = it },
+                        )
+                    }
+                }
+            } else AnimatedVisibility(visible = controlsVisible, enter = fadeIn(), exit = fadeOut()) {
             Column(
                 modifier = Modifier.fillMaxSize().safeDrawingPadding().padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -511,6 +625,226 @@ fun CallScreen(
 }
 
 private const val CONTROLS_HIDE_MS = 4_000L
+
+// Colours of the owner's reference video-call design (active_video_call.html, 2026-11-20), dark scheme.
+private val RefSurface = Color(0xFF111317)
+private val RefOnSurface = Color(0xFFF1F3F6)
+private val RefOnSurfaceVariant = Color(0xFF9BA3B4)
+private val RefContainer = Color(0xFF1E222B)
+private val RefContainerHigh = Color(0xFF272C37)
+private val RefOutlineVariant = Color(0xFF2E3442)
+private val RefError = Color(0xFFC81E1E)
+private val RefSuccess = Color(0xFF16803C)
+private val RefWarning = Color(0xFFB45309)
+
+/** "720p · 30 fps" of the video being received, from the call statistics; null until known. */
+private fun resolutionText(s: StatsSample?): String? {
+    val h = s?.recvHeight ?: return null
+    val fps = s.recvFps
+    return if (fps != null) "${h}p · ${fps.roundToInt()} fps" else "${h}p"
+}
+
+/** Header: minimise, the other person's name with the time and connection, and the live resolution. */
+@Composable
+private fun RefHeader(
+    name: String,
+    status: String,
+    phase: String,
+    onMinimize: (() -> Unit)?,
+    resolution: String?,
+    quality: Int?,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f, fill = false)) {
+            if (onMinimize != null) {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(RefContainer.copy(alpha = 0.9f))
+                        .clickable(role = Role.Button, onClickLabel = stringResource(R.string.call_minimize), onClick = onMinimize),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Filled.KeyboardArrowDown, contentDescription = stringResource(R.string.call_minimize), tint = RefOnSurface, modifier = Modifier.size(24.dp))
+                }
+            }
+            Column {
+                Text(name, color = RefOnSurface, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    status,
+                    color = RefOnSurfaceVariant,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                    letterSpacing = 0.3.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    // Announces phase changes only, not every tick of the timer.
+                    modifier = Modifier.clearAndSetSemantics {
+                        contentDescription = phase
+                        liveRegion = LiveRegionMode.Polite
+                    },
+                )
+            }
+        }
+        if (resolution != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier
+                    .padding(start = 8.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(RefContainer.copy(alpha = 0.9f))
+                    .border(1.dp, RefOutlineVariant, RoundedCornerShape(50))
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            ) {
+                val dot = when (quality) {
+                    1 -> RefError
+                    2 -> RefWarning
+                    else -> RefSuccess
+                }
+                Box(Modifier.size(8.dp).background(dot, CircleShape))
+                Text(resolution, color = RefOnSurface, fontFamily = FontFamily.Monospace, fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = 0.3.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+            }
+        }
+    }
+}
+
+/**
+ * The self view, 112 x 160 dp with rounded corners and a thin border, bottom-right; a small round button
+ * in its corner flips this phone's camera. Tap the picture to swap the two views; drag to move it.
+ */
+@Composable
+private fun RefSelfView(
+    modifier: Modifier,
+    content: @Composable () -> Unit,
+    onDrag: (Offset) -> Unit,
+    canSwap: Boolean,
+    onSwap: () -> Unit,
+    onSwitchCamera: () -> Unit,
+    switchEnabled: Boolean,
+) {
+    Box(
+        modifier = modifier
+            .size(width = 112.dp, height = 160.dp)
+            .shadow(8.dp, RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(16.dp))
+            .background(RefContainer)
+            .border(1.dp, RefOutlineVariant, RoundedCornerShape(16.dp)),
+    ) {
+        content()
+        // A transparent layer on top takes the taps and drags (the video view itself does not).
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectDragGestures { change, drag ->
+                        change.consume()
+                        onDrag(drag)
+                    }
+                }
+                .clickable(enabled = canSwap, onClickLabel = stringResource(R.string.call_swap_video), onClick = onSwap),
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(4.dp)
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(RefSurface.copy(alpha = 0.8f))
+                .clickable(enabled = switchEnabled, role = Role.Button, onClick = onSwitchCamera),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(AppIcons.FlipCamera, contentDescription = stringResource(R.string.call_switch_my_camera), tint = RefOnSurface, modifier = Modifier.size(16.dp))
+        }
+    }
+}
+
+/**
+ * One bar of round controls in a rounded panel: microphone, camera, switch (with the camera and zoom menu),
+ * speaker, and the red end button. A button that is not in its usual state is filled light so it stands out.
+ */
+@Composable
+private fun RefControls(
+    micOn: Boolean,
+    cameraOn: Boolean,
+    speakerOn: Boolean,
+    onMic: () -> Unit,
+    onCamera: () -> Unit,
+    onSpeaker: () -> Unit,
+    onEnd: () -> Unit,
+    menu: @Composable ColumnScope.(dismiss: () -> Unit) -> Unit,
+    onMenuOpen: (Boolean) -> Unit,
+) {
+    Box(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 24.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .background(RefContainer)
+                .border(1.dp, RefOutlineVariant, RoundedCornerShape(24.dp))
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            RefRound(
+                icon = if (micOn) AppIcons.MicOff else AppIcons.Mic,
+                label = stringResource(if (micOn) R.string.call_mute else R.string.call_unmute),
+                highlighted = !micOn,
+                onClick = onMic,
+            )
+            RefRound(
+                icon = if (cameraOn) AppIcons.Videocam else AppIcons.VideocamOff,
+                label = stringResource(if (cameraOn) R.string.call_camera_off else R.string.call_camera_on),
+                highlighted = !cameraOn,
+                onClick = onCamera,
+            )
+            var expanded by remember { mutableStateOf(false) }
+            LaunchedEffect(expanded) { onMenuOpen(expanded) }
+            DisposableEffect(Unit) { onDispose { onMenuOpen(false) } }
+            Box {
+                RefRound(icon = AppIcons.FlipCamera, label = stringResource(R.string.call_switch), highlighted = false, onClick = { expanded = true })
+                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) { menu(this) { expanded = false } }
+            }
+            RefRound(
+                icon = AppIcons.VolumeUp,
+                label = stringResource(R.string.call_speaker),
+                highlighted = !speakerOn,
+                onClick = onSpeaker,
+                state = stringResource(if (speakerOn) R.string.state_on else R.string.state_off),
+            )
+            Box(
+                modifier = Modifier
+                    .size(width = 56.dp, height = 48.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(RefError)
+                    .clickable(role = Role.Button, onClick = onEnd),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(AppIcons.CallEnd, contentDescription = stringResource(R.string.call_end), tint = Color.White, modifier = Modifier.size(24.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun RefRound(icon: ImageVector, label: String, highlighted: Boolean, onClick: () -> Unit, state: String? = null) {
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .background(if (highlighted) RefOnSurface else RefContainerHigh)
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics(mergeDescendants = true) { if (state != null) stateDescription = state },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = label, tint = if (highlighted) RefSurface else RefOnSurface, modifier = Modifier.size(24.dp))
+    }
+}
 
 /** The large avatar of a voice call (or a video call without video), with a gentle pulse while waiting. */
 @Composable

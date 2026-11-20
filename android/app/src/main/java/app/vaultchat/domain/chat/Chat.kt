@@ -16,7 +16,15 @@ data class ChatMessage(
  * [MISSED_CALL] is a line the server writes when a call was not answered (owner request 2026-11-13): its
  * sender is the caller and its text is "video" or "voice". It is deleted like any message (D-01, D-02).
  */
-enum class MessageKind { TEXT, MISSED_CALL }
+enum class MessageKind {
+    TEXT,
+    MISSED_CALL,
+    /** A line saying who changed the disappearing timer (D-30); its text is the seconds or "off". */
+    DISAPPEAR,
+}
+
+/** The disappearing timer choices (D-30), in seconds; null is Off. */
+val DISAPPEAR_CHOICES: List<Int?> = listOf(null, 60, 300, 3600, 86400)
 
 /** One person's emoji on one message (D-25). Deleted with its message, like the message itself. */
 data class Reaction(val messageId: String, val userId: String, val emoji: String)
@@ -33,6 +41,10 @@ data class HistoryPage(
     val items: List<ChatMessage>,
     val hasMore: Boolean,
     val reactions: List<Reaction> = emptyList(),
+    /** Disappearing timer (D-30): null = Off (seen messages go when either leaves); else seconds after seen. */
+    val disappearSeconds: Int? = null,
+    /** How far the other person has read; this user's messages up to here are "Read". */
+    val peerReadSeq: Long = 0,
 )
 
 data class SentMessage(val id: String, val seq: Long, val epoch: Long, val createdAtEpochMs: Long)
@@ -68,6 +80,9 @@ interface ChatRepository {
     suspend fun markRead(conversationId: String, seq: Long): ChatResult<Unit>
     /** Sets this user's reaction on a message, or removes it when [emoji] is null (D-25). */
     suspend fun react(conversationId: String, messageId: String, emoji: String?): ChatResult<Unit>
+
+    /** Sets the disappearing timer for both people (D-30); null turns it off. */
+    suspend fun setDisappearing(conversationId: String, seconds: Int?): ChatResult<Int?> = ChatResult.Failure(ChatFailure.UNEXPECTED)
 }
 
 /**

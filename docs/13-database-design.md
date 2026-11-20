@@ -345,3 +345,9 @@ when the snap is opened or after 24 h.
 `snap_streaks`: one row per connection. `connection_id` (PK, cascade), `count`, `last_mutual_day`,
 `user_a_day`, `user_b_day` (India-time `YYYY-MM-DD`). The streak shown is `count` while `last_mutual_day` is
 today or yesterday, else 0.
+
+## D-30 additions (2026-11-20, migration `20261120060000_disappearing_timer`)
+
+- `conversations.disappear_seconds INTEGER NULL` — CHECK null or one of 60, 300, 3600, 86400. Null = Off.
+- `messages.seen_at TIMESTAMPTZ(3) NULL` — when the recipient first displayed the message; partial index where not null.
+- `messages.kind` CHECK now allows `text`, `missed_call`, `disappear`.
