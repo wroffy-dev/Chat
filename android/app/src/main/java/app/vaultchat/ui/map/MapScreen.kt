@@ -2,32 +2,35 @@ package app.vaultchat.ui.map
 
 import android.graphics.BitmapFactory
 import android.text.format.DateUtils
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -42,15 +45,25 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -60,6 +73,7 @@ import app.vaultchat.R
 import app.vaultchat.data.location.FriendsMapDto
 import app.vaultchat.data.location.LocationApi
 import app.vaultchat.data.network.ApiResult
+import app.vaultchat.ui.components.AppIcons
 import app.vaultchat.ui.home.BottomTab
 import app.vaultchat.ui.home.VaultBottomBar
 import kotlinx.coroutines.Dispatchers
@@ -70,6 +84,7 @@ import okhttp3.Request
 import java.time.Instant
 import java.util.concurrent.TimeUnit
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.ln
 import kotlin.math.log2
@@ -88,11 +103,45 @@ private sealed interface MapLoad {
     data object Offline : MapLoad
 }
 
+// The dark map of the owner's reference (2026-11-20): navy ground, round buttons, round markers.
+private val MapGround = Color(0xFF1C2236)
+private val DarkButton = Color(0xFF262D44)
+private val LabelFill = Color(0xF0121626)
+private val MeBlue = Color(0xFF1E88FF)
+
+/** Marker colours; each person keeps the same one (picked from their name). */
+private val PersonColors = listOf(
+    Color(0xFF1E88FF), Color(0xFF00A86B), Color(0xFFFF7A1A), Color(0xFFE5397F),
+    Color(0xFF8E5CF7), Color(0xFF00A3BF), Color(0xFFF2B705), Color(0xFFE5484D),
+)
+
 /**
- * The Map tab (owner, 2026-11-19; D-06 widened): the latest location of each connected person who agreed to
- * the current location consent, and the user's own. Only the latest point is shown, never a history. Map
- * pictures are OpenStreetMap tiles, fetched straight from tile.openstreetmap.org (that server sees which
- * area is viewed, not who is on it).
+ * OpenStreetMap's light tiles turned into the reference's navy map while drawing: each pixel's brightness is
+ * stretched onto navy, so white roads come out light slate, the ground dark navy and buildings and water
+ * darker still. The same tiles from the same server, so no new map provider sees anything.
+ */
+private val DarkTiles: ColorFilter = run {
+    // Brightness 255 (roads) becomes (80, 92, 130); brightness 210 (buildings) becomes (22, 26, 44).
+    val road = floatArrayOf(80f, 92f, 130f)
+    val building = floatArrayOf(22f, 26f, 44f)
+    val m = FloatArray(20)
+    for (r in 0..2) {
+        val k = (road[r] - building[r]) / 45f
+        m[r * 5] = 0.2126f * k
+        m[r * 5 + 1] = 0.7152f * k
+        m[r * 5 + 2] = 0.0722f * k
+        m[r * 5 + 4] = road[r] - k * 255f
+    }
+    m[18] = 1f
+    ColorFilter.colorMatrix(ColorMatrix(m))
+}
+
+/**
+ * The Map tab (owner, 2026-11-19; D-06 widened; look from the owner's reference 2026-11-20): the latest
+ * location of each connected person who agreed to the current location consent, and the user's own, as round
+ * markers on a dark map. Only the latest point is shown, never a history. Names are not listed under the map;
+ * tapping a marker shows that person's name and how long ago. Map pictures are OpenStreetMap tiles, fetched
+ * straight from tile.openstreetmap.org (that server sees which area is viewed, not who is on it).
  */
 @Composable
 fun MapScreen(api: LocationApi, onChat: () -> Unit, onCamera: () -> Unit) {
@@ -105,30 +154,22 @@ fun MapScreen(api: LocationApi, onChat: () -> Unit, onCamera: () -> Unit) {
             ApiResult.NetworkError -> MapLoad.Offline
         }
     }
-    val colors = MaterialTheme.colorScheme
-    Surface(modifier = Modifier.fillMaxSize(), color = colors.background) {
+    Surface(modifier = Modifier.fillMaxSize(), color = MapGround) {
         Column(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    stringResource(R.string.map_title),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f),
-                )
-                SmallFloatingActionButton(onClick = { load = MapLoad.Loading; reloads++ }) {
-                    Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.action_retry))
-                }
-            }
-            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            Box(modifier = Modifier.weight(1f).fillMaxWidth().background(MapGround)) {
                 when (val l = load) {
-                    MapLoad.Loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                    MapLoad.Loading -> CircularProgressIndicator(color = Color.White, modifier = Modifier.align(Alignment.Center))
                     MapLoad.SharingOff -> Message(stringResource(R.string.map_sharing_off))
                     MapLoad.Offline -> Message(stringResource(R.string.server_unreachable))
                     is MapLoad.Ready -> TileMap(l.pins)
                 }
+                RoundButton(
+                    icon = Icons.Filled.Refresh,
+                    description = stringResource(R.string.action_retry),
+                    light = false,
+                    onClick = { load = MapLoad.Loading; reloads++ },
+                    modifier = Modifier.align(Alignment.TopEnd).padding(16.dp),
+                )
             }
             VaultBottomBar(selected = BottomTab.MAP, onChat = onChat, onCamera = onCamera, onMap = {})
         }
@@ -138,7 +179,24 @@ fun MapScreen(api: LocationApi, onChat: () -> Unit, onCamera: () -> Unit) {
 @Composable
 private fun Message(text: String) {
     Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-        Text(text, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(text, fontSize = 16.sp, lineHeight = 22.sp, color = Color.White.copy(alpha = 0.85f), textAlign = TextAlign.Center)
+    }
+}
+
+/** A round floating button of the reference: white with a dark icon, or dark with a white icon. */
+@Composable
+private fun RoundButton(icon: ImageVector, description: String, light: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = if (light) Color.White else DarkButton,
+        contentColor = if (light) Color(0xFF111111) else Color.White,
+        shadowElevation = 6.dp,
+        modifier = modifier.size(52.dp),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription = description, modifier = Modifier.size(24.dp))
+        }
     }
 }
 
@@ -159,7 +217,7 @@ private fun mercatorY(lat: Double): Double {
 private const val MIN_ZOOM = 2.0
 private const val MAX_ZOOM = 18.0
 
-/** A pannable, pinch-zoomable map of OpenStreetMap tiles with the pins drawn on top. */
+/** A pannable, pinch-zoomable dark map of OpenStreetMap tiles with the markers drawn on top. */
 @Composable
 private fun TileMap(pins: List<Pin>) {
     val density = LocalDensity.current
@@ -169,6 +227,8 @@ private fun TileMap(pins: List<Pin>) {
     var cy by remember { mutableDoubleStateOf(0.5) }
     var zoom by remember { mutableDoubleStateOf(3.0) }
     var fitted by remember { mutableStateOf(false) }
+    // The marker whose name is shown ("" for me), or none.
+    var selected by remember { mutableStateOf<String?>(null) }
 
     fun fit(points: List<Pin>) {
         if (size.width == 0 || points.isEmpty()) return
@@ -180,9 +240,9 @@ private fun TileMap(pins: List<Pin>) {
         cy = (minY + maxY) / 2
         val spanX = max(maxX - minX, 1e-9)
         val spanY = max(maxY - minY, 1e-9)
-        // The zoom at which the pins fill about 70 % of the view; one pin alone shows its neighbourhood.
-        val zx = log2(size.width * 0.7 / (spanX * tilePx))
-        val zy = log2(size.height * 0.7 / (spanY * tilePx))
+        // The zoom at which the markers fill about 60 % of the view; one marker alone shows its neighbourhood.
+        val zx = log2(size.width * 0.6 / (spanX * tilePx))
+        val zy = log2(size.height * 0.6 / (spanY * tilePx))
         zoom = if (points.size == 1) 14.0 else min(min(zx, zy), 15.0).coerceIn(MIN_ZOOM, MAX_ZOOM)
     }
     LaunchedEffect(size, pins) {
@@ -194,13 +254,14 @@ private fun TileMap(pins: List<Pin>) {
 
     val tiles = remember { TileCache() }
     val scope = rememberCoroutineScope()
-    val colors = MaterialTheme.colorScheme
+    val me = pins.firstOrNull { it.name == null }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFE5E3DF))
+            .background(MapGround)
             .onSizeChanged { size = it }
+            .pointerInput(Unit) { detectTapGestures { selected = null } }
             .pointerInput(Unit) {
                 detectTransformGestures { _, pan, zoomChange, _ ->
                     zoom = (zoom + log2(zoomChange.toDouble())).coerceIn(MIN_ZOOM, MAX_ZOOM)
@@ -241,107 +302,140 @@ private fun TileMap(pins: List<Pin>) {
                     image,
                     dstOffset = IntOffset(x.toInt(), y.toInt()),
                     dstSize = IntSize((x + ts).toInt() - x.toInt(), (y + ts).toInt() - y.toInt()),
+                    colorFilter = DarkTiles,
                 )
             }
         }
         val now = System.currentTimeMillis()
-        pins.forEach { pin ->
-            // The pin nearest to the view across the date line.
+        // Me first, so people stay on top of me when we are in the same place; the chosen one on top of all.
+        pins.sortedBy { (if (it.name == null) 0 else 1) + (if ((it.name ?: "") == selected) 2 else 0) }.forEach { pin ->
+            // The marker nearest to the view across the date line.
             var dx = (pin.x - cx) * world
             if (dx > world / 2) dx -= world
             if (dx < -world / 2) dx += world
             val px = w / 2 + dx
             val py = (pin.y - cy) * world + h / 2
             if (px < -200 || px > w + 200 || py < -200 || py > h + 200) return@forEach
-            PinLabel(
+            val key = pin.name ?: ""
+            Marker(
                 pin = pin,
+                selected = selected == key,
                 ago = DateUtils.getRelativeTimeSpanString(pin.capturedAtMs, now, DateUtils.MINUTE_IN_MILLIS).toString(),
-                modifier = Modifier.offset { IntOffset(px.toInt() - 24.dp.roundToPx(), py.toInt() - 24.dp.roundToPx()) },
+                onClick = { selected = if (selected == key) null else key },
+                px = px.toInt(),
+                py = py.toInt(),
             )
+        }
+        if (pins.none { it.name != null }) {
+            Surface(
+                color = LabelFill,
+                contentColor = Color.White,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.align(Alignment.TopCenter).padding(start = 16.dp, end = 84.dp, top = 16.dp),
+            ) {
+                Text(stringResource(R.string.map_nobody), modifier = Modifier.padding(14.dp), fontSize = 14.sp, lineHeight = 20.sp)
+            }
         }
         Column(
-            modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            SmallFloatingActionButton(onClick = { zoom = (zoom + 1).coerceAtMost(MAX_ZOOM) }) {
-                Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.map_zoom_in))
+            if (pins.size > 1) {
+                RoundButton(AppIcons.Group, stringResource(R.string.map_everyone), light = true, onClick = {
+                    selected = null
+                    fit(pins)
+                })
             }
-            SmallFloatingActionButton(onClick = { zoom = (zoom - 1).coerceAtLeast(MIN_ZOOM) }) {
-                Text("−", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            if (me != null) {
+                RoundButton(AppIcons.NearMe, stringResource(R.string.map_center_me), light = false, onClick = {
+                    cx = me.x
+                    cy = me.y
+                    zoom = max(zoom, 15.0)
+                    selected = ""
+                })
             }
         }
-        Column(modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth()) {
-            if (pins.none { it.name != null }) {
-                Surface(
-                    color = colors.surface.copy(alpha = 0.92f),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.padding(12.dp),
-                ) {
-                    Text(stringResource(R.string.map_nobody), modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-            // A chip per pin: tap to centre the map on that person.
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                pins.forEach { pin ->
-                    Surface(
-                        shape = RoundedCornerShape(50),
-                        color = colors.surface,
-                        shadowElevation = 2.dp,
-                        modifier = Modifier.clickable {
-                            cx = pin.x
-                            cy = pin.y
-                            zoom = max(zoom, 14.0)
-                        },
-                    ) {
-                        Text(
-                            pin.name ?: stringResource(R.string.map_me),
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                            style = MaterialTheme.typography.labelLarge,
-                        )
-                    }
-                }
-            }
-            // OpenStreetMap's licence asks for this credit wherever its map is shown.
-            Text(
-                stringResource(R.string.map_attribution),
-                fontSize = 10.sp,
-                color = Color(0xFF333333),
-                modifier = Modifier.align(Alignment.End).background(Color.White.copy(alpha = 0.7f)).padding(horizontal = 4.dp, vertical = 1.dp),
-            )
-        }
+        // OpenStreetMap's licence asks for this credit wherever its map is shown.
+        Text(
+            stringResource(R.string.map_attribution),
+            fontSize = 10.sp,
+            color = Color.White.copy(alpha = 0.75f),
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(8.dp)
+                .background(Color.Black.copy(alpha = 0.35f), RoundedCornerShape(4.dp))
+                .padding(horizontal = 4.dp, vertical = 1.dp),
+        )
     }
 }
 
+/** First letters of a name, for its marker: "partner.phone" → "PP", "ravi" → "R". */
+private fun initials(name: String): String {
+    val parts = name.split('.', '_', '-', ' ').filter { it.isNotBlank() }
+    return parts.take(2).joinToString("") { it.first().uppercase() }.ifEmpty { name.take(1).uppercase() }
+}
+
+/**
+ * A marker placed so that its round part sits on the point (px, py). People are a coloured circle with their
+ * initials and a white ring; I am a blue dot with a soft pulse. Tapping shows the name and "x min ago" above.
+ */
 @Composable
-private fun PinLabel(pin: Pin, ago: String, modifier: Modifier = Modifier) {
-    val colors = MaterialTheme.colorScheme
+private fun Marker(pin: Pin, selected: Boolean, ago: String, onClick: () -> Unit, px: Int, py: Int) {
     val me = pin.name == null
-    val fill = if (me) colors.tertiary else colors.primary
-    val onFill = if (me) colors.onTertiary else colors.onPrimary
-    Column(modifier = modifier, horizontalAlignment = Alignment.Start) {
-        Box(
-            modifier = Modifier.size(48.dp).border(3.dp, Color.White, CircleShape).background(fill, CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                (pin.name ?: stringResource(R.string.map_me)).take(1).uppercase(),
-                color = onFill,
-                fontWeight = FontWeight.Bold,
-                fontSize = 20.sp,
-            )
+    val anchor: Dp = if (me) 28.dp else 27.dp
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.layout { measurable, constraints ->
+            val p = measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
+            layout(0, 0) { p.place(px - p.width / 2, py - p.height + anchor.roundToPx()) }
+        },
+    ) {
+        if (selected) {
+            Surface(color = LabelFill, contentColor = Color.White, shape = RoundedCornerShape(12.dp), shadowElevation = 4.dp) {
+                Column(modifier = Modifier.widthIn(max = 200.dp).padding(horizontal = 12.dp, vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        pin.name ?: stringResource(R.string.map_me),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(ago, fontSize = 11.sp, color = Color.White.copy(alpha = 0.7f))
+                }
+            }
+            Spacer(Modifier.height(6.dp))
         }
-        Surface(shape = RoundedCornerShape(8.dp), color = colors.surface, shadowElevation = 2.dp) {
-            Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)) {
-                Text(
-                    pin.name ?: stringResource(R.string.map_me),
-                    style = MaterialTheme.typography.labelLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(ago, style = MaterialTheme.typography.labelSmall, color = colors.onSurfaceVariant)
+        if (me) {
+            val pulse by rememberInfiniteTransition(label = "me").animateFloat(
+                initialValue = 0.6f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(tween(1_400, easing = LinearEasing), RepeatMode.Reverse),
+                label = "pulse",
+            )
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size(56.dp).clip(CircleShape).clickable(onClickLabel = stringResource(R.string.map_me), onClick = onClick),
+            ) {
+                Box(Modifier.size(56.dp).scale(pulse).background(MeBlue.copy(alpha = 0.25f), CircleShape))
+                Box(Modifier.size(22.dp).border(3.dp, Color.White, CircleShape).background(MeBlue, CircleShape))
+            }
+        } else {
+            val name = pin.name.orEmpty()
+            val color = PersonColors[abs(name.hashCode()) % PersonColors.size]
+            Surface(
+                onClick = onClick,
+                shape = CircleShape,
+                color = color,
+                contentColor = Color.White,
+                shadowElevation = 6.dp,
+                modifier = Modifier.size(54.dp).semantics { contentDescription = name },
+            ) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.fillMaxSize().border(3.dp, if (selected) MeBlue else Color.White, CircleShape),
+                ) {
+                    Text(initials(name), fontSize = 19.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                }
             }
         }
     }
