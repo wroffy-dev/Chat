@@ -63,7 +63,8 @@ object CrashLog {
                 ?: return null
             buildString {
                 appendLine(header(context, info.timestamp, "native crash: ${info.description ?: "–"}"))
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                // Reading the tombstone can fail (size, access); the crash is still reported without it.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) runCatching {
                     info.traceInputStream?.use { stream ->
                         val text = readableStrings(stream.readBytes())
                         // The crashing thread is the one that called abort(); show it first, because the log
@@ -74,9 +75,12 @@ object CrashLog {
                             appendLine(text.substring((at - 1_500).coerceAtLeast(0), (at + 2_500).coerceAtMost(text.length)))
                             appendLine("--- all threads ---")
                         }
-                        append(text)
+                        // Room left for the app log below.
+                        append(text.take(5_000))
                     }
-                }
+                }.onFailure { appendLine("(tombstone not readable: ${it.javaClass.simpleName})") }
+                appendLine("--- app log (warnings and errors) ---")
+                append(ownLog())
             }.take(MAX_CHARS)
         } catch (_: Throwable) {
             null
