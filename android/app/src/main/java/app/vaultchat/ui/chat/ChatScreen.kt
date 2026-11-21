@@ -66,6 +66,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -217,14 +218,15 @@ fun ChatScreen(
     }
     BackHandler(onBack = onBack)
 
-    // Held in memory only: not rememberSaveable, so a draft never lands in saved instance state.
-    var draft by remember { mutableStateOf("") }
+    // Held in memory only: not rememberSaveable, so a draft never lands in saved instance state. Only the
+    // composer reads it, so typing a letter redraws the composer, not the whole chat (owner 2026-11-21: lag).
+    val draftState = remember { mutableStateOf("") }
     // The message being replied to (owner request 2026-11-13); dropped if it disappears from the chat.
     var replyTo by remember { mutableStateOf<ChatMessage?>(null) }
     LaunchedEffect(state.messages) { if (replyTo != null && state.messages.none { it.id == replyTo?.id }) replyTo = null }
     LaunchedEffect(state.restoredDraft) {
         state.restoredDraft?.let {
-            if (draft.isBlank()) draft = it
+            if (draftState.value.isBlank()) draftState.value = it
             controller.draftRestored()
         }
     }
@@ -331,95 +333,131 @@ fun ChatScreen(
                 )
             }
 
-            val tooLong = ChatText.tooLong(draft.trim())
-            // Near the limit, how many characters are left (owner 2026-11-20: a better typing experience).
-            val left = ChatText.MAX_CODE_POINTS - ChatText.codePoints(draft.trim())
-            if (tooLong) {
-                Text(
-                    stringResource(R.string.chat_too_long, ChatText.MAX_CODE_POINTS),
-                    fontSize = 12.sp,
-                    color = Ref.Error,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
-            } else if (left <= 200) {
-                Text(
-                    stringResource(R.string.chat_chars_left, left),
-                    fontSize = 12.sp,
-                    color = Ref.OnSurfaceVariant,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    textAlign = TextAlign.End,
-                )
-            }
-            replyTo?.let { target ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Ref.ContainerLow)
-                        .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(Modifier.width(3.dp).height(32.dp).background(Ref.Primary, RoundedCornerShape(2.dp)))
-                    Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
-                        Text(
-                            stringResource(R.string.chat_replying_to, if (target.senderId == myUserId) stringResource(R.string.chat_you) else peerUsername),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Ref.Primary,
-                        )
-                        Text(target.text, fontSize = 12.sp, color = Ref.OnSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            ChatComposer(
+                draftState = draftState,
+                replyTo = replyTo,
+                onCancelReply = { replyTo = null },
+                open = state.phase == ChatPhase.OPEN,
+                myUserId = myUserId,
+                peerUsername = peerUsername,
+                onSnap = onSnap,
+                onTyping = controller::typing,
+                onSend = { text ->
+                    val effect = EmojiEffects.effectFor(text)
+                    val sent = controller.send(text, replyTo?.id)
+                    if (sent) {
+                        // The sender sees the effect at once, as in Apple Messages.
+                        effect?.let { burst = "sent-${System.nanoTime()}" to it }
+                        replyTo = null
                     }
-                    TextButton(onClick = { replyTo = null }) { Text(stringResource(R.string.action_cancel), color = Ref.Primary) }
-                }
-            }
-            // Composer: text only. The round button on the left takes a snap (the reference's place for it).
-            Column(modifier = Modifier.fillMaxWidth().background(Ref.Surface)) {
-                Box(Modifier.fillMaxWidth().height(1.dp).background(Ref.OutlineVariant))
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.Bottom,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    RoundAction(
-                        icon = AppIcons.PhotoCamera,
-                        description = stringResource(R.string.snap_button),
-                        container = Ref.Container,
-                        tint = Ref.OnSurfaceVariant,
-                        onClick = onSnap,
-                    )
-                    PrivateTextInput(
-                        value = draft,
-                        onValueChange = {
-                            draft = it
-                            if (it.isNotBlank()) controller.typing()
-                        },
-                        hint = stringResource(R.string.chat_message_hint, peerUsername),
-                        enabled = state.phase == ChatPhase.OPEN,
-                        modifier = Modifier.weight(1f),
-                    )
-                    val canSend = state.phase == ChatPhase.OPEN && draft.isNotBlank() && !tooLong
-                    val haptics = LocalHapticFeedback.current
-                    RoundAction(
-                        icon = AppIcons.ArrowUpward,
-                        description = stringResource(R.string.chat_send),
-                        container = if (canSend) Ref.Primary else Ref.Primary.copy(alpha = 0.4f),
-                        tint = Ref.OnPrimary,
-                        enabled = canSend,
-                        onClick = {
-                            val effect = EmojiEffects.effectFor(draft)
-                            if (controller.send(draft, replyTo?.id)) {
-                                // A light tap under the finger: the message is on its way.
-                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                // The sender sees the effect at once, as in Apple Messages.
-                                effect?.let { burst = "sent-${System.nanoTime()}" to it }
-                                draft = ""
-                                replyTo = null
-                            }
-                        },
-                    )
-                }
-            }
+                    sent
+                },
+            )
         }
         burst?.let { (key, effect) -> EmojiBurst(effect, key) { if (burst?.first == key) burst = null } }
+    }
+}
+
+/**
+ * The bottom of the chat: characters left, the reply bar and the input with the snap and send buttons. It
+ * alone reads the draft, so each letter typed redraws only this part (owner 2026-11-21: typing lagged
+ * because every letter redrew the whole chat).
+ */
+@Composable
+private fun ChatComposer(
+    draftState: MutableState<String>,
+    replyTo: ChatMessage?,
+    onCancelReply: () -> Unit,
+    open: Boolean,
+    myUserId: String,
+    peerUsername: String,
+    onSnap: () -> Unit,
+    onTyping: () -> Unit,
+    onSend: (String) -> Boolean,
+) {
+    val draft = draftState.value
+    val tooLong = ChatText.tooLong(draft.trim())
+    // Near the limit, how many characters are left (owner 2026-11-20: a better typing experience).
+    val left = ChatText.MAX_CODE_POINTS - ChatText.codePoints(draft.trim())
+    if (tooLong) {
+        Text(
+            stringResource(R.string.chat_too_long, ChatText.MAX_CODE_POINTS),
+            fontSize = 12.sp,
+            color = Ref.Error,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        )
+    } else if (left <= 200) {
+        Text(
+            stringResource(R.string.chat_chars_left, left),
+            fontSize = 12.sp,
+            color = Ref.OnSurfaceVariant,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            textAlign = TextAlign.End,
+        )
+    }
+    replyTo?.let { target ->
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Ref.ContainerLow)
+                .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.width(3.dp).height(32.dp).background(Ref.Primary, RoundedCornerShape(2.dp)))
+            Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
+                Text(
+                    stringResource(R.string.chat_replying_to, if (target.senderId == myUserId) stringResource(R.string.chat_you) else peerUsername),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Ref.Primary,
+                )
+                Text(target.text, fontSize = 12.sp, color = Ref.OnSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            TextButton(onClick = onCancelReply) { Text(stringResource(R.string.action_cancel), color = Ref.Primary) }
+        }
+    }
+    // Composer: text only. The round button on the left takes a snap (the reference's place for it).
+    Column(modifier = Modifier.fillMaxWidth().background(Ref.Surface)) {
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Ref.OutlineVariant))
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            RoundAction(
+                icon = AppIcons.PhotoCamera,
+                description = stringResource(R.string.snap_button),
+                container = Ref.Container,
+                tint = Ref.OnSurfaceVariant,
+                onClick = onSnap,
+            )
+            PrivateTextInput(
+                value = draft,
+                onValueChange = {
+                    draftState.value = it
+                    if (it.isNotBlank()) onTyping()
+                },
+                hint = stringResource(R.string.chat_message_hint, peerUsername),
+                enabled = open,
+                modifier = Modifier.weight(1f),
+            )
+            val canSend = open && draft.isNotBlank() && !tooLong
+            val haptics = LocalHapticFeedback.current
+            RoundAction(
+                icon = AppIcons.ArrowUpward,
+                description = stringResource(R.string.chat_send),
+                container = if (canSend) Ref.Primary else Ref.Primary.copy(alpha = 0.4f),
+                tint = Ref.OnPrimary,
+                enabled = canSend,
+                onClick = {
+                    if (onSend(draft)) {
+                        // A light tap under the finger: the message is on its way.
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        draftState.value = ""
+                    }
+                },
+            )
+        }
     }
 }
 
@@ -477,10 +515,11 @@ private fun PrivateTextInput(
                 field.setText(value)
                 field.setSelection(value.length)
             }
-            field.isEnabled = enabled
-            field.hint = hint
-            field.setTextColor(textColor)
-            field.setHintTextColor(hintColor)
+            // Only what changed: setting the hint or colours again re-measures the field, on every letter.
+            if (field.isEnabled != enabled) field.isEnabled = enabled
+            if (field.hint?.toString() != hint) field.hint = hint
+            if (field.currentTextColor != textColor) field.setTextColor(textColor)
+            if (field.currentHintTextColor != hintColor) field.setHintTextColor(hintColor)
         },
     )
 }
