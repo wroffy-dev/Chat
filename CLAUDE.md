@@ -30,8 +30,9 @@ decisions there are either recorded as decided or still open; never decide an op
   let the listening phone send audio without the owner. Snaps (D-27, 2026-11-19) are the one exception to "no
   photos/media": a camera photo or a video of at most 7 s, deleted on the server when opened (one replay in
   memory) or after 24 h, never in the database or backups; since 2026-11-20 (owner) the sender may save their own photo or video to
-  the gallery before sending; do not add gallery uploads, saving received snaps, longer videos or keeping
-  snaps without the owner.
+  the gallery before sending; since 2026-11-21 (owner) a photo or a video of at most 30 s may also be picked from the
+  gallery and sent as a snap under the same rules, and any snap may be marked view once (no replay). Do not add saving
+  received snaps, media kept in the chat, videos longer than 30 s or keeping snaps without the owner.
 - At most ten app users (owner decision D-21, 2026-10-29; previously exactly two), each chatting and
   calling 1-to-1 with the people they paired with by QR. No group chats or group calls. The administrator
   is a separate operational identity, not an app user.

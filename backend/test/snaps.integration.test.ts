@@ -98,10 +98,28 @@ describe.skipIf(!TEST_DB_URL)("snaps and streaks (PostgreSQL)", () => {
     expect(opened.statusCode).toBe(200);
     expect(opened.headers["content-type"]).toContain("image/jpeg");
     expect(opened.rawPayload.equals(JPEG)).toBe(true);
+    expect(opened.headers["x-snap-view-once"]).toBe("false");
     // Gone from the server: a second open is refused and the file is deleted.
     expect((await req(bob, "POST", `/snaps/${sent.json().id}/open`, {})).statusCode).toBe(404);
     expect(readdirSync(dir)).toHaveLength(0);
     expect((await req(bob, "GET", "/snaps")).json().items).toEqual([]);
+  });
+
+  it("marks a snap view once when the sender asks, in the list and when opened", async () => {
+    const { alice, bob, connectionId } = await pair();
+    const sent = await app.inject({
+      method: "POST",
+      url: `/api/v1/connections/${connectionId}/snaps?kind=photo&once=true`,
+      headers: { authorization: `Bearer ${alice}`, "content-type": "image/jpeg" },
+      payload: JPEG,
+    });
+    expect(sent.statusCode).toBe(201);
+    expect((await req(bob, "GET", "/snaps")).json().items).toEqual([expect.objectContaining({ id: sent.json().id, viewOnce: true })]);
+    const opened = await req(bob, "POST", `/snaps/${sent.json().id}/open`, {});
+    expect(opened.statusCode).toBe(200);
+    expect(opened.headers["x-snap-view-once"]).toBe("true");
+    // Still deleted on the server once opened.
+    expect((await req(bob, "POST", `/snaps/${sent.json().id}/open`, {})).statusCode).toBe(404);
   });
 
   it("refuses files that are not a camera photo or video, the wrong type, too large, or a stranger's connection", async () => {

@@ -6,6 +6,8 @@ import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -91,7 +93,8 @@ fun SnapViewerScreen(repo: SnapRepository, snapIds: List<String>, onClose: () ->
                         File.createTempFile("view-", ".mp4", context.cacheDir).apply { writeBytes(r.value.bytes) }
                     }
                 }
-                replaysLeft = SnapRules.REPLAYS
+                // View once (owner, 2026-11-21): shown a single time, no replay.
+                replaysLeft = if (r.value.viewOnce) 0 else SnapRules.REPLAYS
                 stage = Stage.SHOWING
                 showing++
             }
@@ -149,6 +152,18 @@ fun SnapViewerScreen(repo: SnapRepository, snapIds: List<String>, onClose: () ->
                                         LoopingVideo(file, Modifier.fillMaxSize(), loop = false, onDone = { stage = Stage.AFTER })
                                     }
                                 }
+                            }
+                            if (current.viewOnce) {
+                                Text(
+                                    stringResource(R.string.snap_view_once_badge),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    modifier = Modifier
+                                        .align(Alignment.TopStart)
+                                        .safeDrawingPadding()
+                                        .padding(top = 28.dp, start = 16.dp)
+                                        .background(VaultGreen.Deepest.copy(alpha = 0.6f), CircleShape)
+                                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                                )
                             }
                             Text(
                                 stringResource(R.string.snap_tap_to_close),

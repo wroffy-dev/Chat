@@ -112,6 +112,10 @@ import app.vaultchat.ui.components.PrimaryButton
 import app.vaultchat.ui.permissions.PermissionPreferences
 import app.vaultchat.ui.permissions.openAppSettings
 import app.vaultchat.ui.permissions.rememberPermissionRequest
+import android.content.Context
+import android.content.ContextWrapper
+import android.view.WindowManager
+import androidx.compose.runtime.saveable.rememberSaveable
 
 /**
  * The call screen: outgoing ringing, incoming ringing, connecting, active and ended states.
@@ -137,6 +141,31 @@ fun CallScreen(
     val localFront by viewModel.media.localFront.collectAsStateWithLifecycle()
     val liveStats by viewModel.controller.liveStats.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    // Light in a video call (owner, 2026-11-21): on the back camera the phone's torch; on the front camera a
+    // warm white glow around the screen at full brightness, which lights the face.
+    var light by rememberSaveable { mutableStateOf(false) }
+    var lightNotice by remember { mutableStateOf(false) }
+    LaunchedEffect(light, localFront, state.cameraOn, state.phase) {
+        if (kind != CallKind.VIDEO) return@LaunchedEffect
+        val wantTorch = light && !localFront && state.cameraOn && state.phase != CallPhase.ENDED
+        val ok = viewModel.controller.setTorch(wantTorch)
+        if (wantTorch && !ok) {
+            light = false
+            lightNotice = true
+        }
+    }
+    val screenLight = kind == CallKind.VIDEO && light && localFront && state.cameraOn && state.phase != CallPhase.ENDED
+    val callWindow = remember(context) { context.findActivity()?.window }
+    DisposableEffect(screenLight, callWindow) {
+        val w = callWindow
+        if (screenLight && w != null) {
+            val before = w.attributes.screenBrightness
+            w.attributes = w.attributes.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_FULL }
+            onDispose { w.attributes = w.attributes.apply { screenBrightness = before } }
+        } else {
+            onDispose { }
+        }
+    }
 
     val mic = rememberPermissionRequest(AppPermission.MICROPHONE, permissionPreferences)
     val camera = rememberPermissionRequest(AppPermission.CAMERA, permissionPreferences)
@@ -381,6 +410,29 @@ fun CallScreen(
                 }
             }
 
+            // Front camera light: a warm white frame around the picture (the buttons stay on top of it).
+            if (screenLight) {
+                Box(Modifier.fillMaxSize().border(36.dp, CallGlow))
+            }
+            if (lightNotice) {
+                Text(
+                    stringResource(R.string.call_light_unavailable),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = VaultGreen.Mint,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .safeDrawingPadding()
+                        .padding(top = 96.dp, start = 24.dp, end = 24.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(Color.Black.copy(alpha = 0.6f))
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+                LaunchedEffect(Unit) {
+                    delay(3_000)
+                    lightNotice = false
+                }
+            }
+
             // Debug builds only: live call statistics for the two-phone tests (docs/09). They fade with
             // the controls after 4 s and come back on a touch.
             val live = liveStats
@@ -469,6 +521,8 @@ fun CallScreen(
                             onMic = viewModel.controller::toggleMicrophone,
                             onCamera = viewModel.controller::toggleCamera,
                             onSpeaker = viewModel.controller::toggleSpeaker,
+                            light = light,
+                            onLight = { light = !light },
                             onEnd = viewModel.controller::hangup,
                             menu = { dismiss ->
                                 // Everything the old controls had stays one tap away under the switch button.
@@ -626,6 +680,18 @@ fun CallScreen(
 
 private const val CONTROLS_HIDE_MS = 4_000L
 
+/** The front camera's light in a video call: warm white. */
+private val CallGlow = Color(0xFFFFF6E8)
+
+private fun Context.findActivity(): Activity? {
+    var c: Context? = this
+    while (c is ContextWrapper) {
+        if (c is Activity) return c
+        c = c.baseContext
+    }
+    return null
+}
+
 // The reference video-call layout (active_video_call.html, 2026-11-20) in the app's dark greens (owner,
 // 2026-11-20: "core app ke green UI mein"); red stays for ending the call.
 private val RefSurface = VaultGreen.Deepest
@@ -777,6 +843,8 @@ private fun RefControls(
     onMic: () -> Unit,
     onCamera: () -> Unit,
     onSpeaker: () -> Unit,
+    light: Boolean,
+    onLight: () -> Unit,
     onEnd: () -> Unit,
     menu: @Composable ColumnScope.(dismiss: () -> Unit) -> Unit,
     onMenuOpen: (Boolean) -> Unit,
@@ -811,6 +879,13 @@ private fun RefControls(
                 RefRound(icon = AppIcons.FlipCamera, label = stringResource(R.string.call_switch), highlighted = false, onClick = { expanded = true })
                 DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) { menu(this) { expanded = false } }
             }
+            RefRound(
+                icon = AppIcons.Flashlight,
+                label = stringResource(R.string.call_light),
+                highlighted = light,
+                onClick = onLight,
+                state = stringResource(if (light) R.string.state_on else R.string.state_off),
+            )
             RefRound(
                 icon = AppIcons.VolumeUp,
                 label = stringResource(R.string.call_speaker),

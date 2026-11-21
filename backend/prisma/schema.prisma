@@ -376,6 +376,8 @@ model Snap {
   /// "photo" | "video" (CHECK in SQL)
   kind            String
   sizeBytes       Int      @map("size_bytes")
+  /// View once (owner, 2026-11-21): shown a single time, no replay.
+  viewOnce        Boolean  @default(false) @map("view_once")
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   connection Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)

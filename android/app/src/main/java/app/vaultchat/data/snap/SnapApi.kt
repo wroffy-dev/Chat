@@ -28,7 +28,7 @@ import java.util.concurrent.TimeUnit
 private data class SnapFromDto(val id: String, val username: String)
 
 @Serializable
-private data class SnapDto(val id: String, val connectionId: String, val from: SnapFromDto, val kind: String, val createdAt: String)
+private data class SnapDto(val id: String, val connectionId: String, val from: SnapFromDto, val kind: String, val createdAt: String, val viewOnce: Boolean = false)
 
 @Serializable
 private data class SnapListDto(val items: List<SnapDto>)
@@ -43,9 +43,9 @@ class RemoteSnapRepository(baseUrl: String, http: OkHttpClient, private val call
     private val client = http.newBuilder().callTimeout(3, TimeUnit.MINUTES).readTimeout(60, TimeUnit.SECONDS).writeTimeout(60, TimeUnit.SECONDS).build()
     private val json = ApiClient.defaultJson
 
-    override suspend fun send(connectionId: String, kind: SnapKind, bytes: ByteArray): SnapResult<Int> = withContext(Dispatchers.IO) {
+    override suspend fun send(connectionId: String, kind: SnapKind, bytes: ByteArray, viewOnce: Boolean): SnapResult<Int> = withContext(Dispatchers.IO) {
         val type = if (kind == SnapKind.PHOTO) "image/jpeg" else "video/mp4"
-        val url = base.resolve("api/v1/connections/$connectionId/snaps?kind=${kind.name.lowercase()}")!!
+        val url = base.resolve("api/v1/connections/$connectionId/snaps?kind=${kind.name.lowercase()}" + if (viewOnce) "&once=true" else "")!!
         caller.call { token ->
             execute(Request.Builder().url(url).header("Authorization", "Bearer $token").post(bytes.toRequestBody(type.toMediaType()))) { r ->
                 json.decodeFromString(SentSnapDto.serializer(), r.body!!.string()).streak
@@ -57,7 +57,7 @@ class RemoteSnapRepository(baseUrl: String, http: OkHttpClient, private val call
         caller.call { token ->
             execute(Request.Builder().url(base.resolve("api/v1/snaps")!!).header("Authorization", "Bearer $token").get()) { r ->
                 json.decodeFromString(SnapListDto.serializer(), r.body!!.string()).items.map {
-                    WaitingSnap(it.id, it.connectionId, it.from.username, if (it.kind == "video") SnapKind.VIDEO else SnapKind.PHOTO, Instant.parse(it.createdAt).toEpochMilli())
+                    WaitingSnap(it.id, it.connectionId, it.from.username, if (it.kind == "video") SnapKind.VIDEO else SnapKind.PHOTO, Instant.parse(it.createdAt).toEpochMilli(), it.viewOnce)
                 }
             }
         }.toSnap()
@@ -69,7 +69,7 @@ class RemoteSnapRepository(baseUrl: String, http: OkHttpClient, private val call
                 .post("{}".toRequestBody("application/json".toMediaType()))
             execute(req) { r ->
                 val video = r.header("Content-Type").orEmpty().startsWith("video/")
-                OpenedSnap(if (video) SnapKind.VIDEO else SnapKind.PHOTO, r.body!!.bytes())
+                OpenedSnap(if (video) SnapKind.VIDEO else SnapKind.PHOTO, r.body!!.bytes(), viewOnce = r.header("X-Snap-View-Once") == "true")
             }
         }.toSnap()
     }

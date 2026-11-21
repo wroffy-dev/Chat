@@ -13,6 +13,7 @@ serialization = "1.7.3"
 okhttp = "4.12.0"
 zxing = "3.5.3"
 camerax = "1.4.1"
+media3 = "1.5.1"
 livekit = "2.29.1"
 coreTelecom = "1.0.0"
 firebaseBom = "33.7.0"
@@ -42,6 +43,14 @@ camerax-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", vers
 camerax-view = { group = "androidx.camera", name = "camera-view", version.ref = "camerax" }
 # Video recording for snaps (D-27): part of the same CameraX release already in use.
 camerax-video = { group = "androidx.camera", name = "camera-video", version.ref = "camerax" }
+# Night mode in the snap camera where the phone offers it (owner 2026-11-21).
+camerax-extensions = { group = "androidx.camera", name = "camera-extensions", version.ref = "camerax" }
+# Video calls: the back camera's light needs the call camera to run on CameraX (owner 2026-11-21).
+livekit-android-camerax = { group = "io.livekit", name = "livekit-android-camerax", version.ref = "livekit" }
+# Gallery videos are made smaller before sending (owner 2026-11-21: up to 30 s).
+media3-transformer = { group = "androidx.media3", name = "media3-transformer", version.ref = "media3" }
+media3-effect = { group = "androidx.media3", name = "media3-effect", version.ref = "media3" }
+media3-common = { group = "androidx.media3", name = "media3-common", version.ref = "media3" }
 core-telecom = { group = "androidx.core", name = "core-telecom", version.ref = "coreTelecom" }
 livekit-android = { group = "io.livekit", name = "livekit-android", version.ref = "livekit" }
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }

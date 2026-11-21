@@ -41,6 +41,8 @@ export interface SnapView {
   connectionId: string;
   from: { id: string; username: string };
   kind: SnapKind;
+  /** Shown a single time, no replay (owner, 2026-11-21). */
+  viewOnce: boolean;
   createdAt: Date;
 }
 
@@ -66,7 +68,7 @@ export class SnapService {
   }
 
   /** Stores a snap from [userId] to the other person of the connection and updates their streak. */
-  async send(userId: string, connectionId: string, kind: SnapKind, body: Readable): Promise<{ id: string; streak: number }> {
+  async send(userId: string, connectionId: string, kind: SnapKind, body: Readable, viewOnce = false): Promise<{ id: string; streak: number }> {
     const dir = this.requireDir();
     const connection = await this.prisma.connection.findUnique({ where: { id: connectionId } });
     if (!connection || (connection.userAId !== userId && connection.userBId !== userId)) {
@@ -91,7 +93,7 @@ export class SnapService {
         ? head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff
         : head.subarray(4, 8).toString("latin1") === "ftyp";
       if (size < 256 || !valid) throw new AppError(400, "VALIDATION_FAILED", "That is not a camera photo or video.");
-      await this.prisma.snap.create({ data: { id, connectionId, senderUserId: userId, recipientUserId, kind, sizeBytes: size, createdAt: now } });
+      await this.prisma.snap.create({ data: { id, connectionId, senderUserId: userId, recipientUserId, kind, sizeBytes: size, viewOnce, createdAt: now } });
     } catch (err) {
       await rm(path, { force: true }).catch(() => undefined);
       // A snaps folder the server cannot write (e.g. a volume owned by root) is a set-up problem, not the user's.
@@ -112,11 +114,11 @@ export class SnapService {
       include: { sender: { select: { id: true, username: true } } },
       orderBy: { createdAt: "asc" },
     });
-    return rows.map((s) => ({ id: s.id, connectionId: s.connectionId, from: s.sender, kind: s.kind as SnapKind, createdAt: s.createdAt }));
+    return rows.map((s) => ({ id: s.id, connectionId: s.connectionId, from: s.sender, kind: s.kind as SnapKind, viewOnce: s.viewOnce, createdAt: s.createdAt }));
   }
 
   /** Opens a snap: returns its bytes once and deletes it from the server at the same moment. */
-  async open(userId: string, snapId: string): Promise<{ kind: SnapKind; bytes: Buffer }> {
+  async open(userId: string, snapId: string): Promise<{ kind: SnapKind; viewOnce: boolean; bytes: Buffer }> {
     const snap = await this.prisma.snap.findUnique({ where: { id: snapId } });
     if (!snap || snap.recipientUserId !== userId) throw appError(404, "NOT_FOUND");
     // Only one request can win the delete, so a snap is never handed out twice.
@@ -124,7 +126,7 @@ export class SnapService {
     if (gone.count !== 1) throw appError(404, "NOT_FOUND");
     const path = this.file(snapId);
     try {
-      return { kind: snap.kind as SnapKind, bytes: await readFile(path) };
+      return { kind: snap.kind as SnapKind, viewOnce: snap.viewOnce, bytes: await readFile(path) };
     } catch {
       throw appError(404, "NOT_FOUND");
     } finally {
