@@ -76,6 +76,8 @@ private const val TOPIC_SWITCH_CAMERA = "vaultchat.switch_camera"
 private const val TOPIC_CAMERA_ZOOM = "vaultchat.camera_zoom"
 private val SWITCH_CAMERA_PAYLOAD = ByteArray(0)
 
+// LiveKit's CameraX camera (for the back camera's light) is built on CameraX's Camera2 interop.
+@OptIn(ExperimentalCamera2Interop::class)
 class LiveKitMediaSession(appContext: Context) : MediaSession {
     private val cameraManager: CameraManager? = appContext.getSystemService(CameraManager::class.java)
 
@@ -293,7 +295,6 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
     private var cameraXProvider: CameraXProvider? = null
     private val callLifecycle = CallLifecycle()
 
-    @OptIn(ExperimentalCamera2Interop::class)
     private suspend fun useCameraX() {
         if (cameraXProvider != null) return
         withContext(Dispatchers.Main) { callLifecycle.resume() }
