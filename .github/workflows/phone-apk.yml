@@ -73,7 +73,7 @@ jobs:
           echo "SIGNED_WITH_TEST_KEY=1" >> "$GITHUB_ENV"
           echo "Signing: the fixed test key"
       - run: |
-          ./gradlew --no-daemon :app:assembleDebug -Pvaultchat.apiBaseUrl.debug="$API_URL" -Pvaultchat.versionCode="$VERSION_CODE" \
+          ./gradlew --no-daemon :app:assemblePhone -Pvaultchat.apiBaseUrl.debug="$API_URL" -Pvaultchat.versionCode="$VERSION_CODE" \
             -Pvaultchat.fcm.projectId="$FCM_PROJECT_ID" -Pvaultchat.fcm.appId="$FCM_APP_ID" \
             -Pvaultchat.fcm.apiKey="$FCM_API_KEY" -Pvaultchat.fcm.senderId="$FCM_SENDER_ID"
           if [ -n "$FCM_PROJECT_ID" ] && [ -n "$FCM_APP_ID" ] && [ -n "$FCM_API_KEY" ] && [ -n "$FCM_SENDER_ID" ]; then
@@ -84,7 +84,7 @@ jobs:
       - name: Name the APK and print its checksum
         run: |
           mkdir -p out
-          cp app/build/outputs/apk/debug/app-debug.apk out/vaultchat-debug.apk
+          cp app/build/outputs/apk/phone/app-phone.apk out/vaultchat-debug.apk
           sha256sum out/vaultchat-debug.apk | tee out/SHA256.txt
           echo "Version $VERSION_CODE, built for $API_URL" >> out/SHA256.txt
       # Saved before the in-app upload, so the APK can be installed by hand even if that upload fails.

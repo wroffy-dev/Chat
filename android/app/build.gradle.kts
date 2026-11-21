@@ -110,6 +110,18 @@ android {
             signingConfigs.findByName("test")?.let { signingConfig = it }
             buildConfigField("String", "API_BASE_URL", "\"${apiBaseUrl("debug")}\"")
         }
+        // What the phones get (owner 2026-11-21: lag): the test build's package (.dev), key and server, so it
+        // installs over it as an in-app update, but not debuggable. Android then compiles and optimises the app
+        // instead of running it in debug mode, and Compose drops its debug-only checks, which makes every screen
+        // noticeably smoother. No code shrinking yet: that changes more and is first tried with the release build.
+        create("phone") {
+            initWith(getByName("debug"))
+            isDebuggable = false
+            isJniDebuggable = false
+            signingConfigs.findByName("test")?.let { signingConfig = it }
+            buildConfigField("String", "API_BASE_URL", "\"${apiBaseUrl("debug")}\"")
+            matchingFallbacks += listOf("debug")
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true

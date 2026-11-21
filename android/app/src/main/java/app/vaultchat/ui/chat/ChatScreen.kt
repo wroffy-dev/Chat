@@ -97,7 +97,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -140,6 +139,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.layout.layout
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import kotlin.math.roundToInt
@@ -1141,14 +1141,21 @@ private fun Bubble(
         mine -> Ref.OnPrimary
         else -> Ref.OnSurface
     }
-    BoxWithConstraints(modifier = Modifier.fillMaxWidth(), contentAlignment = if (mine) Alignment.CenterEnd else Alignment.CenterStart) {
+    // A plain Box with a layout limit instead of BoxWithConstraints: that one composes each bubble a second
+    // time, which made scrolling long chats heavier (owner 2026-11-21: lag).
+    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = if (mine) Alignment.CenterEnd else Alignment.CenterStart) {
         Text(
             text,
             fontSize = 14.sp,
             lineHeight = 20.sp,
             color = content.copy(alpha = alpha),
             modifier = Modifier
-                .widthIn(max = maxWidth * 0.82f)
+                .layout { measurable, constraints ->
+                    // At most 82 % of the chat's width.
+                    val limit = (constraints.maxWidth * 0.82f).roundToInt()
+                    val placeable = measurable.measure(constraints.copy(minWidth = 0, maxWidth = limit))
+                    layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+                }
                 .clip(shape)
                 .background(container.copy(alpha = if (faded) 0.8f else 1f))
                 .then(press)

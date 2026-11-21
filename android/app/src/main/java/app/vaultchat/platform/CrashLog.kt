@@ -43,7 +43,8 @@ object CrashLog {
     fun last(context: Context): String? {
         nativeCrash(context)?.let { return it }
         val file = File(context.filesDir, FILE)
-        return if (file.exists()) file.readText().ifBlank { null } else null
+        if (file.exists()) file.readText().ifBlank { null }?.let { return it }
+        return otherExit(context)
     }
 
     fun clear(context: Context) {
@@ -62,7 +63,8 @@ object CrashLog {
                 ?: return null
             buildString {
                 appendLine(header(context, info.timestamp, "native crash: ${info.description ?: "–"}"))
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                // Reading the tombstone can fail (size, access); the crash is still reported without it.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) runCatching {
                     info.traceInputStream?.use { stream ->
                         val text = readableStrings(stream.readBytes())
                         // The crashing thread is the one that called abort(); show it first, because the log
@@ -73,13 +75,83 @@ object CrashLog {
                             appendLine(text.substring((at - 1_500).coerceAtLeast(0), (at + 2_500).coerceAtMost(text.length)))
                             appendLine("--- all threads ---")
                         }
-                        append(text)
+                        // Room left for the app log below.
+                        append(text.take(5_000))
                     }
-                }
+                }.onFailure { appendLine("(tombstone not readable: ${it.javaClass.simpleName})") }
+                appendLine("--- app log (warnings and errors) ---")
+                append(ownLog())
             }.take(MAX_CHARS)
         } catch (_: Throwable) {
             null
         }
+    }
+
+    /**
+     * The app closed while on screen for another reason Android records: frozen (ANR, with its thread dump),
+     * killed by the system (memory, a signal, too much work) or a crash the handler above could not write
+     * (owner 2026-11-21: "app apne aap band ho rhi h" with no crash log). Exits in the background (Android
+     * freeing memory) are ignored. The app's own recent warnings and errors from the system log are added.
+     */
+    private fun otherExit(context: Context): String? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
+        return try {
+            val am = context.getSystemService(ActivityManager::class.java) ?: return null
+            val seen = prefs(context).getLong(SEEN, 0L)
+            val info = am.getHistoricalProcessExitReasons(context.packageName, 0, 5).firstOrNull {
+                it.timestamp > seen && it.reason !in NORMAL &&
+                    (it.reason == ApplicationExitInfo.REASON_ANR || it.importance <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE)
+            } ?: return null
+            buildString {
+                appendLine(header(context, info.timestamp, "app closed: ${reasonName(info.reason)} · ${info.description ?: "–"} · importance ${info.importance}"))
+                if (info.reason == ApplicationExitInfo.REASON_ANR) {
+                    // For a freeze the trace is plain text: the main thread's stack shows where it was stuck.
+                    info.traceInputStream?.use { stream ->
+                        val text = stream.readBytes().toString(Charsets.UTF_8)
+                        val main = text.indexOf("\"main\"")
+                        appendLine("--- main thread ---")
+                        appendLine(if (main >= 0) text.substring(main, (main + 4_000).coerceAtMost(text.length)) else text.take(4_000))
+                    }
+                }
+                appendLine("--- app log (warnings and errors) ---")
+                append(ownLog())
+            }.take(MAX_CHARS)
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    /** This app's own recent warnings and errors (an app may read only its own lines of the system log). */
+    private fun ownLog(): String = try {
+        val process = ProcessBuilder("logcat", "-d", "-t", "400", "-v", "time", "*:W").redirectErrorStream(true).start()
+        val lines = process.inputStream.bufferedReader().readLines()
+        process.destroy()
+        lines.takeLast(120).joinToString("\n")
+    } catch (_: Throwable) {
+        "(not readable)"
+    }
+
+    /** Exits that are normal or already covered (native crashes, above): everything else on screen is shown. */
+    private val NORMAL = setOf(
+        ApplicationExitInfo.REASON_EXIT_SELF,
+        ApplicationExitInfo.REASON_USER_REQUESTED,
+        ApplicationExitInfo.REASON_USER_STOPPED,
+        ApplicationExitInfo.REASON_PERMISSION_CHANGE,
+        ApplicationExitInfo.REASON_CRASH_NATIVE,
+        15, // REASON_PACKAGE_STATE_CHANGE (Android 13)
+        16, // REASON_PACKAGE_UPDATED (Android 14): the in-app update replaced the app
+    )
+
+    private fun reasonName(reason: Int): String = when (reason) {
+        ApplicationExitInfo.REASON_ANR -> "froze (ANR)"
+        ApplicationExitInfo.REASON_CRASH -> "crash"
+        ApplicationExitInfo.REASON_SIGNALED -> "killed by a signal"
+        ApplicationExitInfo.REASON_LOW_MEMORY -> "low memory"
+        ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE -> "too much work"
+        ApplicationExitInfo.REASON_INITIALIZATION_FAILURE -> "start failed"
+        ApplicationExitInfo.REASON_DEPENDENCY_DIED -> "a dependency died"
+        ApplicationExitInfo.REASON_OTHER -> "closed by the system"
+        else -> "unknown ($reason)"
     }
 
     /** Runs of printable characters from the binary tombstone, like the `strings` tool. */
