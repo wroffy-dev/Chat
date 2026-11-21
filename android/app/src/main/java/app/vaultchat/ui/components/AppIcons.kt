@@ -82,6 +82,16 @@ object AppIcons {
         icon("Download", "M19,9h-4V3H9v6H5l7,7 7,-7zM5,18v2h14v-2H5z")
     }
 
+    /** Material "flash_on" (snap camera). */
+    val FlashOn: ImageVector by lazy {
+        icon("FlashOn", "M7,2v11h3v9l7,-12h-4l4,-8z")
+    }
+
+    /** Material "flash_off" (snap camera). */
+    val FlashOff: ImageVector by lazy {
+        icon("FlashOff", "M3.27,3L2,4.27l5,5V13h3v9l3.58,-6.14L17.73,20 19,18.73 3.27,3zM17,10h-4l4,-8H7v2.18l8.46,8.46L17,10z")
+    }
+
     /** Material "near_me" (centre the Map on me). */
     val NearMe: ImageVector by lazy {
         icon("NearMe", "M21,3L3,10.53v0.98l6.84,2.65L12.48,21h0.98L21,3z")

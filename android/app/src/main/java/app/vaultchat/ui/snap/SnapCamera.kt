@@ -2,11 +2,14 @@ package app.vaultchat.ui.snap
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.net.Uri
+import android.view.WindowManager
 import android.widget.VideoView
 import androidx.activity.compose.BackHandler
 import androidx.camera.core.CameraSelector
@@ -29,32 +32,32 @@ import androidx.camera.video.VideoCapture
 import androidx.camera.video.VideoRecordEvent
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Image
-import app.vaultchat.domain.connection.Connection
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.clickable
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.AlertDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.material3.Icon
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -67,22 +70,27 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import app.vaultchat.R
-import app.vaultchat.platform.snap.SnapSaver
-import app.vaultchat.ui.components.AppIcons
+import app.vaultchat.domain.connection.Connection
 import app.vaultchat.domain.permissions.AppPermission
 import app.vaultchat.domain.permissions.PermissionStatus
 import app.vaultchat.domain.snap.SnapFailure
@@ -90,15 +98,17 @@ import app.vaultchat.domain.snap.SnapKind
 import app.vaultchat.domain.snap.SnapRepository
 import app.vaultchat.domain.snap.SnapResult
 import app.vaultchat.domain.snap.SnapRules
+import app.vaultchat.platform.snap.SnapSaver
+import app.vaultchat.ui.components.AppIcons
 import app.vaultchat.ui.permissions.PermissionPreferences
 import app.vaultchat.ui.permissions.rememberPermissionRequest
 import app.vaultchat.ui.theme.VaultGreen
+import java.io.ByteArrayOutputStream
+import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayOutputStream
-import java.io.File
 
 /** What was just taken, before it is sent: a photo in memory, or a video in a temporary file. */
 private sealed interface Taken {
@@ -309,6 +319,24 @@ private fun CaptureView(
     var boundCamera by remember { mutableStateOf<androidx.camera.core.Camera?>(null) }
     var secondsLeft by remember { mutableIntStateOf(SnapRules.MAX_VIDEO_SECONDS) }
     val scope = rememberCoroutineScope()
+    // Flash and sound (owner, 2026-11-20). Back camera: the phone's flash for a photo, its light for a video.
+    // Front camera: the screen turns white at full brightness while the photo is taken, and a white glow
+    // frames the picture while a video records. Sound off records the video without the microphone.
+    var flash by rememberSaveable { mutableStateOf(false) }
+    var muted by rememberSaveable { mutableStateOf(false) }
+    var screenFlash by remember { mutableStateOf(false) }
+    val glowing = screenFlash || (recording != null && flash && front)
+    val window = remember(context) { context.findActivity()?.window }
+    DisposableEffect(glowing, window) {
+        val w = window
+        if (glowing && w != null) {
+            val before = w.attributes.screenBrightness
+            w.attributes = w.attributes.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_FULL }
+            onDispose { w.attributes = w.attributes.apply { screenBrightness = before } }
+        } else {
+            onDispose { }
+        }
+    }
 
     LaunchedEffect(Unit) { onWantAudio() }
     DisposableEffect(owner, front) {
@@ -332,13 +360,15 @@ private fun CaptureView(
     fun startVideo() {
         val file = File(context.cacheDir, "snap-${System.currentTimeMillis()}.mp4")
         val pending = videoCapture.output.prepareRecording(context, FileOutputOptions.Builder(file).build())
-            .let { if (withAudio && context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) it.withAudioEnabled() else it }
+            .let { if (withAudio && !muted && context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) it.withAudioEnabled() else it }
         recording = pending.start(ContextCompat.getMainExecutor(context)) { event ->
             if (event is VideoRecordEvent.Finalize) {
                 recording = null
+                boundCamera?.cameraControl?.enableTorch(false)
                 if (!event.hasError() || event.error == VideoRecordEvent.Finalize.ERROR_DURATION_LIMIT_REACHED) onVideo(Taken.Video(file)) else file.delete()
             }
         }
+        if (flash && !front) boundCamera?.cameraControl?.enableTorch(true)
         secondsLeft = SnapRules.MAX_VIDEO_SECONDS
         scope.launch {
             while (recording != null && secondsLeft > 0) {
@@ -346,6 +376,46 @@ private fun CaptureView(
                 secondsLeft--
             }
             recording?.stop()
+        }
+    }
+
+    fun capturePhoto() {
+        val mirror = front
+        imageCapture.takePicture(ContextCompat.getMainExecutor(context), object : ImageCapture.OnImageCapturedCallback() {
+            override fun onCaptureSuccess(image: ImageProxy) {
+                screenFlash = false
+                // Decoding a full-resolution photo takes a moment: off the main thread, so
+                // the camera screen never freezes (owner, 2026-11-19: smoother UI).
+                scope.launch {
+                    val photo = withContext(Dispatchers.Default) {
+                        try {
+                            toUprightJpeg(image.toBitmap(), image.imageInfo.rotationDegrees, mirror)
+                        } finally {
+                            image.close()
+                        }
+                    }
+                    taking = false
+                    onPhoto(photo)
+                }
+            }
+            override fun onError(exception: ImageCaptureException) {
+                screenFlash = false
+                taking = false
+            }
+        })
+    }
+
+    fun takePhoto() {
+        imageCapture.flashMode = if (flash && !front) ImageCapture.FLASH_MODE_ON else ImageCapture.FLASH_MODE_OFF
+        if (flash && front) {
+            // White screen at full brightness first; the camera needs a moment to adjust to the new light.
+            screenFlash = true
+            scope.launch {
+                delay(SCREEN_FLASH_MS)
+                capturePhoto()
+            }
+        } else {
+            capturePhoto()
         }
     }
 
@@ -384,27 +454,7 @@ private fun CaptureView(
                                 // One photo at a time; a second tap while it is being made does nothing.
                                 if (taking) return@detectTapGestures
                                 taking = true
-                                val mirror = front
-                                imageCapture.takePicture(ContextCompat.getMainExecutor(context), object : ImageCapture.OnImageCapturedCallback() {
-                                    override fun onCaptureSuccess(image: ImageProxy) {
-                                        // Decoding a full-resolution photo takes a moment: off the main thread, so
-                                        // the camera screen never freezes (owner, 2026-11-19: smoother UI).
-                                        scope.launch {
-                                            val photo = withContext(Dispatchers.Default) {
-                                                try {
-                                                    toUprightJpeg(image.toBitmap(), image.imageInfo.rotationDegrees, mirror)
-                                                } finally {
-                                                    image.close()
-                                                }
-                                            }
-                                            taking = false
-                                            onPhoto(photo)
-                                        }
-                                    }
-                                    override fun onError(exception: ImageCaptureException) {
-                                        taking = false
-                                    }
-                                })
+                                takePhoto()
                             },
                             onLongPress = { startVideo() },
                             onPress = {
@@ -416,8 +466,66 @@ private fun CaptureView(
             )
             TextButton(onClick = { front = !front }, enabled = recording == null) { Text(stringResource(R.string.snap_flip), color = VaultGreen.Mint) }
         }
+        // Front camera video with flash: a warm white glow around the picture lights the face.
+        if (recording != null && flash && front) {
+            Box(Modifier.fillMaxSize().border(40.dp, GlowWhite))
+        }
+        Column(
+            modifier = Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            CameraToggle(
+                icon = if (flash) AppIcons.FlashOn else AppIcons.FlashOff,
+                description = stringResource(if (flash) R.string.snap_flash_on else R.string.snap_flash_off),
+                on = flash,
+                onClick = { flash = !flash },
+            )
+            val soundOn = withAudio && !muted
+            CameraToggle(
+                icon = if (soundOn) AppIcons.Mic else AppIcons.MicOff,
+                description = stringResource(if (soundOn) R.string.snap_sound_on else R.string.snap_sound_off),
+                on = soundOn,
+                enabled = recording == null,
+                onClick = { if (!withAudio) onWantAudio() else muted = !muted },
+            )
+        }
+        // Front camera photo with flash: the whole screen white until the photo is taken.
+        if (screenFlash) {
+            Box(Modifier.fillMaxSize().background(Color.White))
+        }
     }
 }
+
+/** A round button over the camera: flash or sound, bright when on. */
+@Composable
+private fun CameraToggle(icon: ImageVector, description: String, on: Boolean, onClick: () -> Unit, enabled: Boolean = true) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(46.dp)
+            .clip(CircleShape)
+            .background(if (on) VaultGreen.Mint else VaultGreen.Deepest.copy(alpha = 0.55f))
+            .clickable(enabled = enabled, role = Role.Button, onClickLabel = description, onClick = onClick)
+            .semantics { contentDescription = description },
+    ) {
+        Icon(icon, contentDescription = null, tint = if (on) VaultGreen.Deepest else Color.White, modifier = Modifier.size(24.dp))
+    }
+}
+
+/** Finds the activity behind a Compose context (for the screen brightness). */
+private fun Context.findActivity(): Activity? {
+    var c: Context? = this
+    while (c is ContextWrapper) {
+        if (c is Activity) return c
+        c = c.baseContext
+    }
+    return null
+}
+
+private val GlowWhite = Color(0xFFFFF6E8)
+
+/** How long the white screen shows before a front camera photo with flash. */
+private const val SCREEN_FLASH_MS = 600L
 
 private const val VIDEO_BITRATE = 12_000_000
 
