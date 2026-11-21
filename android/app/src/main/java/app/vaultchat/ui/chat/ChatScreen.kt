@@ -135,6 +135,13 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import kotlinx.coroutines.launch
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlin.math.roundToInt
 import app.vaultchat.R
 import app.vaultchat.domain.chat.EmojiEffects
 import kotlinx.coroutines.delay
@@ -695,6 +702,14 @@ private fun MessageList(
 ) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
+    val density = LocalDensity.current
+    // Swipe a message to the right to reply (owner 2026-11-21, like WhatsApp): it follows the finger up to
+    // [SWIPE_MAX], and past [SWIPE_REPLY] a light tick says letting go will reply.
+    val swipeReplyPx = with(density) { SWIPE_REPLY.toPx() }
+    val swipeMaxPx = with(density) { SWIPE_MAX.toPx() }
+    // The message a tapped quote jumped to, lit up for a moment.
+    var highlighted by remember { mutableStateOf<String?>(null) }
     val total = messages.size + outgoing.size
     // The list's last row: the "typing" bubble when it shows, else the newest message.
     val lastIndex = total - 1 + if (peerTyping) 1 else 0
@@ -753,14 +768,25 @@ private fun MessageList(
         state = listState,
         modifier = Modifier.fillMaxSize().background(Ref.Surface),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         items(messages, key = { it.id }) { m ->
             val index = messages.indexOf(m)
             val prev = messages.getOrNull(index - 1)
-            Column(modifier = Modifier.fillMaxWidth().animateItem(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // Messages one person sends close together sit together, and only the last shows the time
+            // (owner 2026-11-21, like iMessage).
+            val joinsPrev = joinsGroup(prev, m)
+            val joinsNext = joinsGroup(m, messages.getOrNull(index + 1))
+            val mine = m.senderId == myUserId
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = if (index == 0) 0.dp else if (joinsPrev) GROUPED_GAP else MESSAGE_GAP)
+                    .animateItem()
+                    // A message that arrives while the chat is open rises gently into place.
+                    .entrance(play = placed && !mine, mine = mine),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
                 if (prev == null || !sameDay(prev.createdAtEpochMs, m.createdAtEpochMs)) DayChip(m.createdAtEpochMs)
-                val mine = m.senderId == myUserId
                 when (m.kind) {
                     MessageKind.MISSED_CALL -> MissedCallLine(m, mine = mine, onCallBack = onCallBack)
                     MessageKind.DISAPPEAR -> DisappearLine(m, mine = mine, peerUsername = peerUsername)
@@ -768,8 +794,47 @@ private fun MessageList(
                         val onThis = reactions[m.id].orEmpty()
                         val quoted = m.replyToId?.let { id -> messages.find { it.id == id } }
                         var picking by remember { mutableStateOf(false) }
+                        val swipe = remember { Animatable(0f) }
+                        val glow by animateColorAsState(
+                            if (highlighted == m.id) Ref.PrimaryContainer else Color.Transparent,
+                            animationSpec = tween(400),
+                            label = "highlight",
+                        )
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                        // The reply arrow that appears behind a message as it is swiped.
+                        Icon(
+                            AppIcons.Reply,
+                            contentDescription = null,
+                            tint = Ref.Primary,
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .size(22.dp)
+                                .graphicsLayer { alpha = (swipe.value / swipeReplyPx).coerceIn(0f, 1f) },
+                        )
                         Column(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .offset { IntOffset(swipe.value.roundToInt(), 0) }
+                                .pointerInput(m.id) {
+                                    var ticked = false
+                                    detectHorizontalDragGestures(
+                                        onDragStart = { ticked = false },
+                                        onDragEnd = {
+                                            if (swipe.value >= swipeReplyPx) onReply(m)
+                                            scope.launch { swipe.animateTo(0f, tween(180)) }
+                                        },
+                                        onDragCancel = { scope.launch { swipe.animateTo(0f, tween(180)) } },
+                                    ) { change, amount ->
+                                        val next = (swipe.value + amount).coerceIn(0f, swipeMaxPx)
+                                        if (next > 0f || swipe.value > 0f) change.consume()
+                                        scope.launch { swipe.snapTo(next) }
+                                        if (!ticked && next >= swipeReplyPx) {
+                                            ticked = true
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        }
+                                    }
+                                }
+                                .background(glow, RoundedCornerShape(12.dp)),
                             horizontalAlignment = if (mine) Alignment.End else Alignment.Start,
                             verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
@@ -777,10 +842,32 @@ private fun MessageList(
                                 QuotedMessage(
                                     who = if (quoted.senderId == myUserId) stringResource(R.string.chat_you) else peerUsername,
                                     text = if (quoted.kind == MessageKind.MISSED_CALL) stringResource(R.string.chat_missed_call_short) else quoted.text,
+                                    onClick = {
+                                        // Tap a quote to go to the message it answers, lit up for a moment.
+                                        val target = messages.indexOfFirst { it.id == quoted.id }
+                                        if (target >= 0) {
+                                            scope.launch {
+                                                listState.animateScrollToItem(target)
+                                                highlighted = quoted.id
+                                                delay(1_600)
+                                                if (highlighted == quoted.id) highlighted = null
+                                            }
+                                        }
+                                    },
                                 )
                             }
                             Box {
-                                Bubble(m.text, mine = mine, onLongPress = { picking = true })
+                                Bubble(
+                                    m.text,
+                                    mine = mine,
+                                    tail = !joinsNext,
+                                    onLongPress = { picking = true },
+                                    // Double-tap for a quick ❤️ (owner 2026-11-21); again takes it away.
+                                    onDoubleTap = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        onReact(m.id, QUICK_REACTIONS.first())
+                                    },
+                                )
                                 if (picking) {
                                     ReactionPicker(
                                         chosen = onThis.find { it.userId == myUserId }?.emoji,
@@ -798,7 +885,7 @@ private fun MessageList(
                                 }
                             }
                             if (onThis.isNotEmpty()) ReactionPill(onThis, onClick = { picking = true })
-                            MetaRow(
+                            if (!joinsNext) MetaRow(
                                 time = DateUtils.formatDateTime(LocalContext.current, m.createdAtEpochMs, DateUtils.FORMAT_SHOW_TIME),
                                 status = when {
                                     !mine -> if (disappearing) MetaStatus.DISAPPEARING else null
@@ -807,18 +894,25 @@ private fun MessageList(
                                 },
                             )
                         }
+                        }
                     }
                 }
             }
         }
         items(outgoing, key = { it.clientMessageId }) { o ->
             val sending = o.status == OutgoingStatus.SENDING
+            val afterMine = outgoing.indexOf(o) > 0 || messages.lastOrNull()?.senderId == myUserId
             Column(
-                modifier = Modifier.fillMaxWidth().animateItem(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = if (total == 1) 0.dp else if (afterMine) GROUPED_GAP else MESSAGE_GAP)
+                    .animateItem()
+                    // A message you send pops up from the box you typed it in.
+                    .entrance(play = placed, mine = true),
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Bubble(o.text, mine = true, faded = sending, failed = !sending)
+                Bubble(o.text, mine = true, faded = sending, failed = !sending, tail = o == outgoing.last())
                 if (sending) {
                     Text(stringResource(R.string.chat_sending), color = Ref.OnSurfaceVariant, fontSize = 11.sp, lineHeight = 14.sp, modifier = Modifier.padding(horizontal = 4.dp))
                 } else {
@@ -834,7 +928,7 @@ private fun MessageList(
         if (peerTyping) {
             item(key = "typing") {
                 // The other person is typing: three dots in a bubble, as in Apple Messages.
-                Box(Modifier.fillMaxWidth().animateItem(), contentAlignment = Alignment.CenterStart) {
+                Box(Modifier.fillMaxWidth().padding(top = MESSAGE_GAP).animateItem(), contentAlignment = Alignment.CenterStart) {
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 16.dp))
@@ -901,13 +995,14 @@ private fun MetaRow(time: String, status: MetaStatus?) {
 
 /** The message a reply answers, shown small above its bubble: who wrote it and its first line. */
 @Composable
-private fun QuotedMessage(who: String, text: String) {
+private fun QuotedMessage(who: String, text: String, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .widthIn(max = 290.dp)
             .padding(bottom = 2.dp)
             .clip(RoundedCornerShape(10.dp))
             .background(Ref.Container)
+            .clickable(onClickLabel = stringResource(R.string.chat_go_to_message), onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 6.dp),
     ) {
         Text(who, style = MaterialTheme.typography.labelSmall, color = Ref.Primary)
@@ -965,15 +1060,23 @@ private fun Bubble(
     mine: Boolean,
     faded: Boolean = false,
     failed: Boolean = false,
+    tail: Boolean = true,
     onLongPress: (() -> Unit)? = null,
+    onDoubleTap: (() -> Unit)? = null,
 ) {
-    val shape = if (mine) {
-        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp)
-    } else {
-        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 16.dp)
+    // Only the last bubble of a group has the small corner next to the sender.
+    val shape = when {
+        !tail -> RoundedCornerShape(16.dp)
+        mine -> RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp)
+        else -> RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 16.dp)
     }
     val press = if (onLongPress != null) {
-        Modifier.combinedClickable(onClick = {}, onLongClickLabel = stringResource(R.string.chat_react), onLongClick = onLongPress)
+        Modifier.combinedClickable(
+            onClick = {},
+            onLongClickLabel = stringResource(R.string.chat_react),
+            onLongClick = onLongPress,
+            onDoubleClick = onDoubleTap,
+        )
     } else {
         Modifier
     }
@@ -1212,4 +1315,44 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this
     is ContextWrapper -> baseContext.findActivity()
     else -> null
+}
+
+/** How far a message is swiped before letting go replies to it, and how far it follows the finger. */
+private val SWIPE_REPLY = 56.dp
+private val SWIPE_MAX = 80.dp
+
+/** Space between groups of messages, and between messages of one group. */
+private val MESSAGE_GAP = 12.dp
+private val GROUPED_GAP = 3.dp
+
+/** Messages within this time of each other from the same person form one group. */
+private const val GROUP_WINDOW_MS = 3 * 60_000L
+
+/** Whether [b] follows [a] in the same group: both text, same person, same day, close in time. */
+private fun joinsGroup(a: ChatMessage?, b: ChatMessage?): Boolean =
+    a != null && b != null &&
+        a.kind == MessageKind.TEXT && b.kind == MessageKind.TEXT &&
+        a.senderId == b.senderId &&
+        sameDay(a.createdAtEpochMs, b.createdAtEpochMs) &&
+        kotlin.math.abs(b.createdAtEpochMs - a.createdAtEpochMs) <= GROUP_WINDOW_MS
+
+/**
+ * A new message's way in (owner 2026-11-21): it rises a little, grows from its sender's side and fades in,
+ * with a soft spring. Messages already there when the chat opens do not move.
+ */
+@Composable
+private fun Modifier.entrance(play: Boolean, mine: Boolean): Modifier {
+    val progress = remember { Animatable(if (play) 0f else 1f) }
+    LaunchedEffect(Unit) {
+        if (play) progress.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow))
+    }
+    return graphicsLayer {
+        val v = progress.value
+        alpha = v.coerceIn(0f, 1f)
+        translationY = (1f - v) * 28.dp.toPx()
+        val scale = 0.86f + 0.14f * v
+        scaleX = scale
+        scaleY = scale
+        transformOrigin = TransformOrigin(if (mine) 1f else 0f, 1f)
+    }
 }

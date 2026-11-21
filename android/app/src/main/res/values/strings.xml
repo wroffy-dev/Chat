@@ -266,6 +266,14 @@
     <string name="tab_camera">Camera</string>
     <string name="tab_map">Map</string>
     <string name="map_me">Me</string>
+    <string name="map_open_chat">Chat</string>
+    <string name="map_voice_call">Voice call</string>
+    <string name="map_video_call">Video call</string>
+    <string name="chat_go_to_message">Go to the message</string>
+    <string name="snap_add_text">Add text</string>
+    <string name="snap_draw">Draw</string>
+    <string name="snap_undo">Undo</string>
+    <string name="snap_edit_done">Done</string>
     <string name="snap_flash_on">Flash on</string>
     <string name="snap_flash_off">Flash off</string>
     <string name="snap_sound_on">Sound on</string>

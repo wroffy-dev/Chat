@@ -66,7 +66,12 @@ import androidx.compose.ui.Modifier
 import app.vaultchat.domain.location.LocationBlock
 import app.vaultchat.ui.location.LocationRequiredScreen
 import kotlinx.serialization.Serializable
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -118,6 +123,13 @@ data class CallRoute(
     val connectionId: String? = null,
     val callId: String? = null,
 )
+
+/** Camera, snaps and calls open full screen: they grow slightly into place and fade in, and shrink away. */
+private fun riseIn(): EnterTransition =
+    fadeIn(tween(Motion.MEDIUM)) + scaleIn(tween(Motion.SLOW, easing = FastOutSlowInEasing), initialScale = 0.92f)
+
+private fun sinkOut(): ExitTransition =
+    fadeOut(tween(Motion.MEDIUM)) + scaleOut(tween(Motion.MEDIUM), targetScale = 0.92f)
 
 /** Clears the whole back stack, so Back never returns to a screen from the previous state. */
 private fun NavHostController.replaceAll(route: Any) {
@@ -224,11 +236,18 @@ fun VaultChatNavHost(container: AppContainer) {
     NavHost(
         navController = navController,
         startDestination = start,
-        // Short, directional transitions (UI upgrade): forward slides in from the right, back returns.
-        enterTransition = { slideInHorizontally(tween(Motion.MEDIUM)) { it / 6 } + fadeIn(tween(Motion.MEDIUM)) },
-        exitTransition = { fadeOut(tween(Motion.FAST)) },
-        popEnterTransition = { fadeIn(tween(Motion.MEDIUM)) },
-        popExitTransition = { slideOutHorizontally(tween(Motion.MEDIUM)) { it / 6 } + fadeOut(tween(Motion.FAST)) },
+        // Smooth, iPhone-like screen changes (owner 2026-11-21): a new screen slides in over the old one, which
+        // drifts a little to the left and dims; Back plays it in reverse.
+        enterTransition = { slideInHorizontally(tween(Motion.SLOW, easing = FastOutSlowInEasing)) { it } },
+        exitTransition = {
+            slideOutHorizontally(tween(Motion.SLOW, easing = FastOutSlowInEasing)) { -it / 4 } +
+                fadeOut(tween(Motion.SLOW), targetAlpha = 0.6f)
+        },
+        popEnterTransition = {
+            slideInHorizontally(tween(Motion.SLOW, easing = FastOutSlowInEasing)) { -it / 4 } +
+                fadeIn(tween(Motion.SLOW), initialAlpha = 0.6f)
+        },
+        popExitTransition = { slideOutHorizontally(tween(Motion.SLOW, easing = FastOutSlowInEasing)) { it } },
     ) {
         composable<LoginRoute> {
             val viewModel: LoginViewModel = viewModel(
@@ -320,7 +339,10 @@ fun VaultChatNavHost(container: AppContainer) {
                 onCall = { video -> navController.navigate(CallRoute(video = video, peerUsername = route.peerUsername, connectionId = route.connectionId)) },
             )
         }
-        composable<CallRoute> { entry ->
+        composable<CallRoute>(
+            enterTransition = { riseIn() },
+            popExitTransition = { sinkOut() },
+        ) { entry ->
             val route = entry.toRoute<CallRoute>()
             val kind = if (route.video) CallKind.VIDEO else CallKind.VOICE
             // The call lives in the app, not in this screen, so it can be minimised and come back.
@@ -363,14 +385,31 @@ fun VaultChatNavHost(container: AppContainer) {
                 },
             )
         }
-        composable<MapRoute> {
+        // The Map is a tab next to Chat: it fades in and out instead of sliding.
+        composable<MapRoute>(
+            enterTransition = { fadeIn(tween(Motion.MEDIUM)) },
+            popExitTransition = { fadeOut(tween(Motion.MEDIUM)) },
+        ) {
             MapScreen(
                 api = container.locationApi,
                 onChat = { navController.popBackStack() },
                 onCamera = { navController.navigate(SnapCameraRoute()) },
+                // A person's marker opens their chat or calls them (owner, 2026-11-21).
+                onOpenChat = { connectionId ->
+                    scope.launch {
+                        val c = (container.connectionRepository.connections() as? ConnResult.Ok)?.value?.find { it.id == connectionId }
+                        if (c != null) navController.navigate(ChatRoute(c.conversationId, c.peerUsername, c.id))
+                    }
+                },
+                onCallPerson = { connectionId, username, video ->
+                    navController.navigate(CallRoute(video = video, peerUsername = username, connectionId = connectionId))
+                },
             )
         }
-        composable<SnapCameraRoute> { entry ->
+        composable<SnapCameraRoute>(
+            enterTransition = { riseIn() },
+            popExitTransition = { sinkOut() },
+        ) { entry ->
             SnapCameraScreen(
                 preselect = entry.toRoute<SnapCameraRoute>().preselect,
                 repo = container.snapRepository,
@@ -379,7 +418,10 @@ fun VaultChatNavHost(container: AppContainer) {
                 onClose = { navController.popBackStack() },
             )
         }
-        composable<SnapViewerRoute> { entry ->
+        composable<SnapViewerRoute>(
+            enterTransition = { riseIn() },
+            popExitTransition = { sinkOut() },
+        ) { entry ->
             val route = entry.toRoute<SnapViewerRoute>()
             SnapViewerScreen(
                 repo = container.snapRepository,

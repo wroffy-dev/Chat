@@ -10,6 +10,7 @@ import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -84,7 +86,7 @@ import kotlin.math.pow
 import kotlin.math.tan
 
 /** One pin: a connected person, or the user (name null). x and y are Web Mercator in 0..1. */
-private data class Pin(val name: String?, val x: Double, val y: Double, val capturedAtMs: Long)
+private data class Pin(val name: String?, val x: Double, val y: Double, val capturedAtMs: Long, val connectionId: String? = null)
 
 private sealed interface MapLoad {
     data object Loading : MapLoad
@@ -114,7 +116,13 @@ private val PersonColors = listOf(
  * straight from tile.openstreetmap.org (that server sees which area is viewed, not who is on it).
  */
 @Composable
-fun MapScreen(api: LocationApi, onChat: () -> Unit, onCamera: () -> Unit) {
+fun MapScreen(
+    api: LocationApi,
+    onChat: () -> Unit,
+    onCamera: () -> Unit,
+    onOpenChat: (connectionId: String) -> Unit = {},
+    onCallPerson: (connectionId: String, username: String, video: Boolean) -> Unit = { _, _, _ -> },
+) {
     var load by remember { mutableStateOf<MapLoad>(MapLoad.Loading) }
     var reloads by remember { mutableIntStateOf(0) }
     LaunchedEffect(reloads) {
@@ -131,7 +139,7 @@ fun MapScreen(api: LocationApi, onChat: () -> Unit, onCamera: () -> Unit) {
                     MapLoad.Loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
                     MapLoad.SharingOff -> Message(stringResource(R.string.map_sharing_off))
                     MapLoad.Offline -> Message(stringResource(R.string.server_unreachable))
-                    is MapLoad.Ready -> TileMap(l.pins)
+                    is MapLoad.Ready -> TileMap(l.pins, onOpenChat, onCallPerson)
                 }
                 RoundButton(
                     icon = Icons.Filled.Refresh,
@@ -171,7 +179,7 @@ private fun RoundButton(icon: ImageVector, description: String, light: Boolean, 
 }
 
 private fun FriendsMapDto.toPins(): List<Pin> {
-    val list = people.map { Pin(it.username, mercatorX(it.lng), mercatorY(it.lat), epochMs(it.capturedAt)) }
+    val list = people.map { Pin(it.username, mercatorX(it.lng), mercatorY(it.lat), epochMs(it.capturedAt), it.connectionId) }
     return list + listOfNotNull(me?.let { Pin(null, mercatorX(it.lng), mercatorY(it.lat), epochMs(it.capturedAt)) })
 }
 
@@ -189,7 +197,11 @@ private const val MAX_ZOOM = 18.0
 
 /** A pannable, pinch-zoomable map of OpenStreetMap tiles with the markers drawn on top. */
 @Composable
-private fun TileMap(pins: List<Pin>) {
+private fun TileMap(
+    pins: List<Pin>,
+    onOpenChat: (connectionId: String) -> Unit,
+    onCallPerson: (connectionId: String, username: String, video: Boolean) -> Unit,
+) {
     val density = LocalDensity.current
     val tilePx = with(density) { 256.dp.toPx() }
     var size by remember { mutableStateOf(IntSize.Zero) }
@@ -291,6 +303,8 @@ private fun TileMap(pins: List<Pin>) {
                 selected = selected == key,
                 ago = DateUtils.getRelativeTimeSpanString(pin.capturedAtMs, now, DateUtils.MINUTE_IN_MILLIS).toString(),
                 onClick = { selected = if (selected == key) null else key },
+                onChat = pin.connectionId?.let { id -> { onOpenChat(id) } },
+                onCall = pin.connectionId?.let { id -> { video: Boolean -> onCallPerson(id, pin.name.orEmpty(), video) } },
                 px = px.toInt(),
                 py = py.toInt(),
             )
@@ -338,6 +352,16 @@ private fun TileMap(pins: List<Pin>) {
     }
 }
 
+/** A small white round button in a marker's name label. */
+@Composable
+private fun LabelAction(icon: ImageVector, description: String, onClick: () -> Unit) {
+    Surface(onClick = onClick, shape = CircleShape, color = Color.White, contentColor = Color(0xFF111111), modifier = Modifier.size(38.dp)) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription = description, modifier = Modifier.size(20.dp))
+        }
+    }
+}
+
 /** First letters of a name, for its marker: "partner.phone" → "PP", "ravi" → "R". */
 private fun initials(name: String): String {
     val parts = name.split('.', '_', '-', ' ').filter { it.isNotBlank() }
@@ -349,7 +373,16 @@ private fun initials(name: String): String {
  * initials and a white ring; I am a round marker in the theme's colour with "M". Tapping shows the name and "x min ago" above.
  */
 @Composable
-private fun Marker(pin: Pin, selected: Boolean, ago: String, onClick: () -> Unit, px: Int, py: Int) {
+private fun Marker(
+    pin: Pin,
+    selected: Boolean,
+    ago: String,
+    onClick: () -> Unit,
+    px: Int,
+    py: Int,
+    onChat: (() -> Unit)? = null,
+    onCall: ((video: Boolean) -> Unit)? = null,
+) {
     val me = pin.name == null
     val anchor: Dp = if (me) 24.dp else 27.dp
     Column(
@@ -370,6 +403,14 @@ private fun Marker(pin: Pin, selected: Boolean, ago: String, onClick: () -> Unit
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(ago, fontSize = 11.sp, color = Color.White.copy(alpha = 0.7f))
+                    // Chat, voice call and video call with this person straight from the Map (owner, 2026-11-21).
+                    if (onChat != null && onCall != null) {
+                        Row(modifier = Modifier.padding(top = 8.dp, bottom = 2.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            LabelAction(AppIcons.Chat, stringResource(R.string.map_open_chat), onChat)
+                            LabelAction(Icons.Filled.Call, stringResource(R.string.map_voice_call)) { onCall(false) }
+                            LabelAction(AppIcons.Videocam, stringResource(R.string.map_video_call)) { onCall(true) }
+                        }
+                    }
                 }
             }
             Spacer(Modifier.height(6.dp))
