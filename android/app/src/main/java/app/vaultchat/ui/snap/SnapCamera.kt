@@ -12,6 +12,9 @@ import android.net.Uri
 import android.view.WindowManager
 import android.widget.VideoView
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageCapture
@@ -53,6 +56,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -104,6 +108,7 @@ import app.vaultchat.domain.snap.SnapKind
 import app.vaultchat.domain.snap.SnapRepository
 import app.vaultchat.domain.snap.SnapResult
 import app.vaultchat.domain.snap.SnapRules
+import app.vaultchat.platform.snap.GalleryMedia
 import app.vaultchat.platform.snap.SnapSaver
 import app.vaultchat.ui.components.AppIcons
 import app.vaultchat.ui.permissions.PermissionPreferences
@@ -120,8 +125,10 @@ import kotlinx.coroutines.withContext
 
 /** What was just taken, before it is sent: a photo in memory, or a video in a temporary file. */
 private sealed interface Taken {
-    class Photo(val jpeg: ByteArray, val preview: Bitmap) : Taken
-    class Video(val file: File) : Taken
+    /** [fromGallery]: picked from the phone's gallery (owner, 2026-11-21), so it is already saved there. */
+    val fromGallery: Boolean
+    class Photo(val jpeg: ByteArray, val preview: Bitmap, override val fromGallery: Boolean = false) : Taken
+    class Video(val file: File, override val fromGallery: Boolean = false) : Taken
 }
 
 /**
@@ -154,9 +161,40 @@ fun SnapCameraScreen(
     var picking by remember { mutableStateOf(false) }
     // Writing or drawing on the photo before sending (owner, 2026-11-21); null while not editing.
     var editing by remember { mutableStateOf<SnapEditMode?>(null) }
+    // View once (owner, 2026-11-21): the person sees it a single time, with no replay.
+    var viewOnce by remember { mutableStateOf(false) }
+    // A gallery video being made smaller before it can be sent.
+    var preparing by remember { mutableStateOf(false) }
+    val tooLongText = stringResource(R.string.snap_video_too_long, SnapRules.MAX_GALLERY_VIDEO_SECONDS)
+    val galleryFailedText = stringResource(R.string.snap_gallery_failed)
+    // Photos and videos from the gallery (owner, 2026-11-21; changes D-27), through Android's own photo picker:
+    // the app sees only the one item chosen and needs no storage permission. Sent as snaps, like camera ones.
+    val gallery = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        preparing = true
+        scope.launch {
+            val video = context.contentResolver.getType(uri).orEmpty().startsWith("video/")
+            if (video) {
+                when (val v = GalleryMedia.video(context, uri, SnapRules.MAX_GALLERY_VIDEO_SECONDS)) {
+                    is GalleryMedia.Video.Ready -> taken = Taken.Video(v.file, fromGallery = true)
+                    is GalleryMedia.Video.TooLong -> notice = tooLongText
+                    GalleryMedia.Video.Failed -> notice = galleryFailedText
+                }
+            } else {
+                val bitmap = GalleryMedia.photo(context, uri)
+                if (bitmap == null) {
+                    notice = galleryFailedText
+                } else {
+                    taken = withContext(Dispatchers.Default) { encodePhoto(bitmap, fromGallery = true) }
+                }
+            }
+            preparing = false
+        }
+    }
 
     fun discard() {
         editing = null
+        viewOnce = false
         (taken as? Taken.Video)?.file?.delete()
         taken = null
     }
@@ -183,7 +221,7 @@ fun SnapCameraScreen(
             var sent = 0
             var failure: SnapFailure? = null
             for (person in chosen) {
-                when (val r = repo.send(person.id, kind, bytes)) {
+                when (val r = repo.send(person.id, kind, bytes, viewOnce)) {
                     is SnapResult.Ok -> sent++
                     is SnapResult.Failure -> failure = r.reason
                 }
@@ -219,6 +257,9 @@ fun SnapCameraScreen(
                     onPhoto = { taken = it },
                     onVideo = { taken = it },
                     onWantAudio = { if (mic.status != PermissionStatus.Granted) mic.request() },
+                    onGallery = {
+                        if (!preparing) gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+                    },
                 )
                 else -> ReviewView(taken!!)
             }
@@ -235,16 +276,33 @@ fun SnapCameraScreen(
                 }
             }
             if (taken != null && editing == null) {
+                // View once: a pill at the top left that turns bright when on.
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .safeDrawingPadding()
+                        .padding(12.dp)
+                        .clip(CircleShape)
+                        .background(if (viewOnce) VaultGreen.Mint else VaultGreen.Deepest.copy(alpha = 0.55f))
+                        .clickable(enabled = !sending, role = Role.Switch, onClickLabel = stringResource(R.string.snap_view_once)) { viewOnce = !viewOnce }
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                ) {
+                    Text("①", color = if (viewOnce) VaultGreen.Deepest else Color.White, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.snap_view_once), color = if (viewOnce) VaultGreen.Deepest else Color.White, fontWeight = FontWeight.SemiBold)
+                }
                 Row(
                     modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().safeDrawingPadding().padding(20.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     TextButton(onClick = ::discard, enabled = !sending) { Text(stringResource(R.string.snap_retake), color = VaultGreen.Mint) }
-                    // Save your own photo or video to the phone (owner, 2026-11-20). Received snaps have no Save.
+                    // Save your own photo or video to the phone (owner, 2026-11-20). Received snaps have no Save, and
+                    // one picked from the gallery is already there.
                     val savedText = stringResource(R.string.snap_saved)
                     val saveFailedText = stringResource(R.string.snap_save_failed)
-                    TextButton(
+                    if (taken?.fromGallery != true) TextButton(
                         enabled = !sending && !saving,
                         onClick = {
                             val item = taken ?: return@TextButton
@@ -287,6 +345,16 @@ fun SnapCameraScreen(
                     onCancel = { editing = null },
                 )
             }
+            if (preparing) {
+                Column(
+                    modifier = Modifier.fillMaxSize().background(VaultGreen.Deepest.copy(alpha = 0.85f)),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    CircularProgressIndicator(color = VaultGreen.Sage)
+                    Text(stringResource(R.string.snap_preparing), modifier = Modifier.padding(top = 12.dp))
+                }
+            }
             if (picking) {
                 RecipientPicker(recipients, preselect, onSend = ::sendTo, onDismiss = { picking = false })
             }
@@ -310,6 +378,7 @@ private fun CaptureView(
     onPhoto: (Taken.Photo) -> Unit,
     onVideo: (Taken.Video) -> Unit,
     onWantAudio: () -> Unit,
+    onGallery: () -> Unit,
 ) {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
@@ -556,6 +625,27 @@ private fun CaptureView(
                 onClick = { if (!withAudio) onWantAudio() else muted = !muted },
             )
         }
+        // Pick a photo or a video (up to 30 s) from the gallery (owner, 2026-11-21), bottom left as in Snapchat.
+        if (recording == null) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .safeDrawingPadding()
+                    .padding(start = 28.dp, bottom = 64.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable(role = Role.Button, onClickLabel = stringResource(R.string.snap_gallery), onClick = onGallery)
+                    .padding(6.dp),
+            ) {
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.size(46.dp).clip(RoundedCornerShape(12.dp)).background(VaultGreen.Deepest.copy(alpha = 0.55f)).border(2.dp, Color.White, RoundedCornerShape(12.dp)),
+                ) {
+                    Icon(AppIcons.Gallery, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+                }
+                Text(stringResource(R.string.snap_gallery), color = Color.White, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 4.dp))
+            }
+        }
         // Front camera photo with flash: the whole screen white until the photo is taken.
         if (screenFlash) {
             Box(Modifier.fillMaxSize().background(Color.White))
@@ -616,7 +706,7 @@ private fun toUprightJpeg(raw: Bitmap, rotation: Int, mirror: Boolean): Taken.Ph
 }
 
 /** A JPEG of [upright] for sending, with the bitmap kept for the preview. */
-private fun encodePhoto(upright: Bitmap): Taken.Photo {
+private fun encodePhoto(upright: Bitmap, fromGallery: Boolean = false): Taken.Photo {
     // High JPEG quality; lowered step by step only if a very detailed photo would pass the server's limit.
     var bytes = ByteArray(0)
     for (quality in intArrayOf(95, 90, 85, 75, 65)) {
@@ -625,7 +715,7 @@ private fun encodePhoto(upright: Bitmap): Taken.Photo {
         bytes = out.toByteArray()
         if (bytes.size <= PHOTO_MAX_BYTES) break
     }
-    return Taken.Photo(bytes, upright)
+    return Taken.Photo(bytes, upright, fromGallery)
 }
 
 /** A round button over the photo before sending: "Aa" for text, the pen for drawing. */

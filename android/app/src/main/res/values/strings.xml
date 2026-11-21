@@ -274,6 +274,12 @@
     <string name="snap_draw">Draw</string>
     <string name="snap_undo">Undo</string>
     <string name="snap_edit_done">Done</string>
+    <string name="snap_gallery">Gallery</string>
+    <string name="snap_view_once">View once</string>
+    <string name="snap_view_once_badge">① View once</string>
+    <string name="snap_preparing">Getting it ready…</string>
+    <string name="snap_video_too_long">Videos from the gallery can be at most %1$d seconds.</string>
+    <string name="snap_gallery_failed">That photo or video could not be opened.</string>
     <string name="snap_flash_on">Flash on</string>
     <string name="snap_flash_off">Flash off</string>
     <string name="snap_sound_on">Sound on</string>

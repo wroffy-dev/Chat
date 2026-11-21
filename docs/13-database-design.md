@@ -339,7 +339,8 @@ encrypted, uploaded offsite; only the last 24 hours of backups kept (D-12); mont
 
 `snaps`: one row per snap waiting to be opened. `id` uuid, `connection_id` → connections (cascade),
 `sender_user_id` and `recipient_user_id` → users (cascade), `kind` `photo` | `video` (CHECK), `size_bytes`,
-`created_at`. The media file is `SNAPS_DIR/<id>.snap`, never in the database; the row and the file are deleted
+`view_once` boolean (default false; migration `20261121060000_snap_view_once`, owner 2026-11-21: shown once, no
+replay), `created_at`. The media file is `SNAPS_DIR/<id>.snap`, never in the database; the row and the file are deleted
 when the snap is opened or after 24 h.
 
 `snap_streaks`: one row per connection. `connection_id` (PK, cascade), `count`, `last_mutual_day`,
