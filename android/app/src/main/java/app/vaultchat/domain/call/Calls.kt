@@ -85,6 +85,11 @@ interface MediaSession {
     fun setNoiseReduction(enabled: Boolean) = Unit
     fun switchCamera()
     /**
+     * Turns the back camera's light on or off during a video call (owner, 2026-11-21). Returns false when it
+     * could not (no light, front camera, camera off). A no-op returning false where there is no camera.
+     */
+    suspend fun setTorch(on: Boolean): Boolean = false
+    /**
      * Asks the other person's phone to flip its own camera (front/back) during the call. Their app
      * switches its already-shared camera and shows that it happened; it cannot turn a camera on.
      * A no-op where the media layer cannot send it (e.g. the test fake).

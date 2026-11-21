@@ -280,6 +280,11 @@
     <string name="snap_preparing">Getting it ready…</string>
     <string name="snap_video_too_long">Videos from the gallery can be at most %1$d seconds.</string>
     <string name="snap_gallery_failed">That photo or video could not be opened.</string>
+    <string name="snap_night_on">Night mode on</string>
+    <string name="snap_night_off">Night mode off</string>
+    <string name="snap_night_photos_only">Night mode: tap for a photo</string>
+    <string name="call_light">Light</string>
+    <string name="call_light_unavailable">The light could not be turned on on this phone.</string>
     <string name="snap_flash_on">Flash on</string>
     <string name="snap_flash_off">Flash off</string>
     <string name="snap_sound_on">Sound on</string>

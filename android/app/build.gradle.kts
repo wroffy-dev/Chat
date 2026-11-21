@@ -188,6 +188,8 @@ dependencies {
     implementation(libs.camerax.lifecycle)
     implementation(libs.camerax.view)
     implementation(libs.camerax.video)
+    implementation(libs.camerax.extensions)
+    implementation(libs.livekit.android.camerax)
     implementation(libs.media3.transformer)
     implementation(libs.media3.effect)
     implementation(libs.media3.common)

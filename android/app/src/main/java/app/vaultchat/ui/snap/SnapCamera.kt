@@ -25,6 +25,8 @@ import androidx.camera.core.Preview
 import androidx.camera.core.resolutionselector.AspectRatioStrategy
 import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
+import androidx.camera.extensions.ExtensionMode
+import androidx.camera.extensions.ExtensionsManager
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.FallbackStrategy
 import androidx.camera.video.FileOutputOptions
@@ -428,6 +430,9 @@ private fun CaptureView(
     var flash by rememberSaveable { mutableStateOf(false) }
     var muted by rememberSaveable { mutableStateOf(false) }
     var screenFlash by remember { mutableStateOf(false) }
+    var night by rememberSaveable { mutableStateOf(false) }
+    // True while the phone's own night mode is on, which takes photos only.
+    var nightPhotoOnly by remember { mutableStateOf(false) }
     var focusAt by remember { mutableStateOf<Offset?>(null) }
     var focusTick by remember { mutableIntStateOf(0) }
     val glowing = screenFlash || (recording != null && flash && front)
@@ -444,18 +449,46 @@ private fun CaptureView(
     }
 
     LaunchedEffect(Unit) { onWantAudio() }
-    DisposableEffect(owner, front) {
+    DisposableEffect(owner, front, night) {
         val future = ProcessCameraProvider.getInstance(context)
         var provider: ProcessCameraProvider? = null
+        val main = ContextCompat.getMainExecutor(context)
         future.addListener({
             val p = future.get()
             provider = p
-            val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
-            p.unbindAll()
-            boundCamera = runCatching {
-                p.bindToLifecycle(owner, if (front) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA, preview, imageCapture, videoCapture)
-            }.getOrNull()
-        }, ContextCompat.getMainExecutor(context))
+            val base = if (front) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
+            fun bind(selector: CameraSelector, photoOnly: Boolean) {
+                val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
+                p.unbindAll()
+                boundCamera = runCatching {
+                    // The phone's own night mode works for photos only (CameraX extensions cannot record video).
+                    if (photoOnly) p.bindToLifecycle(owner, selector, preview, imageCapture)
+                    else p.bindToLifecycle(owner, selector, preview, imageCapture, videoCapture)
+                }.getOrNull()
+                nightPhotoOnly = photoOnly && boundCamera != null
+                // Without the phone's night mode, night is the brightest exposure the camera allows.
+                if (night && !photoOnly) {
+                    boundCamera?.let { cam ->
+                        val exposure = cam.cameraInfo.exposureState
+                        if (exposure.isExposureCompensationSupported) cam.cameraControl.setExposureCompensationIndex(exposure.exposureCompensationRange.upper)
+                    }
+                }
+            }
+            if (!night) {
+                bind(base, photoOnly = false)
+            } else {
+                // Night mode (owner, 2026-11-21): the phone maker's night processing where it is offered.
+                val extensions = ExtensionsManager.getInstanceAsync(context, p)
+                extensions.addListener({
+                    val manager = runCatching { extensions.get() }.getOrNull()
+                    if (manager != null && runCatching { manager.isExtensionAvailable(base, ExtensionMode.NIGHT) }.getOrDefault(false)) {
+                        bind(manager.getExtensionEnabledCameraSelector(base, ExtensionMode.NIGHT), photoOnly = true)
+                    } else {
+                        bind(base, photoOnly = false)
+                    }
+                }, main)
+            }
+        }, main)
         onDispose {
             recording?.stop()
             provider?.unbindAll()
@@ -573,7 +606,11 @@ private fun CaptureView(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                if (recording != null) "● $secondsLeft s" else stringResource(R.string.snap_hint, SnapRules.MAX_VIDEO_SECONDS),
+                when {
+                    recording != null -> "● $secondsLeft s"
+                    nightPhotoOnly -> stringResource(R.string.snap_night_photos_only)
+                    else -> stringResource(R.string.snap_hint, SnapRules.MAX_VIDEO_SECONDS)
+                },
                 style = MaterialTheme.typography.labelLarge,
                 modifier = Modifier.background(VaultGreen.Deepest.copy(alpha = 0.6f), CircleShape).padding(horizontal = 12.dp, vertical = 6.dp),
             )
@@ -592,7 +629,7 @@ private fun CaptureView(
                                 taking = true
                                 takePhoto()
                             },
-                            onLongPress = { startVideo() },
+                            onLongPress = { if (!nightPhotoOnly) startVideo() },
                             onPress = {
                                 tryAwaitRelease()
                                 recording?.stop()
@@ -610,6 +647,13 @@ private fun CaptureView(
             modifier = Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            CameraToggle(
+                icon = AppIcons.NightMode,
+                description = stringResource(if (night) R.string.snap_night_on else R.string.snap_night_off),
+                on = night,
+                enabled = recording == null,
+                onClick = { night = !night },
+            )
             CameraToggle(
                 icon = if (flash) AppIcons.FlashOn else AppIcons.FlashOff,
                 description = stringResource(if (flash) R.string.snap_flash_on else R.string.snap_flash_off),

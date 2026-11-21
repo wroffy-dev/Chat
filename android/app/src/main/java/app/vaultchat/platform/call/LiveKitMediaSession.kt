@@ -52,6 +52,20 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import android.os.Handler
+import android.os.Looper
+import androidx.annotation.OptIn
+import androidx.camera.camera2.interop.ExperimentalCamera2Interop
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
+import io.livekit.android.room.track.video.CameraCapturerUtils
+import livekit.org.webrtc.CameraXHelper
+import livekit.org.webrtc.CameraXProvider
+import livekit.org.webrtc.getCameraX
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /**
  * LiveKit-backed media for one call. The server issues a room-scoped token; this class never sees
@@ -243,7 +257,52 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
         }
     }
 
-    override suspend fun requestPeerSwitchCamera() {
+    /**
+     * The back camera's light (owner, 2026-11-21). LiveKit's usual camera (Camera2 through WebRTC) cannot turn
+     * the light on, so the first time it is wanted this call's camera moves to LiveKit's CameraX camera, which
+     * can, through the same [republishCamera] a flip uses. Calls that never use the light keep the usual camera.
+     */
+    override suspend fun setTorch(on: Boolean): Boolean {
+        if (!joined) return false
+        return try {
+            flipLock.withLock {
+                val publication = room.localParticipant.getTrackPublication(Track.Source.CAMERA) ?: return@withLock !on
+                var track = publication.track as? LocalVideoTrack ?: return@withLock !on
+                if (publication.muted || track.options.position == CameraPosition.FRONT) return@withLock !on
+                var camera = track.capturer.getCameraX()?.value
+                if (camera == null) {
+                    if (!on) return@withLock true
+                    useCameraX()
+                    if (!republishCamera(track, quality, forced = false, position = CameraPosition.BACK)) return@withLock false
+                    track = _localVideo.value as? LocalVideoTrack ?: return@withLock false
+                    camera = withTimeoutOrNull(4_000) { track.capturer.getCameraX()?.first { it != null } } ?: return@withLock false
+                }
+                if (on && !camera.cameraInfo.hasFlashUnit()) return@withLock false
+                camera.cameraControl.enableTorch(on)
+                true
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Throwable) {
+            // Never let the light end the call.
+            false
+        }
+    }
+
+    /** LiveKit's CameraX camera, registered for this call only and kept running in the background like a call. */
+    private var cameraXProvider: CameraXProvider? = null
+    private val callLifecycle = CallLifecycle()
+
+    @OptIn(ExperimentalCamera2Interop::class)
+    private suspend fun useCameraX() {
+        if (cameraXProvider != null) return
+        withContext(Dispatchers.Main) { callLifecycle.resume() }
+        val provider = CameraXHelper.createCameraProvider(callLifecycle)
+        CameraCapturerUtils.registerCameraProvider(provider)
+        cameraXProvider = provider
+    }
+
+        override suspend fun requestPeerSwitchCamera() {
         if (!joined) return
         // Tiny reliable message on our own topic; the payload is unused, the topic carries the meaning.
         room.localParticipant.publishData(SWITCH_CAMERA_PAYLOAD, DataPublishReliability.RELIABLE, topic = TOPIC_SWITCH_CAMERA)
@@ -456,6 +515,9 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
     override fun disconnect() {
         if (released) return
         released = true
+        cameraXProvider?.let { CameraCapturerUtils.unregisterCameraProvider(it) }
+        cameraXProvider = null
+        Handler(Looper.getMainLooper()).post { callLifecycle.destroy() }
         _localVideo.value = null
         _remoteVideo.value = null
         room.disconnect()
@@ -547,4 +609,19 @@ private class HandoverAudioHandler(val own: AudioSwitchHandler) : AudioHandler {
         if (started) own.stop()
     }
 
+}
+
+/** Keeps the call's CameraX camera running for the whole call, also while the app is in the background. */
+private class CallLifecycle : LifecycleOwner {
+    private val registry = LifecycleRegistry(this)
+    override val lifecycle: Lifecycle get() = registry
+
+    fun resume() {
+        if (registry.currentState != Lifecycle.State.DESTROYED) registry.currentState = Lifecycle.State.RESUMED
+    }
+
+    fun destroy() {
+        // A lifecycle that never started cannot be destroyed (LifecycleRegistry refuses INITIALIZED → DESTROYED).
+        if (registry.currentState != Lifecycle.State.INITIALIZED) registry.currentState = Lifecycle.State.DESTROYED
+    }
 }
