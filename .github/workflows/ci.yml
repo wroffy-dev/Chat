@@ -55,7 +55,7 @@ jobs:
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
       # GitHub-hosted Ubuntu runners include the Android SDK (ANDROID_HOME is preset).
-      - run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:lintDebug
+      - run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:assemblePhone :app:lintDebug
       # The debug network config is generated from the API URL: plain HTTP only to the emulator host
       # and the URL's host (docs/PHONE_TEST_GUIDE.md). Check the built APKs actually carry it.
       - name: Debug APK allows plain HTTP only to the development hosts

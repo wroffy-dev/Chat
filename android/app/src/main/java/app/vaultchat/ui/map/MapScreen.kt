@@ -39,6 +39,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.flow.distinctUntilChanged
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -253,30 +255,21 @@ private fun TileMap(
                 }
             },
     ) {
-        val world = 2.0.pow(zoom) * tilePx
-        val tz = floor(zoom).toInt().coerceIn(MIN_ZOOM.toInt(), MAX_ZOOM.toInt())
-        val n = 1 shl tz
-        val ts = world / n
-        val w = size.width.toDouble()
-        val h = size.height.toDouble()
-        val left = cx * world - w / 2
-        val top = cy * world - h / 2
-        val needed = buildList {
-            if (size.width > 0) {
-                for (ty in floor(top / ts).toInt()..floor((top + h) / ts).toInt()) {
-                    if (ty < 0 || ty >= n) continue
-                    for (tx in floor(left / ts).toInt()..floor((left + w) / ts).toInt()) add(Triple(tx, ty, tz))
-                }
-            }
-        }
-        LaunchedEffect(needed) {
-            needed.forEach { (tx, ty, z) ->
-                val key = TileKey(z, Math.floorMod(tx, n), ty)
-                if (tiles.wants(key)) scope.launch { tiles.fetch(key) }
-            }
+        // Panning and zooming change only cx, cy and zoom. They are read while laying out and drawing, never
+        // while composing, so a moving map redraws without rebuilding the markers on every frame
+        // (owner 2026-11-21: smoother, no lag).
+        LaunchedEffect(Unit) {
+            snapshotFlow { visibleTiles(cx, cy, zoom, size, tilePx).map { (tx, ty, z) -> TileKey(z, Math.floorMod(tx, 1 shl z), ty) } }
+                .distinctUntilChanged()
+                .collect { keys -> keys.forEach { key -> if (tiles.wants(key)) scope.launch { tiles.fetch(key) } } }
         }
         Canvas(modifier = Modifier.fillMaxSize()) {
-            needed.forEach { (tx, ty, z) ->
+            val world = 2.0.pow(zoom) * tilePx
+            val left = cx * world - size.width / 2.0
+            val top = cy * world - size.height / 2.0
+            visibleTiles(cx, cy, zoom, IntSize(size.width.toInt(), size.height.toInt()), tilePx).forEach { (tx, ty, z) ->
+                val n = 1 shl z
+                val ts = world / n
                 val image = tiles.images[TileKey(z, Math.floorMod(tx, n), ty)] ?: return@forEach
                 val x = tx * ts - left
                 val y = ty * ts - top
@@ -290,13 +283,6 @@ private fun TileMap(
         val now = System.currentTimeMillis()
         // Me first, so people stay on top of me when we are in the same place; the chosen one on top of all.
         pins.sortedBy { (if (it.name == null) 0 else 1) + (if ((it.name ?: "") == selected) 2 else 0) }.forEach { pin ->
-            // The marker nearest to the view across the date line.
-            var dx = (pin.x - cx) * world
-            if (dx > world / 2) dx -= world
-            if (dx < -world / 2) dx += world
-            val px = w / 2 + dx
-            val py = (pin.y - cy) * world + h / 2
-            if (px < -200 || px > w + 200 || py < -200 || py > h + 200) return@forEach
             val key = pin.name ?: ""
             Marker(
                 pin = pin,
@@ -305,8 +291,14 @@ private fun TileMap(
                 onClick = { selected = if (selected == key) null else key },
                 onChat = pin.connectionId?.let { id -> { onOpenChat(id) } },
                 onCall = pin.connectionId?.let { id -> { video: Boolean -> onCallPerson(id, pin.name.orEmpty(), video) } },
-                px = px.toInt(),
-                py = py.toInt(),
+                position = {
+                    // The marker nearest to the view across the date line.
+                    val world = 2.0.pow(zoom) * tilePx
+                    var dx = (pin.x - cx) * world
+                    if (dx > world / 2) dx -= world
+                    if (dx < -world / 2) dx += world
+                    IntOffset((size.width / 2.0 + dx).toInt(), ((pin.y - cy) * world + size.height / 2.0).toInt())
+                },
             )
         }
         if (pins.none { it.name != null }) {
@@ -378,8 +370,8 @@ private fun Marker(
     selected: Boolean,
     ago: String,
     onClick: () -> Unit,
-    px: Int,
-    py: Int,
+    /** Where the point is on screen; read while laying out, so moving the map does not recompose. */
+    position: () -> IntOffset,
     onChat: (() -> Unit)? = null,
     onCall: ((video: Boolean) -> Unit)? = null,
 ) {
@@ -389,7 +381,8 @@ private fun Marker(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.layout { measurable, constraints ->
             val p = measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
-            layout(0, 0) { p.place(px - p.width / 2, py - p.height + anchor.roundToPx()) }
+            val at = position()
+            layout(0, 0) { p.place(at.x - p.width / 2, at.y - p.height + anchor.roundToPx()) }
         },
     ) {
         if (selected) {
@@ -456,6 +449,23 @@ private fun Marker(
 }
 
 private data class TileKey(val z: Int, val x: Int, val y: Int)
+
+/** The tiles (x not yet wrapped around the date line, y, zoom level) that cover a view of [size] pixels. */
+private fun visibleTiles(cx: Double, cy: Double, zoom: Double, size: IntSize, tilePx: Float): List<Triple<Int, Int, Int>> {
+    if (size.width == 0) return emptyList()
+    val world = 2.0.pow(zoom) * tilePx
+    val tz = floor(zoom).toInt().coerceIn(MIN_ZOOM.toInt(), MAX_ZOOM.toInt())
+    val n = 1 shl tz
+    val ts = world / n
+    val left = cx * world - size.width / 2.0
+    val top = cy * world - size.height / 2.0
+    return buildList {
+        for (ty in floor(top / ts).toInt()..floor((top + size.height) / ts).toInt()) {
+            if (ty < 0 || ty >= n) continue
+            for (tx in floor(left / ts).toInt()..floor((left + size.width) / ts).toInt()) add(Triple(tx, ty, tz))
+        }
+    }
+}
 
 /** Downloaded map tiles, kept in memory while the Map is open (at most [MAX] of them). */
 private class TileCache {
