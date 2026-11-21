@@ -110,6 +110,8 @@ describe.skipIf(!TEST_DB_URL)("snaps and streaks (PostgreSQL)", () => {
     expect((await upload(alice, connectionId, "video", MP4, "image/jpeg")).statusCode).toBe(415);
     expect((await upload(alice, connectionId, "video", MP4)).statusCode).toBe(201);
     expect((await upload(alice, connectionId, "photo", Buffer.concat([JPEG, Buffer.alloc(7 * 1024 * 1024)]))).statusCode).toBe(413);
+    // Far past the limit the upload is cut off instead of read to the end; still a 413 and no file.
+    expect((await upload(alice, connectionId, "photo", Buffer.concat([JPEG, Buffer.alloc(13 * 1024 * 1024)]))).statusCode).toBe(413);
     const carol = await login("carol");
     expect((await upload(carol, connectionId, "photo", JPEG)).statusCode).toBe(404);
     // Refused uploads leave no file behind.

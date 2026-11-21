@@ -2,8 +2,7 @@ import { randomUUID } from "node:crypto";
 import { createWriteStream } from "node:fs";
 import { mkdir, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { Transform, type Readable } from "node:stream";
-import { pipeline } from "node:stream/promises";
+import type { Readable } from "node:stream";
 import type { PrismaClient } from "../generated/prisma/client.js";
 import { AppError, appError } from "../errors.js";
 import type { PushService } from "../push/service.js";
@@ -21,6 +20,8 @@ export const SNAP_POLICY = {
   maxPhotoBytes: 6 * 1024 * 1024,
   /** A 7 s video from the phone's camera at a modest bit rate (the app records at most 7 s). */
   maxVideoBytes: 20 * 1024 * 1024,
+  /** An upload over the limit is read and dropped up to this many times the limit, then no longer read. */
+  drainFactor: 2,
   /** Unopened snaps are deleted after this long (as messages are, D-02). */
   lifetimeMs: 24 * 60 * 60 * 1000,
   sendsPerMinute: 20,
@@ -77,22 +78,13 @@ export class SnapService {
     const recipientUserId = connection.userAId === userId ? connection.userBId : connection.userAId;
     const id = randomUUID();
     const max = kind === "photo" ? SNAP_POLICY.maxPhotoBytes : SNAP_POLICY.maxVideoBytes;
-    let size = 0;
     let head = Buffer.alloc(0);
-    // Past the limit the rest of the body is read and dropped (not written), so the client always gets a
-    // clean 413 instead of a connection cut in the middle of its upload.
-    const counter = new Transform({
-      transform(chunk: Buffer, _enc, cb) {
-        size += chunk.length;
-        if (size > max) return cb();
-        if (head.length < 12) head = Buffer.concat([head, chunk.subarray(0, 12 - head.length)]);
-        cb(null, chunk);
-      },
-    });
     const path = join(dir, `${id}.snap`);
     try {
       await mkdir(dir, { recursive: true });
-      await pipeline(body, counter, createWriteStream(path, { mode: 0o600 }));
+      const size = await saveUpload(body, path, max, (chunk) => {
+        if (head.length < 12) head = Buffer.concat([head, chunk.subarray(0, 12 - head.length)]);
+      });
       if (size > max) throw new AppError(413, "PAYLOAD_TOO_LARGE", "The snap is too large.");
       // A JPEG starts FF D8 FF; an MP4 has "ftyp" at byte 4.
       const valid = kind === "photo"
@@ -209,4 +201,44 @@ export class SnapService {
     }
     if (++w.count > SNAP_POLICY.sendsPerMinute) throw appError(429, "RATE_LIMITED");
   }
+}
+
+/**
+ * Writes [body] to [path] (mode 0600), at most [max] bytes, and returns how many bytes the client sent.
+ * Past [max] the rest is read and dropped, so the client gets a clean 413 instead of a cut connection. Past
+ * [SNAP_POLICY.drainFactor] times [max] (a body no app sends) reading stops, so nobody can keep the server
+ * busy forever (audit 2026-11-21, L-1); the caller answers 413 and the connection is closed after it.
+ */
+function saveUpload(body: Readable, path: string, max: number, onKept: (chunk: Buffer) => void): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const out = createWriteStream(path, { mode: 0o600 });
+    let size = 0;
+    let settled = false;
+    const finish = (err?: unknown) => {
+      if (settled) return;
+      settled = true;
+      if (err) reject(err instanceof Error ? err : new Error(String(err)));
+      else resolve(size);
+    };
+    const onData = (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > max * SNAP_POLICY.drainFactor) {
+        // Stop reading without destroying the request, as Fastify does for its own body limit.
+        body.off("data", onData);
+        body.pause();
+        out.end(() => finish());
+        return;
+      }
+      if (size > max) return;
+      onKept(chunk);
+      if (!out.write(chunk)) {
+        body.pause();
+        out.once("drain", () => body.resume());
+      }
+    };
+    out.on("error", finish);
+    body.on("error", finish);
+    body.on("data", onData);
+    body.on("end", () => out.end(() => finish()));
+  });
 }
