@@ -13,6 +13,7 @@ import android.view.WindowManager
 import android.widget.VideoView
 import androidx.activity.compose.BackHandler
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.FocusMeteringAction
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
@@ -45,6 +46,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
@@ -75,6 +77,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -85,7 +88,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -105,6 +111,8 @@ import app.vaultchat.ui.permissions.rememberPermissionRequest
 import app.vaultchat.ui.theme.VaultGreen
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.util.concurrent.TimeUnit
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -144,8 +152,11 @@ fun SnapCameraScreen(
     var recipients by remember { mutableStateOf<List<Connection>>(emptyList()) }
     LaunchedEffect(Unit) { recipients = loadRecipients() }
     var picking by remember { mutableStateOf(false) }
+    // Writing or drawing on the photo before sending (owner, 2026-11-21); null while not editing.
+    var editing by remember { mutableStateOf<SnapEditMode?>(null) }
 
     fun discard() {
+        editing = null
         (taken as? Taken.Video)?.file?.delete()
         taken = null
     }
@@ -212,7 +223,18 @@ fun SnapCameraScreen(
                 else -> ReviewView(taken!!)
             }
 
-            if (taken != null) {
+            val photo = taken as? Taken.Photo
+            if (photo != null && editing == null) {
+                // Text and pen for a photo, top right (videos are sent as recorded).
+                Row(
+                    modifier = Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    ReviewTool("Aa", stringResource(R.string.snap_add_text)) { editing = SnapEditMode.TEXT }
+                    ReviewTool("✎", stringResource(R.string.snap_draw)) { editing = SnapEditMode.DRAW }
+                }
+            }
+            if (taken != null && editing == null) {
                 Row(
                     modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().safeDrawingPadding().padding(20.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -252,6 +274,18 @@ fun SnapCameraScreen(
                         else Text(stringResource(R.string.snap_send_to))
                     }
                 }
+            }
+            val mode = editing
+            if (photo != null && mode != null) {
+                SnapEditor(
+                    photo = photo.preview,
+                    startMode = mode,
+                    onDone = { painted ->
+                        editing = null
+                        if (painted != null) scope.launch { taken = withContext(Dispatchers.Default) { encodePhoto(painted) } }
+                    },
+                    onCancel = { editing = null },
+                )
             }
             if (picking) {
                 RecipientPicker(recipients, preselect, onSend = ::sendTo, onDismiss = { picking = false })
@@ -325,6 +359,8 @@ private fun CaptureView(
     var flash by rememberSaveable { mutableStateOf(false) }
     var muted by rememberSaveable { mutableStateOf(false) }
     var screenFlash by remember { mutableStateOf(false) }
+    var focusAt by remember { mutableStateOf<Offset?>(null) }
+    var focusTick by remember { mutableIntStateOf(0) }
     val glowing = screenFlash || (recording != null && flash && front)
     val window = remember(context) { context.findActivity()?.window }
     DisposableEffect(glowing, window) {
@@ -423,15 +459,46 @@ private fun CaptureView(
         // Pinch on the picture to zoom the camera (owner request 2026-11-20), within what the lens allows.
         AndroidView(
             factory = { previewView },
-            modifier = Modifier.fillMaxSize().pointerInput(boundCamera) {
-                detectTransformGestures { _, _, change, _ ->
-                    val cam = boundCamera ?: return@detectTransformGestures
-                    val zoomState = cam.cameraInfo.zoomState.value ?: return@detectTransformGestures
-                    val next = (zoomState.zoomRatio * change).coerceIn(zoomState.minZoomRatio, zoomState.maxZoomRatio)
-                    cam.cameraControl.setZoomRatio(next)
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(boundCamera) {
+                    detectTransformGestures { _, _, change, _ ->
+                        val cam = boundCamera ?: return@detectTransformGestures
+                        val zoomState = cam.cameraInfo.zoomState.value ?: return@detectTransformGestures
+                        val next = (zoomState.zoomRatio * change).coerceIn(zoomState.minZoomRatio, zoomState.maxZoomRatio)
+                        cam.cameraControl.setZoomRatio(next)
+                    }
                 }
-            },
+                .pointerInput(boundCamera) {
+                    detectTapGestures(
+                        // Tap to focus and set the light there (owner, 2026-11-21); a ring shows where.
+                        onTap = { at ->
+                            val cam = boundCamera ?: return@detectTapGestures
+                            val point = previewView.meteringPointFactory.createPoint(at.x, at.y)
+                            val action = FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE)
+                                .setAutoCancelDuration(4, TimeUnit.SECONDS)
+                                .build()
+                            runCatching { cam.cameraControl.startFocusAndMetering(action) }
+                            focusAt = at
+                            focusTick++
+                        },
+                        // Double-tap to switch between the front and back camera, as in Snapchat.
+                        onDoubleTap = { if (recording == null) front = !front },
+                    )
+                },
         )
+        focusAt?.let { at ->
+            LaunchedEffect(focusTick) {
+                delay(900)
+                focusAt = null
+            }
+            Box(
+                Modifier
+                    .offset { IntOffset(at.x.roundToInt() - 36.dp.roundToPx(), at.y.roundToInt() - 36.dp.roundToPx()) }
+                    .size(72.dp)
+                    .border(2.dp, Color.White, CircleShape),
+            )
+        }
         Column(
             modifier = Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(bottom = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -545,7 +612,11 @@ private fun toUprightJpeg(raw: Bitmap, rotation: Int, mirror: Boolean): Taken.Ph
         // A front-camera photo comes out as the preview showed it (mirrored), as in Snapchat (owner, 2026-11-19).
         if (mirror) postScale(-1f, 1f)
     }
-    val upright = Bitmap.createBitmap(raw, 0, 0, raw.width, raw.height, matrix, true)
+    return encodePhoto(Bitmap.createBitmap(raw, 0, 0, raw.width, raw.height, matrix, true))
+}
+
+/** A JPEG of [upright] for sending, with the bitmap kept for the preview. */
+private fun encodePhoto(upright: Bitmap): Taken.Photo {
     // High JPEG quality; lowered step by step only if a very detailed photo would pass the server's limit.
     var bytes = ByteArray(0)
     for (quality in intArrayOf(95, 90, 85, 75, 65)) {
@@ -555,6 +626,21 @@ private fun toUprightJpeg(raw: Bitmap, rotation: Int, mirror: Boolean): Taken.Ph
         if (bytes.size <= PHOTO_MAX_BYTES) break
     }
     return Taken.Photo(bytes, upright)
+}
+
+/** A round button over the photo before sending: "Aa" for text, the pen for drawing. */
+@Composable
+private fun ReviewTool(label: String, description: String, onClick: () -> Unit) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(46.dp)
+            .clip(CircleShape)
+            .background(VaultGreen.Deepest.copy(alpha = 0.55f))
+            .clickable(role = Role.Button, onClickLabel = description, onClick = onClick),
+    ) {
+        Text(label, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+    }
 }
 
 @Composable

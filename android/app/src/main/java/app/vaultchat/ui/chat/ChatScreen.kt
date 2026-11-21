@@ -135,6 +135,10 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import kotlinx.coroutines.launch
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlin.math.roundToInt
 import app.vaultchat.R
 import app.vaultchat.domain.chat.EmojiEffects
 import kotlinx.coroutines.delay
@@ -695,6 +699,14 @@ private fun MessageList(
 ) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
+    val density = LocalDensity.current
+    // Swipe a message to the right to reply (owner 2026-11-21, like WhatsApp): it follows the finger up to
+    // [SWIPE_MAX], and past [SWIPE_REPLY] a light tick says letting go will reply.
+    val swipeReplyPx = with(density) { SWIPE_REPLY.toPx() }
+    val swipeMaxPx = with(density) { SWIPE_MAX.toPx() }
+    // The message a tapped quote jumped to, lit up for a moment.
+    var highlighted by remember { mutableStateOf<String?>(null) }
     val total = messages.size + outgoing.size
     // The list's last row: the "typing" bubble when it shows, else the newest message.
     val lastIndex = total - 1 + if (peerTyping) 1 else 0
@@ -768,8 +780,47 @@ private fun MessageList(
                         val onThis = reactions[m.id].orEmpty()
                         val quoted = m.replyToId?.let { id -> messages.find { it.id == id } }
                         var picking by remember { mutableStateOf(false) }
+                        val swipe = remember { Animatable(0f) }
+                        val glow by animateColorAsState(
+                            if (highlighted == m.id) Ref.PrimaryContainer else Color.Transparent,
+                            animationSpec = tween(400),
+                            label = "highlight",
+                        )
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                        // The reply arrow that appears behind a message as it is swiped.
+                        Icon(
+                            AppIcons.Reply,
+                            contentDescription = null,
+                            tint = Ref.Primary,
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .size(22.dp)
+                                .graphicsLayer { alpha = (swipe.value / swipeReplyPx).coerceIn(0f, 1f) },
+                        )
                         Column(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .offset { IntOffset(swipe.value.roundToInt(), 0) }
+                                .pointerInput(m.id) {
+                                    var ticked = false
+                                    detectHorizontalDragGestures(
+                                        onDragStart = { ticked = false },
+                                        onDragEnd = {
+                                            if (swipe.value >= swipeReplyPx) onReply(m)
+                                            scope.launch { swipe.animateTo(0f, tween(180)) }
+                                        },
+                                        onDragCancel = { scope.launch { swipe.animateTo(0f, tween(180)) } },
+                                    ) { change, amount ->
+                                        val next = (swipe.value + amount).coerceIn(0f, swipeMaxPx)
+                                        if (next > 0f || swipe.value > 0f) change.consume()
+                                        scope.launch { swipe.snapTo(next) }
+                                        if (!ticked && next >= swipeReplyPx) {
+                                            ticked = true
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        }
+                                    }
+                                }
+                                .background(glow, RoundedCornerShape(12.dp)),
                             horizontalAlignment = if (mine) Alignment.End else Alignment.Start,
                             verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
@@ -777,10 +828,31 @@ private fun MessageList(
                                 QuotedMessage(
                                     who = if (quoted.senderId == myUserId) stringResource(R.string.chat_you) else peerUsername,
                                     text = if (quoted.kind == MessageKind.MISSED_CALL) stringResource(R.string.chat_missed_call_short) else quoted.text,
+                                    onClick = {
+                                        // Tap a quote to go to the message it answers, lit up for a moment.
+                                        val target = messages.indexOfFirst { it.id == quoted.id }
+                                        if (target >= 0) {
+                                            scope.launch {
+                                                listState.animateScrollToItem(target)
+                                                highlighted = quoted.id
+                                                delay(1_600)
+                                                if (highlighted == quoted.id) highlighted = null
+                                            }
+                                        }
+                                    },
                                 )
                             }
                             Box {
-                                Bubble(m.text, mine = mine, onLongPress = { picking = true })
+                                Bubble(
+                                    m.text,
+                                    mine = mine,
+                                    onLongPress = { picking = true },
+                                    // Double-tap for a quick ❤️ (owner 2026-11-21); again takes it away.
+                                    onDoubleTap = {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        onReact(m.id, QUICK_REACTIONS.first())
+                                    },
+                                )
                                 if (picking) {
                                     ReactionPicker(
                                         chosen = onThis.find { it.userId == myUserId }?.emoji,
@@ -806,6 +878,7 @@ private fun MessageList(
                                     else -> MetaStatus.SENT
                                 },
                             )
+                        }
                         }
                     }
                 }
@@ -901,13 +974,14 @@ private fun MetaRow(time: String, status: MetaStatus?) {
 
 /** The message a reply answers, shown small above its bubble: who wrote it and its first line. */
 @Composable
-private fun QuotedMessage(who: String, text: String) {
+private fun QuotedMessage(who: String, text: String, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .widthIn(max = 290.dp)
             .padding(bottom = 2.dp)
             .clip(RoundedCornerShape(10.dp))
             .background(Ref.Container)
+            .clickable(onClickLabel = stringResource(R.string.chat_go_to_message), onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 6.dp),
     ) {
         Text(who, style = MaterialTheme.typography.labelSmall, color = Ref.Primary)
@@ -966,6 +1040,7 @@ private fun Bubble(
     faded: Boolean = false,
     failed: Boolean = false,
     onLongPress: (() -> Unit)? = null,
+    onDoubleTap: (() -> Unit)? = null,
 ) {
     val shape = if (mine) {
         RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp)
@@ -973,7 +1048,12 @@ private fun Bubble(
         RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 16.dp)
     }
     val press = if (onLongPress != null) {
-        Modifier.combinedClickable(onClick = {}, onLongClickLabel = stringResource(R.string.chat_react), onLongClick = onLongPress)
+        Modifier.combinedClickable(
+            onClick = {},
+            onLongClickLabel = stringResource(R.string.chat_react),
+            onLongClick = onLongPress,
+            onDoubleClick = onDoubleTap,
+        )
     } else {
         Modifier
     }
@@ -1213,3 +1293,7 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     is ContextWrapper -> baseContext.findActivity()
     else -> null
 }
+
+/** How far a message is swiped before letting go replies to it, and how far it follows the finger. */
+private val SWIPE_REPLY = 56.dp
+private val SWIPE_MAX = 80.dp

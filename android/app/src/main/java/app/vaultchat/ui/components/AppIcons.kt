@@ -82,6 +82,11 @@ object AppIcons {
         icon("Download", "M19,9h-4V3H9v6H5l7,7 7,-7zM5,18v2h14v-2H5z")
     }
 
+    /** Material "reply" (swipe a message to reply). */
+    val Reply: ImageVector by lazy {
+        icon("Reply", "M10,9V5l-7,7 7,7v-4.1c5,0 8.5,1.6 11,5.1 -1,-5 -4,-10 -11,-11z")
+    }
+
     /** Material "flash_on" (snap camera). */
     val FlashOn: ImageVector by lazy {
         icon("FlashOn", "M7,2v11h3v9l7,-12h-4l4,-8z")

@@ -368,6 +368,16 @@ fun VaultChatNavHost(container: AppContainer) {
                 api = container.locationApi,
                 onChat = { navController.popBackStack() },
                 onCamera = { navController.navigate(SnapCameraRoute()) },
+                // A person's marker opens their chat or calls them (owner, 2026-11-21).
+                onOpenChat = { connectionId ->
+                    scope.launch {
+                        val c = (container.connectionRepository.connections() as? ConnResult.Ok)?.value?.find { it.id == connectionId }
+                        if (c != null) navController.navigate(ChatRoute(c.conversationId, c.peerUsername, c.id))
+                    }
+                },
+                onCallPerson = { connectionId, username, video ->
+                    navController.navigate(CallRoute(video = video, peerUsername = username, connectionId = connectionId))
+                },
             )
         }
         composable<SnapCameraRoute> { entry ->
