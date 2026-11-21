@@ -33,6 +33,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,6 +68,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.vaultchat.R
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** What the editor is doing: writing the caption or drawing with the pen. */
 enum class SnapEditMode { TEXT, DRAW }
@@ -102,6 +106,8 @@ fun SnapEditor(photo: Bitmap, startMode: SnapEditMode, onDone: (Bitmap?) -> Unit
     var current by remember { mutableStateOf<List<Offset>>(emptyList()) }
     var penColor by remember { mutableStateOf(PenColors[0]) }
     var box by remember { mutableStateOf(IntSize.Zero) }
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
     // Where the photo sits on screen (fitted, centred).
     val rect = remember(box, photo) {
         if (box.width == 0) {
@@ -198,8 +204,18 @@ fun SnapEditor(photo: Bitmap, startMode: SnapEditMode, onDone: (Bitmap?) -> Unit
             EditorButton("Aa", stringResource(R.string.snap_add_text), active = mode == SnapEditMode.TEXT, onClick = { mode = SnapEditMode.TEXT })
             EditorButton("✎", stringResource(R.string.snap_draw), active = mode == SnapEditMode.DRAW, onClick = { mode = SnapEditMode.DRAW })
             EditorButton("✓", stringResource(R.string.snap_edit_done), active = true, onClick = {
+                if (busy) return@EditorButton
                 val text = caption.trim()
-                onDone(if (text.isEmpty() && lines.isEmpty()) null else paint(photo, text, captionY, lines))
+                if (text.isEmpty() && lines.isEmpty()) {
+                    onDone(null)
+                } else {
+                    // Painting into a full-size photo takes a moment: off the main thread, so the screen
+                    // never freezes (audit 2026-11-21, Q-1).
+                    busy = true
+                    val snapshot = lines.toList()
+                    val y = captionY
+                    scope.launch { onDone(withContext(Dispatchers.Default) { paint(photo, text, y, snapshot) }) }
+                }
             })
         }
         // Pen colours down the right side while drawing.

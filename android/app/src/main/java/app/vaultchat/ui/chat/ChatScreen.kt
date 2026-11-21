@@ -46,7 +46,7 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -769,8 +769,8 @@ private fun MessageList(
         modifier = Modifier.fillMaxSize().background(Ref.Surface),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
     ) {
-        items(messages, key = { it.id }) { m ->
-            val index = messages.indexOf(m)
+        // Indexed items: each row knows its place without searching the whole list (audit 2026-11-21, Q-2).
+        itemsIndexed(messages, key = { _, it -> it.id }) { index, m ->
             val prev = messages.getOrNull(index - 1)
             // Messages one person sends close together sit together, and only the last shows the time
             // (owner 2026-11-21, like iMessage).
@@ -899,9 +899,9 @@ private fun MessageList(
                 }
             }
         }
-        items(outgoing, key = { it.clientMessageId }) { o ->
+        itemsIndexed(outgoing, key = { _, it -> it.clientMessageId }) { oIndex, o ->
             val sending = o.status == OutgoingStatus.SENDING
-            val afterMine = outgoing.indexOf(o) > 0 || messages.lastOrNull()?.senderId == myUserId
+            val afterMine = oIndex > 0 || messages.lastOrNull()?.senderId == myUserId
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -912,7 +912,7 @@ private fun MessageList(
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Bubble(o.text, mine = true, faded = sending, failed = !sending, tail = o == outgoing.last())
+                Bubble(o.text, mine = true, faded = sending, failed = !sending, tail = oIndex == outgoing.lastIndex)
                 if (sending) {
                     Text(stringResource(R.string.chat_sending), color = Ref.OnSurfaceVariant, fontSize = 11.sp, lineHeight = 14.sp, modifier = Modifier.padding(horizontal = 4.dp))
                 } else {
