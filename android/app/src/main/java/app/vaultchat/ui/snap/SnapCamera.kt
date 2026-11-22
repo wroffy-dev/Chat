@@ -1,5 +1,7 @@
 package app.vaultchat.ui.snap
 
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.Spacer
 import app.vaultchat.ui.components.InitialsAvatar
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.animation.AnimatedVisibility
@@ -691,9 +693,22 @@ private fun CaptureView(
                 )
             }
         }
+        // Bottom controls (owner 2026-11-22: they overlapped): the zoom pill and a short-lived hint stack above one
+        // row in which the gallery sits level with the shutter, so nothing can cover anything else.
+        var hintShown by remember { mutableStateOf(true) }
+        LaunchedEffect(Unit) {
+            delay(4_000)
+            hintShown = false
+        }
         Column(
-            modifier = Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(bottom = 28.dp).staggeredAppear(1),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .safeDrawingPadding()
+                .padding(start = 20.dp, end = 20.dp, bottom = 28.dp)
+                .staggeredAppear(1),
             horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             // The zoom level, while it is not 1x; tap it to go back to 1x.
             AnimatedVisibility(
@@ -706,7 +721,6 @@ private fun CaptureView(
                     style = MaterialTheme.typography.labelLarge,
                     color = Color.White,
                     modifier = Modifier
-                        .padding(bottom = 12.dp)
                         .cameraGlass(CircleShape, on = false)
                         .clickable(role = Role.Button) {
                             val cam = boundCamera ?: return@clickable
@@ -717,99 +731,136 @@ private fun CaptureView(
                         .padding(horizontal = 14.dp, vertical = 8.dp),
                 )
             }
-            // While recording: a breathing red dot and the time; otherwise the hint.
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.cameraGlass(CircleShape, on = false).padding(horizontal = 14.dp, vertical = 7.dp),
+            // While recording: a breathing red dot and the time. Otherwise the hint, which fades after a few seconds,
+            // and the night-mode note, which stays while it applies.
+            AnimatedVisibility(
+                visible = recording != null || nightPhotoOnly || hintShown,
+                enter = fadeIn() + scaleIn(initialScale = 0.9f),
+                exit = fadeOut() + scaleOut(targetScale = 0.9f),
             ) {
-                if (recording != null) {
-                    RecordingDot()
-                    Text(String.format(Locale.US, "0:%02d", SnapRules.MAX_VIDEO_SECONDS - secondsLeft), style = MaterialTheme.typography.labelLarge, color = Color.White)
-                } else {
-                    Text(
-                        if (nightPhotoOnly) stringResource(R.string.snap_night_photos_only) else stringResource(R.string.snap_hint, SnapRules.MAX_VIDEO_SECONDS),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = Color.White,
-                    )
-                }
-            }
-            // The shutter: a white ring around a white disc. The disc dips under the finger; while a video records it
-            // shrinks into a red rounded square and a red arc runs round the ring for the time allowed.
-            val recordingNow = recording != null
-            val progress = remember { Animatable(0f) }
-            LaunchedEffect(recordingNow) {
-                if (recordingNow) {
-                    progress.snapTo(0f)
-                    progress.animateTo(1f, tween(SnapRules.MAX_VIDEO_SECONDS * 1000, easing = LinearEasing))
-                } else {
-                    progress.snapTo(0f)
-                }
-            }
-            val discScale by animateFloatAsState(
-                when {
-                    recordingNow -> 0.56f
-                    shutterDown -> 0.86f
-                    else -> 1f
-                },
-                spring(dampingRatio = 0.55f, stiffness = 600f),
-                label = "shutterDisc",
-            )
-            val discColor by animateColorAsState(if (recordingNow) RecordRed else Color.White, label = "shutterColor")
-            val corner by animateIntAsState(if (recordingNow) 28 else 50, label = "shutterCorner")
-            val error = RecordRed
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .padding(top = 16.dp)
-                    .size(84.dp)
-                    .drawBehind {
-                        val stroke = 5.dp.toPx()
-                        val inset = stroke / 2f
-                        drawCircle(Color.White.copy(alpha = 0.92f), radius = size.minDimension / 2f - inset, style = Stroke(stroke))
-                        val p = progress.value
-                        if (p > 0f) {
-                            drawArc(
-                                error,
-                                startAngle = -90f,
-                                sweepAngle = 360f * p,
-                                useCenter = false,
-                                topLeft = Offset(inset, inset),
-                                size = Size(size.width - stroke, size.height - stroke),
-                                style = Stroke(stroke, cap = StrokeCap.Round),
-                            )
-                        }
-                    }
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onTap = {
-                                // One photo at a time; a second tap while it is being made does nothing.
-                                if (taking) return@detectTapGestures
-                                taking = true
-                                takePhoto()
-                            },
-                            onLongPress = { if (!nightPhotoOnly) startVideo() },
-                            onPress = {
-                                shutterDown = true
-                                tryAwaitRelease()
-                                shutterDown = false
-                                recording?.stop()
-                            },
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .widthIn(max = 300.dp)
+                        .cameraGlass(RoundedCornerShape(20.dp), on = false)
+                        .padding(horizontal = 14.dp, vertical = 7.dp),
+                ) {
+                    if (recording != null) {
+                        RecordingDot()
+                        Text(String.format(Locale.US, "0:%02d", SnapRules.MAX_VIDEO_SECONDS - secondsLeft), style = MaterialTheme.typography.labelLarge, color = Color.White)
+                    } else {
+                        Text(
+                            if (nightPhotoOnly) stringResource(R.string.snap_night_photos_only) else stringResource(R.string.snap_hint, SnapRules.MAX_VIDEO_SECONDS),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color.White,
+                            textAlign = TextAlign.Center,
                         )
                     }
-                    .semantics { contentDescription = context.getString(R.string.snap_hint, SnapRules.MAX_VIDEO_SECONDS) },
-            ) {
-                Box(
-                    Modifier
-                        .size(64.dp)
-                        .graphicsLayer {
-                            scaleX = discScale
-                            scaleY = discScale
+                }
+            }
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                // Gallery: a photo or a video (up to 30 s) (owner, 2026-11-21), level with the shutter, as in Snapchat.
+                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    // Fades out (and stops taking taps) while a video records.
+                    val idle = recording == null
+                    val shown by animateFloatAsState(if (idle) 1f else 0f, label = "galleryShown")
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .graphicsLayer { alpha = shown }
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable(enabled = idle, role = Role.Button, onClickLabel = stringResource(R.string.snap_gallery), onClick = onGallery)
+                            .padding(6.dp),
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.size(48.dp).cameraGlass(RoundedCornerShape(14.dp), on = false),
+                        ) {
+                            Icon(AppIcons.Gallery, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
                         }
-                        .clip(RoundedCornerShape(corner))
-                        .background(discColor)
-                        .glossy(RoundedCornerShape(corner), strength = 0.5f),
+                        Text(stringResource(R.string.snap_gallery), color = Color.White, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 4.dp))
+                    }
+                }
+                // The shutter: a white ring around a white disc. The disc dips under the finger; while a video records it
+                // shrinks into a red rounded square and a red arc runs round the ring for the time allowed.
+                val recordingNow = recording != null
+                val progress = remember { Animatable(0f) }
+                LaunchedEffect(recordingNow) {
+                    if (recordingNow) {
+                        progress.snapTo(0f)
+                        progress.animateTo(1f, tween(SnapRules.MAX_VIDEO_SECONDS * 1000, easing = LinearEasing))
+                    } else {
+                        progress.snapTo(0f)
+                    }
+                }
+                val discScale by animateFloatAsState(
+                    when {
+                        recordingNow -> 0.56f
+                        shutterDown -> 0.86f
+                        else -> 1f
+                    },
+                    spring(dampingRatio = 0.55f, stiffness = 600f),
+                    label = "shutterDisc",
                 )
+                val discColor by animateColorAsState(if (recordingNow) RecordRed else Color.White, label = "shutterColor")
+                val corner by animateIntAsState(if (recordingNow) 28 else 50, label = "shutterCorner")
+                val error = RecordRed
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier
+                        .padding(top = 16.dp)
+                        .size(84.dp)
+                        .drawBehind {
+                            val stroke = 5.dp.toPx()
+                            val inset = stroke / 2f
+                            drawCircle(Color.White.copy(alpha = 0.92f), radius = size.minDimension / 2f - inset, style = Stroke(stroke))
+                            val p = progress.value
+                            if (p > 0f) {
+                                drawArc(
+                                    error,
+                                    startAngle = -90f,
+                                    sweepAngle = 360f * p,
+                                    useCenter = false,
+                                    topLeft = Offset(inset, inset),
+                                    size = Size(size.width - stroke, size.height - stroke),
+                                    style = Stroke(stroke, cap = StrokeCap.Round),
+                                )
+                            }
+                        }
+                        .pointerInput(Unit) {
+                            detectTapGestures(
+                                onTap = {
+                                    // One photo at a time; a second tap while it is being made does nothing.
+                                    if (taking) return@detectTapGestures
+                                    taking = true
+                                    takePhoto()
+                                },
+                                onLongPress = { if (!nightPhotoOnly) startVideo() },
+                                onPress = {
+                                    shutterDown = true
+                                    tryAwaitRelease()
+                                    shutterDown = false
+                                    recording?.stop()
+                                },
+                            )
+                        }
+                        .semantics { contentDescription = context.getString(R.string.snap_hint, SnapRules.MAX_VIDEO_SECONDS) },
+                ) {
+                    Box(
+                        Modifier
+                            .size(64.dp)
+                            .graphicsLayer {
+                                scaleX = discScale
+                                scaleY = discScale
+                            }
+                            .clip(RoundedCornerShape(corner))
+                            .background(discColor)
+                            .glossy(RoundedCornerShape(corner), strength = 0.5f),
+                    )
+                }
+                // Balances the gallery, so the shutter stays in the middle.
+                Spacer(Modifier.weight(1f))
             }
         }
         // Front camera video with flash: a warm white glow around the picture lights the face.
@@ -851,32 +902,6 @@ private fun CaptureView(
                 enabled = recording == null,
                 onClick = { if (!withAudio) onWantAudio() else muted = !muted },
             )
-        }
-        // Pick a photo or a video (up to 30 s) from the gallery (owner, 2026-11-21), bottom left as in Snapchat.
-        AnimatedVisibility(
-            visible = recording == null,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.align(Alignment.BottomStart),
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .safeDrawingPadding()
-                    .padding(start = 28.dp, bottom = 64.dp)
-                    .staggeredAppear(2)
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable(role = Role.Button, onClickLabel = stringResource(R.string.snap_gallery), onClick = onGallery)
-                    .padding(6.dp),
-            ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.size(48.dp).cameraGlass(RoundedCornerShape(14.dp), on = false),
-                ) {
-                    Icon(AppIcons.Gallery, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
-                }
-                Text(stringResource(R.string.snap_gallery), color = Color.White, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 4.dp))
-            }
         }
         // Front camera photo with flash: the whole screen white until the photo is taken.
         if (screenFlash) {
