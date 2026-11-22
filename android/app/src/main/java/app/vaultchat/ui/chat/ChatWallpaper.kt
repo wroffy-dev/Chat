@@ -35,7 +35,8 @@ import kotlin.random.Random
 /**
  * The chat's background (owner 2026-11-22, in the spirit of a doodle wallpaper): the screen colour with a very
  * light pattern of small line drawings about chatting and love — hearts, chat bubbles, stars, a moon,
- * flowers, smileys, sparkles, a letter and music notes — in the app's green. The pattern is drawn once into
+ * flowers, smileys, sparkles, a letter, music notes, a cup, a camera, a paper plane, a balloon — with mini
+ * doodles in between (owner 2026-11-22: denser, smaller gaps), in the app's green. The pattern is drawn once into
  * one tile and repeated, so it costs nothing while scrolling. It is the app's own drawing, not a copy of
  * another app's wallpaper.
  */
@@ -54,36 +55,83 @@ fun Modifier.chatWallpaper(): Modifier {
     }
 }
 
-private enum class Doodle { HEART, BUBBLE, STAR, MOON, FLOWER, SMILEY, SPARKLE, LETTER, NOTE, DOTS, TWO_HEARTS, CHAT_DOTS }
+private enum class Doodle {
+    HEART, BUBBLE, STAR, MOON, FLOWER, SMILEY, SPARKLE, LETTER, NOTE, CUP, TWO_HEARTS, CHAT_DOTS, CAMERA, PLANE, BALLOON, SQUIGGLE,
+}
 
-/** One square tile of the pattern; a grid with jitter keeps every drawing inside its cell, so tiles meet without seams. */
+/** Tiny shapes that fill the gaps between the doodles (owner 2026-11-22: fewer empty spaces). */
+private enum class Mini { HEART, PLUS, SPARKLE, RING, DOT, WAVE }
+
+/**
+ * One tile of the pattern: a grid of cells, each with one doodle near its middle (jittered and turned a little)
+ * and one or two mini doodles in its corners. Everything stays inside its own cell, so tiles meet without seams.
+ */
 private fun doodleTile(ink: Color, density: Density): ImageBitmap {
-    val cell = with(density) { 64.dp.toPx() }
-    val columns = 5
-    val rows = 6
+    val cell = with(density) { 48.dp.toPx() }
+    val columns = 6
+    val rows = 7
     val tile = ImageBitmap((cell * columns).toInt(), (cell * rows).toInt())
-    val stroke = Stroke(width = with(density) { 1.6.dp.toPx() }, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    val stroke = Stroke(width = with(density) { 1.5.dp.toPx() }, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    val thin = Stroke(width = with(density) { 1.2.dp.toPx() }, cap = StrokeCap.Round, join = StrokeJoin.Round)
     val random = Random(20261122)
     val kinds = Doodle.entries
+    val minis = Mini.entries
     CanvasDrawScope().draw(density, LayoutDirection.Ltr, Canvas(tile), Size(tile.width.toFloat(), tile.height.toFloat())) {
         var k = 0
         for (r in 0 until rows) {
             for (c in 0 until columns) {
-                val size = cell * (0.40f + random.nextFloat() * 0.12f)
-                val room = (cell - size) / 2
-                val x = c * cell + cell / 2 + (random.nextFloat() - 0.5f) * room
-                val y = r * cell + cell / 2 + (random.nextFloat() - 0.5f) * room
+                val left = c * cell
+                val top = r * cell
+                val size = cell * (0.50f + random.nextFloat() * 0.10f)
+                val room = (cell - size) * 0.35f
+                val x = left + cell / 2 + (random.nextFloat() - 0.5f) * room
+                val y = top + cell / 2 + (random.nextFloat() - 0.5f) * room
                 val angle = (random.nextFloat() - 0.5f) * 50f
                 // Every kind in turn, starting at a different one on each row, so neighbours differ.
-                val kind = kinds[(k + r * 5) % kinds.size]
+                val kind = kinds[(k + r * 7) % kinds.size]
                 k++
                 translate(x, y) {
                     rotate(angle, pivot = Offset.Zero) { drawDoodle(kind, size, ink, stroke) }
+                }
+                // Minis in the cell's corners: always the top left, often the bottom right.
+                val mini = cell * 0.15f
+                val corners = buildList {
+                    add(Offset(left + cell * (0.10f + random.nextFloat() * 0.06f), top + cell * (0.10f + random.nextFloat() * 0.06f)))
+                    if (random.nextFloat() < 0.7f) add(Offset(left + cell * (0.84f + random.nextFloat() * 0.06f), top + cell * (0.84f + random.nextFloat() * 0.06f)))
+                }
+                corners.forEach { at ->
+                    val m = minis[random.nextInt(minis.size)]
+                    translate(at.x, at.y) {
+                        rotate((random.nextFloat() - 0.5f) * 60f, pivot = Offset.Zero) { drawMini(m, mini, ink, thin) }
+                    }
                 }
             }
         }
     }
     return tile
+}
+
+/** Draws one mini doodle about [s] pixels across, centred on (0, 0). */
+private fun DrawScope.drawMini(kind: Mini, s: Float, ink: Color, stroke: Stroke) {
+    val h = s / 2
+    when (kind) {
+        Mini.HEART -> drawPath(heart(h), ink)
+        Mini.PLUS -> {
+            drawLine(ink, Offset(-h, 0f), Offset(h, 0f), stroke.width, StrokeCap.Round)
+            drawLine(ink, Offset(0f, -h), Offset(0f, h), stroke.width, StrokeCap.Round)
+        }
+        Mini.SPARKLE -> drawPath(star(h, h * 0.3f, 4), ink)
+        Mini.RING -> drawCircle(ink, radius = h * 0.75f, center = Offset.Zero, style = stroke)
+        Mini.DOT -> drawCircle(ink, radius = h * 0.45f, center = Offset.Zero)
+        Mini.WAVE -> {
+            val path = Path().apply {
+                moveTo(-h * 1.2f, 0f)
+                quadraticTo(-h * 0.6f, -h * 0.8f, 0f, 0f)
+                quadraticTo(h * 0.6f, h * 0.8f, h * 1.2f, 0f)
+            }
+            drawPath(path, ink, style = stroke)
+        }
+    }
 }
 
 /** Draws one doodle about [s] pixels across, centred on (0, 0). */
@@ -154,10 +202,52 @@ private fun DrawScope.drawDoodle(kind: Doodle, s: Float, ink: Color, stroke: Str
             }
             drawPath(beam, ink, style = stroke)
         }
-        Doodle.DOTS -> {
-            drawCircle(ink, radius = h * 0.16f, center = Offset(-h * 0.5f, -h * 0.3f))
-            drawCircle(ink, radius = h * 0.11f, center = Offset(h * 0.4f, -h * 0.55f))
-            drawCircle(ink, radius = h * 0.22f, center = Offset(h * 0.2f, h * 0.45f), style = stroke)
+        Doodle.CUP -> {
+            drawRoundRect(ink, Offset(-h * 0.7f, -h * 0.15f), Size(h * 1.15f, h * 1.0f), CornerRadius(h * 0.18f), style = stroke)
+            drawArc(ink, -90f, 180f, false, Offset(h * 0.2f, h * 0.05f), Size(h * 0.6f, h * 0.55f), style = stroke)
+            for (dx in listOf(-h * 0.35f, 0f)) {
+                val steam = Path().apply {
+                    moveTo(dx, -h * 0.35f)
+                    quadraticTo(dx - h * 0.18f, -h * 0.6f, dx, -h * 0.8f)
+                    quadraticTo(dx + h * 0.18f, -h * 1.0f, dx, -h * 1.1f)
+                }
+                drawPath(steam, ink, style = stroke)
+            }
+        }
+        Doodle.CAMERA -> {
+            drawRoundRect(ink, Offset(-h, -h * 0.45f), Size(s, h * 1.2f), CornerRadius(h * 0.22f), style = stroke)
+            drawRoundRect(ink, Offset(-h * 0.35f, -h * 0.72f), Size(h * 0.7f, h * 0.27f), CornerRadius(h * 0.08f), style = stroke)
+            drawCircle(ink, radius = h * 0.36f, center = Offset(0f, h * 0.15f), style = stroke)
+        }
+        Doodle.PLANE -> {
+            // A paper plane, the "send" sign.
+            val plane = Path().apply {
+                moveTo(-h, h * 0.05f)
+                lineTo(h, -h * 0.75f)
+                lineTo(h * 0.25f, h * 0.75f)
+                lineTo(-h * 0.05f, h * 0.15f)
+                close()
+            }
+            drawPath(plane, ink, style = stroke)
+            drawLine(ink, Offset(-h * 0.05f, h * 0.15f), Offset(h, -h * 0.75f), stroke.width, StrokeCap.Round)
+        }
+        Doodle.BALLOON -> {
+            drawOval(ink, Offset(-h * 0.6f, -h), Size(h * 1.2f, h * 1.45f), style = stroke)
+            val string = Path().apply {
+                moveTo(0f, h * 0.45f)
+                quadraticTo(-h * 0.25f, h * 0.7f, 0f, h * 0.85f)
+                quadraticTo(h * 0.25f, h * 1.0f, 0f, h * 1.1f)
+            }
+            drawPath(string, ink, style = stroke)
+        }
+        Doodle.SQUIGGLE -> {
+            val path = Path().apply {
+                moveTo(-h, h * 0.2f)
+                quadraticTo(-h * 0.5f, -h * 0.6f, 0f, 0f)
+                quadraticTo(h * 0.5f, h * 0.6f, h, -h * 0.2f)
+            }
+            drawPath(path, ink, style = stroke)
+            drawCircle(ink, radius = stroke.width * 1.2f, center = Offset(h * 0.6f, -h * 0.6f))
         }
     }
 }

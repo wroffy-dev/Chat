@@ -169,6 +169,8 @@ describe.skipIf(!TEST_DB_URL)("calls (PostgreSQL)", () => {
   it("with several contacts (D-21), a person in a call is busy for everyone else", async () => {
     const { alice, bob, connectionId } = await connectedPair();
     const carol = await userToken("carol");
+    const missed: string[] = [];
+    calls.onMissed = (c) => missed.push(`${c.kind}:${c.callerUserId === carol.id ? "carol" : "other"}`);
     const pair = async (owner: string, scanner: string) => {
       const qr = (await call(owner, "POST", "/connection-qr")).json();
       const req = (await call(scanner, "POST", "/connection-requests", { token: qr.token })).json();
@@ -180,9 +182,35 @@ describe.skipIf(!TEST_DB_URL)("calls (PostgreSQL)", () => {
     expect((await call(alice.token, "POST", "/calls", { connectionId, kind: "voice" })).statusCode).toBe(201);
     const busy = await call(carol.token, "POST", "/calls", { connectionId: bobCarol, kind: "voice" });
     expect([busy.statusCode, busy.json().error.code]).toEqual([409, "PEER_BUSY"]);
+    // Bob never heard it ring, so his chat with Carol gets a "Missed call" line (owner 2026-11-22).
+    expect(missed).toEqual(["voice:carol"]);
     const self = await call(alice.token, "POST", "/calls", { connectionId: aliceCarol, kind: "voice" });
     expect([self.statusCode, self.json().error.code]).toEqual([409, "CALL_IN_PROGRESS"]);
     expect(await database.prisma.call.count()).toBe(1);
+  });
+
+  it("several people calling one person at the same moment start only one call (owner 2026-11-22)", async () => {
+    const { alice, bob, connectionId } = await connectedPair();
+    const carol = await userToken("carol");
+    const dave = await userToken("dave");
+    const pair = async (owner: string, scanner: string) => {
+      const qr = (await call(owner, "POST", "/connection-qr")).json();
+      const req = (await call(scanner, "POST", "/connection-requests", { token: qr.token })).json();
+      return (await call(owner, "POST", `/connection-requests/${req.id}/accept`)).json().id as string;
+    };
+    const bobCarol = await pair(bob.token, carol.token);
+    const bobDave = await pair(bob.token, dave.token);
+    // Alice, Carol and Dave send Bob a walkie-talkie message at the same instant.
+    const results = await Promise.all([
+      call(alice.token, "POST", "/calls", { connectionId, kind: "talk" }),
+      call(carol.token, "POST", "/calls", { connectionId: bobCarol, kind: "talk" }),
+      call(dave.token, "POST", "/calls", { connectionId: bobDave, kind: "talk" }),
+    ]);
+    expect(results.map((r) => r.statusCode).sort()).toEqual([201, 409, 409]);
+    expect(results.filter((r) => r.statusCode === 409).map((r) => r.json().error.code)).toEqual(["PEER_BUSY", "PEER_BUSY"]);
+    expect(await database.prisma.call.count()).toBe(1);
+    // The losers' rooms were cleaned up.
+    expect(media.deleted.length).toBe(media.created.length - 1);
   });
 
   it("only the callee answers or declines; only the caller cancels", async () => {

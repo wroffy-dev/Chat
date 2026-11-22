@@ -308,6 +308,12 @@ class CallControllerTest {
         c.startOutgoing("conn", CallKind.VIDEO, "bob")
         runCurrent()
         assertEquals(CallEndReason.BUSY, c.state.value.endReason)
+        // The other person on a call with someone else is told apart (owner 2026-11-22).
+        repo.startResult = CallResult.Failure(CallFailure.PEER_BUSY)
+        val peer = controller()
+        peer.startOutgoing("conn", CallKind.VOICE, "bob")
+        runCurrent()
+        assertEquals(CallEndReason.PEER_BUSY, peer.state.value.endReason)
         repo.startResult = CallResult.Failure(CallFailure.MEDIA_UNAVAILABLE)
         val c2 = controller()
         c2.startOutgoing("conn", CallKind.VIDEO, "bob")

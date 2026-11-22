@@ -62,7 +62,7 @@ class TalkSender(
         job = scope.launch {
             val join = when (val r = repo.start(connectionId, CallKind.TALK)) {
                 is CallResult.Ok -> r.value
-                is CallResult.Failure -> return@launch finish(if (r.reason == CallFailure.IN_PROGRESS) TalkOutcome.BUSY else TalkOutcome.FAILED)
+                is CallResult.Failure -> return@launch finish(if (r.reason == CallFailure.IN_PROGRESS || r.reason == CallFailure.PEER_BUSY) TalkOutcome.BUSY else TalkOutcome.FAILED)
             }
             callId = join.callId
             try {

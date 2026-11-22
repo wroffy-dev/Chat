@@ -1299,6 +1299,7 @@ private fun phaseText(phase: CallPhase, reason: CallEndReason?, incoming: Boolea
             CallEndReason.NETWORK_LOST -> R.string.call_ended_network
             CallEndReason.MEDIA_UNAVAILABLE -> R.string.call_ended_unavailable
             CallEndReason.BUSY -> R.string.call_ended_busy
+            CallEndReason.PEER_BUSY -> R.string.call_ended_peer_busy
             CallEndReason.FAILED -> R.string.call_ended_failed
             CallEndReason.CANCELLED -> R.string.call_ended_cancelled
             CallEndReason.SESSION_ENDED -> R.string.session_ended
