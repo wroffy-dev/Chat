@@ -129,7 +129,7 @@ private fun LoginContent(
     }
 
     Surface(modifier = Modifier.fillMaxSize(), color = RefSurface, contentColor = RefOnSurface) {
-        BoxWithConstraints(modifier = Modifier.fillMaxSize().glassBackdrop(RefSurface).safeDrawingPadding().imePadding()) {
+        BoxWithConstraints(modifier = Modifier.fillMaxSize().glassBackdrop().safeDrawingPadding().imePadding()) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()

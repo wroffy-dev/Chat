@@ -63,7 +63,7 @@ fun ChangePasswordScreen(
     BackHandler(enabled = forced) {}
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(modifier = Modifier.fillMaxSize().glassBackdrop(MaterialTheme.colorScheme.background).safeDrawingPadding().imePadding()) {
+        Column(modifier = Modifier.fillMaxSize().glassBackdrop().safeDrawingPadding().imePadding()) {
             TopBar(stringResource(R.string.password_title), onBack = if (forced) null else onBack)
             Box(
                 modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),

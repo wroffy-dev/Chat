@@ -32,7 +32,8 @@ import app.vaultchat.ui.theme.Sizes
 import app.vaultchat.ui.theme.Spacing
 import app.vaultchat.ui.theme.glass
 import app.vaultchat.ui.theme.glassBackdrop
-import app.vaultchat.ui.theme.glossy
+import app.vaultchat.ui.theme.glassInset
+import app.vaultchat.ui.theme.glassTrack
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -66,9 +67,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.foundation.layout.width
 import app.vaultchat.ui.components.AppIcons
-import androidx.compose.foundation.border
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.input.pointer.pointerInput
@@ -157,7 +156,7 @@ fun HomeScreen(
         },
         color = MaterialTheme.colorScheme.background,
     ) {
-        Column(modifier = Modifier.fillMaxSize().glassBackdrop(MaterialTheme.colorScheme.background).safeDrawingPadding()) {
+        Column(modifier = Modifier.fillMaxSize().glassBackdrop().safeDrawingPadding()) {
             var searching by rememberSaveable { mutableStateOf(false) }
             Header(
                 searching = searching || state.query.isNotEmpty(),
@@ -225,7 +224,7 @@ private fun Header(searching: Boolean, onSearch: () -> Unit, onConnect: () -> Un
     ) {
         Text(
             stringResource(R.string.app_name),
-            style = MaterialTheme.typography.headlineMedium.copy(fontSize = 34.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1).sp),
+            style = MaterialTheme.typography.headlineMedium.copy(fontSize = 38.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1.2).sp),
             maxLines = 1,
             modifier = Modifier.weight(1f).semantics { heading() },
         )
@@ -391,12 +390,12 @@ private fun SearchField(query: String, onQuery: (String) -> Unit) {
 
 @Composable
 private fun FilterRow(selected: ChatFilter, unread: Int, onSelect: (ChatFilter) -> Unit) {
-    // Both pills sit in one glass capsule, as in the mockup (owner 2026-11-22).
+    // Both pills sit in one glass track, the chosen one pressed in, as in the mockup (owner 2026-11-22).
     Row(
         modifier = Modifier
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            .glass(RoundedCornerShape(50))
-            .padding(4.dp),
+            .glassTrack(RoundedCornerShape(50))
+            .padding(5.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Pill(stringResource(R.string.home_filter_all), selected == ChatFilter.ALL) { onSelect(ChatFilter.ALL) }
@@ -410,8 +409,7 @@ private fun FilterRow(selected: ChatFilter, unread: Int, onSelect: (ChatFilter) 
 @Composable
 private fun Pill(label: String, selected: Boolean, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
-    val container by animateColorAsState(if (selected) colors.primary else Color.Transparent, tween(Motion.MEDIUM), label = "pill")
-    val content by animateColorAsState(if (selected) colors.onPrimary else colors.onSurface, tween(Motion.MEDIUM), label = "pillText")
+    val content by animateColorAsState(if (selected) colors.onSurface else colors.onSurfaceVariant, tween(Motion.MEDIUM), label = "pillText")
     Text(
         label,
         style = MaterialTheme.typography.labelLarge.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
@@ -419,10 +417,9 @@ private fun Pill(label: String, selected: Boolean, onClick: () -> Unit) {
         modifier = Modifier
             .semantics { this.selected = selected }
             .clip(RoundedCornerShape(50))
-            .background(container)
-            .then(if (selected) Modifier.glossy(RoundedCornerShape(50), strength = 0.8f) else Modifier)
+            .then(if (selected) Modifier.glassInset(RoundedCornerShape(50)) else Modifier)
             .clickable(role = Role.Tab, onClick = onClick)
-            .padding(horizontal = 18.dp, vertical = 8.dp),
+            .padding(horizontal = 22.dp, vertical = 9.dp),
     )
 }
 
@@ -450,8 +447,8 @@ private fun ChatList(chats: List<Connection>, onChat: (Connection) -> Unit, onSn
 }
 
 /**
- * A chat-list row (UI upgrade 2026-11-20, keeping the owner's Snapchat elements): avatar, name with the time
- * on the right, a status line ("New snap", "N new messages" or "Tap to chat") with its coloured square, the
+ * A chat-list row as a glass card, as in the dark glass mockup (owner 2026-11-22): avatar, name with the time
+ * on the right, a status line ("New snap" in the accent colour, "N new messages" or "Tap to chat"), the
  * 🔥 streak, the unread badge and a camera button for a snap. The list has no message text to preview (the
  * chat list API carries counts and times only).
  */
@@ -460,7 +457,6 @@ private fun ChatRow(chat: Connection, onClick: () -> Unit, onSnap: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val snap = chat.pendingSnaps > 0
     val unread = chat.unreadCount > 0
-    val fresh = snap || unread
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -476,8 +472,8 @@ private fun ChatRow(chat: Connection, onClick: () -> Unit, onSnap: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     chat.peerUsername,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = if (fresh) FontWeight.SemiBold else FontWeight.Medium,
+                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp),
+                    fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
@@ -494,23 +490,14 @@ private fun ChatRow(chat: Connection, onClick: () -> Unit, onSnap: () -> Unit) {
                 chat.lastMessageAtEpochMs?.let {
                     Text(
                         relativeTime(it),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (unread) colors.primary else colors.onSurfaceVariant,
-                        fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Normal,
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
+                        color = colors.onSurfaceVariant,
                         maxLines = 1,
                         modifier = Modifier.padding(start = Spacing.sm),
                     )
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // Snapchat's status square: filled for something new, an outline otherwise.
-                val mark = if (snap) colors.primary else colors.secondary
-                Box(
-                    modifier = Modifier
-                        .size(9.dp)
-                        .then(if (fresh) Modifier.background(mark, RoundedCornerShape(2.dp)) else Modifier.border(1.5.dp, mark, RoundedCornerShape(2.dp))),
-                )
-                Spacer(Modifier.width(6.dp))
                 val status = when {
                     snap -> pluralStringResource(R.plurals.home_new_snaps, chat.pendingSnaps, chat.pendingSnaps)
                     unread -> pluralStringResource(R.plurals.home_new_messages, chat.unreadCount, chat.unreadCount)
@@ -518,9 +505,8 @@ private fun ChatRow(chat: Connection, onClick: () -> Unit, onSnap: () -> Unit) {
                 }
                 Text(
                     status,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (fresh) colors.onSurface else colors.onSurfaceVariant,
-                    fontWeight = if (fresh) FontWeight.Medium else FontWeight.Normal,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp),
+                    color = if (snap) colors.primary else colors.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
@@ -528,7 +514,7 @@ private fun ChatRow(chat: Connection, onClick: () -> Unit, onSnap: () -> Unit) {
                 UnreadBadge(chat.unreadCount, modifier = Modifier.padding(start = Spacing.sm))
             }
         }
-        VaultIconButton(AppIcons.PhotoCamera, stringResource(R.string.snap_button), onSnap, tint = colors.onSurface)
+        VaultIconButton(AppIcons.PhotoCamera, stringResource(R.string.snap_button), onSnap, tint = colors.onSurface, size = 42.dp)
     }
 }
 

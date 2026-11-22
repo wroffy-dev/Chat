@@ -6,7 +6,12 @@ where this document and the built screens differ, the plan records what exists.
 
 ## 1. Design principles
 
-**Liquid Glass (owner 2026-11-22, Implemented, replaces the colours below):** after approving a mockup, the owner
+**Dark glass (owner 2026-11-22, Implemented, replaces the Liquid Glass paragraph and the colours below):** the
+app is always dark, matching the owner's dark glass mockup exactly: near-black screens with faint teal and warm
+lights, glass panels with bright edges, a pressed-in segment for All/Unread and the tab bar, a silver camera
+button, dark grey-teal avatars, mint `#7FE0B5` for my bubbles, badges and send. No doodle background in chats.
+
+**Liquid Glass (owner 2026-11-22, superseded the same day):** after approving a mockup, the owner
 asked for the Liquid Glass look across the app. Screens are plain light grey `#F2F2F5` (dark: `#0C0C0F`) with one
 soft warm glow, panels are glass (see-through white with a shine on top and a bright rim, `ui/theme/Glass.kt`),
 solid buttons, my bubbles and avatars are glossy, and the accent is green `#0C7F57` (dark: `#3DDC97`). There is no

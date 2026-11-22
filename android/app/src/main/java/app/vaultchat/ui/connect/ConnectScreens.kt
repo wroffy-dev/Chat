@@ -93,7 +93,7 @@ private fun ScreenScaffold(
     content: @Composable () -> Unit,
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Box(modifier = Modifier.fillMaxSize().glassBackdrop(MaterialTheme.colorScheme.background)) {
+        Box(modifier = Modifier.fillMaxSize().glassBackdrop()) {
             Column(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
                 TopBar(title, onBack)
                 Box(
