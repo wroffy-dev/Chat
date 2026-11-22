@@ -16,6 +16,10 @@ Versions of the Android app (`versionName`) and the backend (`package.json`). Th
   - the All/Unread glass slides like liquid (tap or drag), and the tab bar glass slides between tabs;
   - buttons and cards bounce when pressed, chats cascade in, and the large title shrinks on scroll;
   - badges pop, the send button grows in, and the reaction picker rises in.
+- **Premium finish:**
+  - glass with a cut-edge shine, a fine frosted grain and deeper edges;
+  - brushed-silver titles, mint with depth and a soft glow;
+  - dialogs and menus in neutral glass greys, refined typography.
 
 ## 0.2.0 — 2026-11-22
 

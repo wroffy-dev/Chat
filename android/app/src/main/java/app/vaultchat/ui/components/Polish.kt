@@ -1,5 +1,6 @@
 package app.vaultchat.ui.components
 
+import app.vaultchat.ui.theme.MintGradient
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -121,7 +122,7 @@ fun UnreadBadge(count: Int, modifier: Modifier = Modifier) {
             .popOnChange(count)
             .heightIn(min = 22.dp)
             .widthIn(min = 22.dp)
-            .background(MaterialTheme.colorScheme.primary, CircleShape)
+            .background(MintGradient, CircleShape)
             .glossy(CircleShape, strength = 0.8f)
             .padding(horizontal = 7.dp),
         contentAlignment = Alignment.Center,
