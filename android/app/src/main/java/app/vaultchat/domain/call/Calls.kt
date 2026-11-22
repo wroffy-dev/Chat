@@ -24,7 +24,7 @@ data class JoinInfo(
     val maxQuality: CaptureQuality? = null,
 )
 
-enum class CallFailure { NOT_FOUND, IN_PROGRESS, NOT_ACTIVE, MEDIA_UNAVAILABLE, RATE_LIMITED, SESSION_ENDED, NETWORK, UNEXPECTED }
+enum class CallFailure { NOT_FOUND, IN_PROGRESS, PEER_BUSY, NOT_ACTIVE, MEDIA_UNAVAILABLE, RATE_LIMITED, SESSION_ENDED, NETWORK, UNEXPECTED }
 
 sealed interface CallResult<out T> {
     data class Ok<T>(val value: T) : CallResult<T>

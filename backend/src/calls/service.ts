@@ -97,13 +97,9 @@ export class CallService {
     const callee = await this.prisma.user.findUnique({ where: { id: calleeUserId } });
     if (!callee || callee.status !== "active") throw appError(404, "NOT_FOUND");
 
-    const existing = await this.liveCallFor(connectionId);
-    if (existing) throw this.inProgress(existing.id);
-    // With several contacts (D-21) either person may already be in a call with someone else.
-    if (await this.liveCallOfUser(userId)) throw this.inProgress("");
-    const peerCall = await this.liveCallOfUser(calleeUserId);
-    // A call between these two that started a moment ago (both called at once) is this pair's call.
-    if (peerCall) throw peerCall.connectionId === connectionId ? this.inProgress(peerCall.id) : appError(409, "PEER_BUSY");
+    // Quick checks first, so a busy call fails before a room is made.
+    const before = await this.liveCallOfEither(userId, calleeUserId);
+    if (before) throw this.busy(before, userId, connectionId, kind);
 
     const room = `call_${randomUUID()}`;
     try {
@@ -114,8 +110,18 @@ export class CallService {
 
     let call: Call;
     try {
-      call = await this.prisma.call.create({
-        data: { connectionId, callerUserId: userId, calleeUserId, kind, livekitRoom: room, status: "ringing", createdAt: this.now() },
+      call = await this.prisma.$transaction(async (tx) => {
+        // One call start at a time for each of the two people (owner 2026-11-22: four people sending a
+        // walkie-talkie to one person at the same moment must not create four calls). Locks are taken in a
+        // fixed order, so two starts never wait on each other in a circle.
+        for (const id of [userId, calleeUserId].sort()) {
+          await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${id}, 0))`;
+        }
+        const live = await tx.call.findFirst({ where: { status: { in: [...LIVE] }, OR: this.involving(userId, calleeUserId) } });
+        if (live) throw this.busy(live, userId, connectionId, kind);
+        return tx.call.create({
+          data: { connectionId, callerUserId: userId, calleeUserId, kind, livekitRoom: room, status: "ringing", createdAt: this.now() },
+        });
       });
     } catch (err) {
       await media.deleteRoom(room).catch(() => undefined);
@@ -304,8 +310,32 @@ export class CallService {
     };
   }
 
-  private liveCallOfUser(userId: string) {
-    return this.prisma.call.findFirst({ where: { status: { in: [...LIVE] }, OR: [{ callerUserId: userId }, { calleeUserId: userId }] } });
+  /** The live call of either person, if any. */
+  private liveCallOfEither(userId: string, otherUserId: string) {
+    return this.prisma.call.findFirst({ where: { status: { in: [...LIVE] }, OR: this.involving(userId, otherUserId) } });
+  }
+
+  private involving(userId: string, otherUserId: string) {
+    return [{ callerUserId: userId }, { calleeUserId: userId }, { callerUserId: otherUserId }, { calleeUserId: otherUserId }];
+  }
+
+  /**
+   * Why a new call cannot start, given the live call that is in the way: this pair's own call (both called at
+   * once), the caller's other call, or the other person's call with someone else (PEER_BUSY). In that last case
+   * the other person never hears it ring, so their chat with the caller gets a "Missed call" line to call back
+   * from (owner 2026-11-22); never for the walkie-talkie.
+   */
+  private busy(live: Call, userId: string, connectionId: string, kind: CallKind): AppError {
+    if (live.connectionId === connectionId) return this.inProgress(live.id);
+    if (live.callerUserId === userId || live.calleeUserId === userId) return this.inProgress("");
+    if (kind === "video" || kind === "voice") {
+      try {
+        this.onMissed?.({ connectionId, callerUserId: userId, kind });
+      } catch {
+        // The chat line is best effort.
+      }
+    }
+    return appError(409, "PEER_BUSY");
   }
 
   private liveCallFor(connectionId: string) {

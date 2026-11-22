@@ -108,7 +108,9 @@ class RemoteCallRepository(private val http: HttpJson, private val caller: Autho
         ApiResult.NetworkError -> CallResult.Failure(CallFailure.NETWORK)
         is ApiResult.HttpError -> CallResult.Failure(
             when {
-                code == "CALL_IN_PROGRESS" || code == "PEER_BUSY" -> CallFailure.IN_PROGRESS
+                code == "CALL_IN_PROGRESS" -> CallFailure.IN_PROGRESS
+                // The other person is on a call with someone else (owner 2026-11-22: say so plainly).
+                code == "PEER_BUSY" -> CallFailure.PEER_BUSY
                 code == "CALL_NOT_ACTIVE" -> CallFailure.NOT_ACTIVE
                 code == "MEDIA_UNAVAILABLE" -> CallFailure.MEDIA_UNAVAILABLE
                 status == 404 -> CallFailure.NOT_FOUND

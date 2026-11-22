@@ -77,7 +77,7 @@ class TelecomSystemCalls(context: Context) : SystemCalls {
         CallEndReason.DECLINED -> DisconnectCause.REJECTED
         CallEndReason.NO_ANSWER -> DisconnectCause.MISSED
         CallEndReason.CANCELLED -> DisconnectCause.CANCELED
-        CallEndReason.BUSY -> DisconnectCause.BUSY
+        CallEndReason.BUSY, CallEndReason.PEER_BUSY -> DisconnectCause.BUSY
         CallEndReason.NETWORK_LOST, CallEndReason.FAILED, CallEndReason.MEDIA_UNAVAILABLE, CallEndReason.SESSION_ENDED -> DisconnectCause.ERROR
     }
 }

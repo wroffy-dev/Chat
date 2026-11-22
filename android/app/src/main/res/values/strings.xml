@@ -101,6 +101,7 @@
     <string name="call_ended_network">Call ended — connection lost</string>
     <string name="call_ended_unavailable">Calling is temporarily unavailable</string>
     <string name="call_ended_busy">A call is already in progress</string>
+    <string name="call_ended_peer_busy">They are on another call. Try again in a little while.</string>
     <string name="call_ended_failed">The call could not be connected</string>
     <string name="call_ended_cancelled">Call cancelled</string>
     <string name="call_accept">Accept</string>

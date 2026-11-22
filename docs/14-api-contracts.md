@@ -225,7 +225,7 @@ All routes require the caller to be the caller or callee of `{id}` (else `404`).
   the server gives up after 25 s without an accept and ends it 10 s (plus 8 s to connect) after the accept
   (`endReason: "talk_limit"`).
 - **Response 201:** `{ "callId", "status": "ringing", "livekitUrl": "wss://rtc.<domain>", "livekitToken", "maxVideoQuality", "ringTimeoutSeconds" }`
-- **Errors:** `404` (not a member of the connection), `409 CALL_IN_PROGRESS` (this pair, or the caller, already has a live call; the app then reads `GET /calls/current`), `409 PEER_BUSY` (the other person is in a call with someone else, D-21), `503 MEDIA_UNAVAILABLE` (LiveKit not configured or unreachable).
+- **Errors:** `404` (not a member of the connection), `409 CALL_IN_PROGRESS` (this pair, or the caller, already has a live call; the app then reads `GET /calls/current`), `409 PEER_BUSY` (the other person is in a call with someone else, D-21; since 2026-11-22 a voice or video attempt then leaves a "Missed call" line in their chat with the caller, never for the walkie-talkie). Starts are serialised per person with PostgreSQL advisory locks on both user ids, so people calling one person at the same moment create only one call, `503 MEDIA_UNAVAILABLE` (LiveKit not configured or unreachable).
 - **Side effects:** creates LiveKit room (max 2), call row; WS `call.incoming` + FCM `call` to callee. **Audit:** none (calls table is the record).
 - **Rate limit:** 10/min per user.
 

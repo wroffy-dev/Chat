@@ -29,6 +29,8 @@ enum class CallEndReason {
     FAILED,
     MEDIA_UNAVAILABLE,
     BUSY,
+    /** The other person is on a call with someone else (owner 2026-11-22). */
+    PEER_BUSY,
     SESSION_ENDED,
 }
 
@@ -127,6 +129,7 @@ class CallController(
                 is CallResult.Failure -> finish(
                     when (r.reason) {
                         CallFailure.IN_PROGRESS -> CallEndReason.BUSY
+                        CallFailure.PEER_BUSY -> CallEndReason.PEER_BUSY
                         CallFailure.MEDIA_UNAVAILABLE -> CallEndReason.MEDIA_UNAVAILABLE
                         CallFailure.SESSION_ENDED -> CallEndReason.SESSION_ENDED
                         else -> CallEndReason.FAILED
