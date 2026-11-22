@@ -20,7 +20,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import app.vaultchat.ui.theme.Glass
-import app.vaultchat.ui.theme.glassInset
+import app.vaultchat.ui.components.GlassSliderIndicator
+import app.vaultchat.ui.components.glassSegment
+import app.vaultchat.ui.components.rememberGlassSlider
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import app.vaultchat.ui.theme.glassTrack
 import androidx.compose.ui.graphics.Brush
 import app.vaultchat.ui.theme.glossy
@@ -50,57 +57,80 @@ enum class BottomTab { CHAT, CAMERA, MAP }
  * chat list), and Map. Chat is what the app opens on. A glass track with the chosen tab pressed in and a
  * silver camera button (dark glass mockup, owner 2026-11-22).
  */
+/**
+ * The tab the user last left by tapping the other tab, so the next screen's bar can open with its glass sliding
+ * over from there.
+ */
+private var lastTabIndex = 0
+
 @Composable
 fun VaultBottomBar(selected: BottomTab, onChat: () -> Unit, onCamera: () -> Unit, onMap: () -> Unit) {
-    Row(
+    val index = if (selected == BottomTab.MAP) 1 else 0
+    // The pressed-in glass slides over from the tab the user came from (owner 2026-11-22: iOS-like motion).
+    val slider = rememberGlassSlider(index, count = 2, from = lastTabIndex)
+    val haptics = LocalHapticFeedback.current
+    fun go(to: Int, action: () -> Unit) {
+        if (to == index) return
+        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        lastTabIndex = index
+        action()
+    }
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 18.dp, vertical = 10.dp)
             .glassTrack(RoundedCornerShape(36.dp))
             .height(72.dp)
             .padding(horizontal = 10.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
+        contentAlignment = Alignment.CenterStart,
     ) {
-        Tab(AppIcons.Chat, stringResource(R.string.tab_chat), selected == BottomTab.CHAT, onChat)
-        // The round camera shrinks a little under the finger (UI upgrade): quiet, tactile feedback.
-        val interaction = remember { MutableInteractionSource() }
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier
-                .size(60.dp)
-                .pressScale(interaction)
-                .clip(CircleShape)
-                .background(SilverButton)
-                .glossy(CircleShape, strength = 0.6f)
-                .clickable(
-                    interactionSource = interaction,
-                    indication = ripple(bounded = true),
-                    onClickLabel = stringResource(R.string.tab_camera),
-                    role = Role.Button,
-                    onClick = onCamera,
-                ),
+        GlassSliderIndicator(slider, RoundedCornerShape(28.dp))
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(AppIcons.PhotoCamera, contentDescription = stringResource(R.string.tab_camera), tint = Glass.Ground, modifier = Modifier.size(28.dp))
+            Tab(AppIcons.Chat, stringResource(R.string.tab_chat), selected == BottomTab.CHAT, Modifier.glassSegment(slider, 0)) { go(0, onChat) }
+            // The silver camera shrinks under the finger and springs back.
+            val interaction = remember { MutableInteractionSource() }
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(60.dp)
+                    .pressScale(interaction, 0.88f)
+                    .clip(CircleShape)
+                    .background(SilverButton)
+                    .glossy(CircleShape, strength = 0.6f)
+                    .clickable(
+                        interactionSource = interaction,
+                        indication = ripple(bounded = true),
+                        onClickLabel = stringResource(R.string.tab_camera),
+                        role = Role.Button,
+                        onClick = onCamera,
+                    ),
+            ) {
+                Icon(AppIcons.PhotoCamera, contentDescription = stringResource(R.string.tab_camera), tint = Glass.Ground, modifier = Modifier.size(28.dp))
+            }
+            Tab(AppIcons.Map, stringResource(R.string.tab_map), selected == BottomTab.MAP, Modifier.glassSegment(slider, 1)) { go(1, onMap) }
         }
-        Tab(AppIcons.Map, stringResource(R.string.tab_map), selected == BottomTab.MAP, onMap)
     }
 }
 
 @Composable
-private fun Tab(icon: ImageVector, label: String, isSelected: Boolean, onClick: () -> Unit) {
+private fun Tab(icon: ImageVector, label: String, isSelected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
-    val tint = if (isSelected) colors.onSurface else colors.onSurfaceVariant
+    val tint by animateColorAsState(if (isSelected) colors.onSurface else colors.onSurfaceVariant, label = "tabTint")
+    val interaction = remember { MutableInteractionSource() }
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
-        modifier = Modifier
+        modifier = modifier
             .width(104.dp)
             .height(56.dp)
+            .pressScale(interaction, 0.9f)
             .clip(RoundedCornerShape(28.dp))
-            .then(if (isSelected) Modifier.glassInset(RoundedCornerShape(28.dp)) else Modifier)
             .semantics { selected = isSelected }
-            .clickable(role = Role.Tab, onClick = onClick),
+            .clickable(interactionSource = interaction, indication = null, role = Role.Tab, onClick = onClick),
     ) {
         Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
         Text(label, style = MaterialTheme.typography.labelSmall, color = tint)

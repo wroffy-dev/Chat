@@ -12,6 +12,10 @@ Versions of the Android app (`versionName`) and the backend (`package.json`). Th
   - mint bubbles, badges and send button; dark grey-teal avatars.
 - **Chat:** the person's name sits in a glass capsule that opens the chat options; the timer pill is centred
   under it; "Read" is shown as text. The doodle background is gone.
+- **Motion:** iOS-like spring animations:
+  - the All/Unread glass slides like liquid (tap or drag), and the tab bar glass slides between tabs;
+  - buttons and cards bounce when pressed, chats cascade in, and the large title shrinks on scroll;
+  - badges pop, the send button grows in, and the reaction picker rises in.
 
 ## 0.2.0 — 2026-11-22
 

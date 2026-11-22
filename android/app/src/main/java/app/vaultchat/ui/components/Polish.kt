@@ -2,7 +2,6 @@ package app.vaultchat.ui.components
 
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -46,7 +45,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import app.vaultchat.ui.theme.Motion
 import app.vaultchat.ui.theme.Radii
 import app.vaultchat.ui.theme.glass
 import app.vaultchat.ui.theme.glossy
@@ -58,14 +56,20 @@ import app.vaultchat.ui.theme.Spacing
  * headings, settings rows, loading placeholders and small status animations.
  */
 
-/** Shrinks a pressed element slightly: quiet, tactile feedback without extra decoration. */
+/**
+ * Shrinks a pressed element and lets it spring back with a small bounce when let go, as on iOS (owner
+ * 2026-11-22). The scale is read in the draw phase only.
+ */
 @Composable
 fun Modifier.pressScale(interaction: MutableInteractionSource, pressed: Float = 0.94f): Modifier {
     val isPressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (isPressed) pressed else 1f, tween(Motion.FAST), label = "press")
+    val scale = remember { androidx.compose.animation.core.Animatable(1f) }
+    androidx.compose.runtime.LaunchedEffect(isPressed) {
+        scale.animateTo(if (isPressed) pressed else 1f, if (isPressed) GlassMotion.press else GlassMotion.release)
+    }
     return graphicsLayer {
-        scaleX = scale
-        scaleY = scale
+        scaleX = scale.value
+        scaleY = scale.value
     }
 }
 
@@ -114,6 +118,7 @@ fun UnreadBadge(count: Int, modifier: Modifier = Modifier) {
     val text = if (count > 99) "99+" else count.toString()
     Box(
         modifier = modifier
+            .popOnChange(count)
             .heightIn(min = 22.dp)
             .widthIn(min = 22.dp)
             .background(MaterialTheme.colorScheme.primary, CircleShape)

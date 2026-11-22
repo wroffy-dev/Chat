@@ -12,7 +12,6 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.text.format.DateUtils
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -22,7 +21,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.semantics.selected
 import app.vaultchat.ui.components.SkeletonRow
 import app.vaultchat.ui.components.UnreadBadge
 import app.vaultchat.ui.components.VaultIconButton
@@ -32,8 +30,19 @@ import app.vaultchat.ui.theme.Sizes
 import app.vaultchat.ui.theme.Spacing
 import app.vaultchat.ui.theme.glass
 import app.vaultchat.ui.theme.glassBackdrop
-import app.vaultchat.ui.theme.glassInset
-import app.vaultchat.ui.theme.glassTrack
+import app.vaultchat.ui.components.GlassSegmented
+import app.vaultchat.ui.components.pressScale
+import app.vaultchat.ui.components.staggeredAppear
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.ripple
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -51,7 +60,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -158,7 +166,9 @@ fun HomeScreen(
     ) {
         Column(modifier = Modifier.fillMaxSize().glassBackdrop().safeDrawingPadding()) {
             var searching by rememberSaveable { mutableStateOf(false) }
+            val listState = rememberLazyListState()
             Header(
+                listState = listState,
                 searching = searching || state.query.isNotEmpty(),
                 onSearch = {
                     if (searching || state.query.isNotEmpty()) {
@@ -199,13 +209,14 @@ fun HomeScreen(
             } else {
                 AnimatedVisibility(
                     visible = searching || state.query.isNotEmpty(),
-                    enter = expandVertically(tween(Motion.MEDIUM)) + fadeIn(tween(Motion.MEDIUM)),
-                    exit = shrinkVertically(tween(Motion.FAST)) + fadeOut(tween(Motion.FAST)),
+                    // The search field springs open under the header (owner 2026-11-22: iOS-like motion).
+                    enter = expandVertically(spring(dampingRatio = 0.82f, stiffness = 420f)) + fadeIn(tween(Motion.MEDIUM)),
+                    exit = shrinkVertically(spring(dampingRatio = 1f, stiffness = 520f)) + fadeOut(tween(Motion.FAST)),
                 ) {
                     SearchField(state.query, viewModel::setQuery)
                 }
                 FilterRow(state.filter, unread = state.chats.count { it.unreadCount > 0 }, onSelect = viewModel::setFilter)
-                ChatList(state.visibleChats, onChat, onSnap = onSnapTo, modifier = Modifier.weight(1f))
+                ChatList(state.visibleChats, onChat, onSnap = onSnapTo, listState = listState, modifier = Modifier.weight(1f))
             }
             VaultBottomBar(selected = BottomTab.CHAT, onChat = {}, onCamera = onOpenCamera, onMap = onOpenMap)
         }
@@ -217,7 +228,7 @@ fun HomeScreen(
  * No Settings button (removed by the owner, 2026-11-20) and no sign-out (owner request 2026-11-02).
  */
 @Composable
-private fun Header(searching: Boolean, onSearch: () -> Unit, onConnect: () -> Unit) {
+private fun Header(listState: LazyListState, searching: Boolean, onSearch: () -> Unit, onConnect: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(start = Spacing.xl, end = Spacing.sm, top = Spacing.lg, bottom = Spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
@@ -226,7 +237,19 @@ private fun Header(searching: Boolean, onSearch: () -> Unit, onConnect: () -> Un
             stringResource(R.string.app_name),
             style = MaterialTheme.typography.headlineMedium.copy(fontSize = 38.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1.2).sp),
             maxLines = 1,
-            modifier = Modifier.weight(1f).semantics { heading() },
+            modifier = Modifier
+                .weight(1f)
+                .semantics { heading() }
+                // The large title shrinks and fades a little as the list scrolls under it, as on iOS. Read in the
+                // draw phase only, so scrolling does not recompose the header.
+                .graphicsLayer {
+                    val scrolled = if (listState.firstVisibleItemIndex > 0) 1f else (listState.firstVisibleItemScrollOffset / 64.dp.toPx()).coerceIn(0f, 1f)
+                    val scale = 1f - 0.16f * scrolled
+                    scaleX = scale
+                    scaleY = scale
+                    alpha = 1f - 0.25f * scrolled
+                    transformOrigin = TransformOrigin(0f, 0.5f)
+                },
         )
         VaultIconButton(
             icon = if (searching) Icons.Filled.Close else Icons.Filled.Search,
@@ -390,41 +413,26 @@ private fun SearchField(query: String, onQuery: (String) -> Unit) {
 
 @Composable
 private fun FilterRow(selected: ChatFilter, unread: Int, onSelect: (ChatFilter) -> Unit) {
-    // Both pills sit in one glass track, the chosen one pressed in, as in the mockup (owner 2026-11-22).
-    Row(
-        modifier = Modifier
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .glassTrack(RoundedCornerShape(50))
-            .padding(5.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Pill(stringResource(R.string.home_filter_all), selected == ChatFilter.ALL) { onSelect(ChatFilter.ALL) }
-        Pill(
+    // One glass switch whose pressed-in glass slides between All and Unread (owner 2026-11-22).
+    GlassSegmented(
+        labels = listOf(
+            stringResource(R.string.home_filter_all),
             if (unread > 0) stringResource(R.string.home_filter_unread_count, unread) else stringResource(R.string.home_filter_unread),
-            selected == ChatFilter.UNREAD,
-        ) { onSelect(ChatFilter.UNREAD) }
-    }
-}
-
-@Composable
-private fun Pill(label: String, selected: Boolean, onClick: () -> Unit) {
-    val colors = MaterialTheme.colorScheme
-    val content by animateColorAsState(if (selected) colors.onSurface else colors.onSurfaceVariant, tween(Motion.MEDIUM), label = "pillText")
-    Text(
-        label,
-        style = MaterialTheme.typography.labelLarge.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
-        color = content,
-        modifier = Modifier
-            .semantics { this.selected = selected }
-            .clip(RoundedCornerShape(50))
-            .then(if (selected) Modifier.glassInset(RoundedCornerShape(50)) else Modifier)
-            .clickable(role = Role.Tab, onClick = onClick)
-            .padding(horizontal = 22.dp, vertical = 9.dp),
+        ),
+        selected = if (selected == ChatFilter.UNREAD) 1 else 0,
+        onSelect = { onSelect(if (it == 1) ChatFilter.UNREAD else ChatFilter.ALL) },
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
     )
 }
 
 @Composable
-private fun ChatList(chats: List<Connection>, onChat: (Connection) -> Unit, onSnap: (Connection) -> Unit, modifier: Modifier = Modifier) {
+private fun ChatList(
+    chats: List<Connection>,
+    onChat: (Connection) -> Unit,
+    onSnap: (Connection) -> Unit,
+    listState: LazyListState,
+    modifier: Modifier = Modifier,
+) {
     if (chats.isEmpty()) {
         Box(modifier = modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.TopCenter) {
             Text(stringResource(R.string.home_no_matches), color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -433,13 +441,19 @@ private fun ChatList(chats: List<Connection>, onChat: (Connection) -> Unit, onSn
     }
     // Each chat is its own glass card (Liquid Glass, owner 2026-11-22).
     LazyColumn(
+        state = listState,
         modifier = modifier.fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = Spacing.screen, vertical = Spacing.xs),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        items(chats, key = { it.id }) { chat ->
-            // Rows slide to their new place when the order changes (a new message moves a chat up).
-            Box(modifier = Modifier.animateItem()) {
+        itemsIndexed(chats, key = { _, it -> it.id }) { index, chat ->
+            // Rows cascade in one after another, and spring to their new place when the order changes (a new
+            // message moves a chat up) or the filter changes (owner 2026-11-22: iOS-like motion).
+            Box(
+                modifier = Modifier
+                    .animateItem(placementSpec = spring(dampingRatio = 0.8f, stiffness = 380f, visibilityThreshold = IntOffset.VisibilityThreshold))
+                    .staggeredAppear(index),
+            ) {
                 ChatRow(chat, onClick = { onChat(chat) }, onSnap = { onSnap(chat) })
             }
         }
@@ -457,12 +471,14 @@ private fun ChatRow(chat: Connection, onClick: () -> Unit, onSnap: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val snap = chat.pendingSnaps > 0
     val unread = chat.unreadCount > 0
+    val interaction = remember { MutableInteractionSource() }
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 76.dp)
+            .pressScale(interaction, 0.97f)
             .glass(RoundedCornerShape(Radii.card))
-            .clickable(onClick = onClick)
+            .clickable(interactionSource = interaction, indication = ripple(), onClick = onClick)
             .padding(start = 14.dp, end = Spacing.sm, top = Spacing.md, bottom = Spacing.md),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.md),
