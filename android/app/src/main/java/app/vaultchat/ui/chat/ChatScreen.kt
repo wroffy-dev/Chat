@@ -138,6 +138,10 @@ import kotlinx.coroutines.launch
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.material3.ripple
+import app.vaultchat.ui.components.pressScale
+import app.vaultchat.ui.components.staggeredAppear
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.layout.layout
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -444,12 +448,20 @@ private fun ChatComposer(
             )
             val canSend = open && draft.isNotBlank() && !tooLong
             val haptics = LocalHapticFeedback.current
+            // The send button grows in with a bounce once there is something to send (owner 2026-11-22).
+            val ready by animateFloatAsState(if (canSend) 1f else 0f, spring(dampingRatio = 0.5f, stiffness = 520f), label = "sendReady")
             RoundAction(
                 icon = AppIcons.ArrowUpward,
                 description = stringResource(R.string.chat_send),
                 container = if (canSend) Ref.Primary else Ref.Primary.copy(alpha = 0.4f),
                 tint = Ref.OnPrimary,
                 enabled = canSend,
+                modifier = Modifier.graphicsLayer {
+                    val scale = 0.82f + 0.18f * ready
+                    scaleX = scale
+                    scaleY = scale
+                    rotationZ = (1f - ready) * -35f
+                },
                 onClick = {
                     if (onSend(draft)) {
                         // A light tap under the finger: the message is on its way.
@@ -536,17 +548,21 @@ private fun RoundAction(
     tint: Color,
     onClick: () -> Unit,
     enabled: Boolean = true,
+    modifier: Modifier = Modifier,
 ) {
     val look = when {
         container == GLASS -> Modifier.glass(CircleShape)
         container.alpha == 0f -> Modifier.clip(CircleShape)
         else -> Modifier.clip(CircleShape).background(container).glossy(CircleShape, strength = 0.8f)
     }
+    // Shrinks under the finger and springs back with a small bounce (owner 2026-11-22: iOS-like motion).
+    val interaction = remember { MutableInteractionSource() }
     Box(
-        modifier = Modifier
+        modifier = modifier
             .size(44.dp)
+            .pressScale(interaction, 0.86f)
             .then(look)
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
+            .clickable(interactionSource = interaction, indication = ripple(), enabled = enabled, role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription = description, tint = tint, modifier = Modifier.size(20.dp))
@@ -573,12 +589,14 @@ private fun ChatHeader(
     ) {
         RoundAction(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back), GLASS, Ref.OnSurface, onBack)
         var menu by remember { mutableStateOf(false) }
+        val capsulePress = remember { MutableInteractionSource() }
         Box(modifier = Modifier.weight(1f)) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .pressScale(capsulePress, 0.96f)
                     .glass(RoundedCornerShape(50))
-                    .clickable(onClickLabel = stringResource(R.string.chat_options), role = Role.Button) { menu = true }
+                    .clickable(interactionSource = capsulePress, indication = ripple(), onClickLabel = stringResource(R.string.chat_options), role = Role.Button) { menu = true }
                     .padding(start = 4.dp, end = 14.dp, top = 4.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -595,13 +613,22 @@ private fun ChatHeader(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.semantics { heading() },
                     )
-                    // Vault only knows when the other person is typing (no presence).
-                    if (typing) {
+                    // Vault only knows when the other person is typing (no presence). The line slides open softly.
+                    AnimatedVisibility(
+                        visible = typing,
+                        enter = expandVertically(spring(dampingRatio = 0.8f, stiffness = 500f)) + fadeIn(),
+                        exit = shrinkVertically(spring(dampingRatio = 1f, stiffness = 500f)) + fadeOut(),
+                    ) {
                         Text(stringResource(R.string.chat_typing), color = Ref.OnSurfaceVariant, fontSize = 11.5.sp, lineHeight = 15.sp)
                     }
                 }
             }
-            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            DropdownMenu(
+                expanded = menu,
+                onDismissRequest = { menu = false },
+                shape = RoundedCornerShape(20.dp),
+                containerColor = Ref.ContainerHigh,
+            ) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.expiry_title)) },
                     leadingIcon = { Icon(AppIcons.Timer, contentDescription = null) },
@@ -633,13 +660,15 @@ private fun expiryLabel(seconds: Int?): String = when (seconds) {
 @Composable
 private fun StatusStrip(disappearSeconds: Int?, onExpiry: () -> Unit) {
     // Only the timer pill, centred under the header, as in the mockup (owner 2026-11-22, "must be same").
+    val pillPress = remember { MutableInteractionSource() }
     Box(modifier = Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 8.dp), contentAlignment = Alignment.Center) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             modifier = Modifier
+                .pressScale(pillPress, 0.92f)
                 .glass(RoundedCornerShape(50))
-                .clickable(role = Role.Button, onClick = onExpiry)
+                .clickable(interactionSource = pillPress, indication = ripple(), role = Role.Button, onClick = onExpiry)
                 .padding(horizontal = 12.dp, vertical = 6.dp),
         ) {
             Icon(AppIcons.Timer, contentDescription = null, tint = Ref.OnSurface.copy(alpha = 0.85f), modifier = Modifier.size(14.dp))
@@ -1155,11 +1184,13 @@ private fun ReactionPicker(chosen: String?, alignEnd: Boolean, onPick: (String) 
         onDismissRequest = onDismiss,
         properties = PopupProperties(focusable = true),
     ) {
-        Box(modifier = Modifier.glass(RoundedCornerShape(28.dp), strong = true, elevation = 8.dp)) {
+        // The picker rises in, and its emoji follow one after another (owner 2026-11-22: iOS-like motion).
+        Box(modifier = Modifier.staggeredAppear(0).glass(RoundedCornerShape(28.dp), strong = true, elevation = 8.dp)) {
             Row(modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                QUICK_REACTIONS.forEach { emoji ->
+                QUICK_REACTIONS.forEachIndexed { i, emoji ->
                     Box(
                         modifier = Modifier
+                            .staggeredAppear(i + 1)
                             .size(44.dp)
                             .clip(CircleShape)
                             .background(if (emoji == chosen) Ref.Container else Color.Transparent)
