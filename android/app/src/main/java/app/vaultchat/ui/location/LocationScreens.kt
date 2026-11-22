@@ -1,5 +1,6 @@
 package app.vaultchat.ui.location
 
+import app.vaultchat.ui.theme.glassBackdrop
 import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.Intent
@@ -95,7 +96,7 @@ fun LocationRequiredScreen(ui: LocationUi, sharing: LocationSharing, onLogout: (
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
-            modifier = Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(24.dp),
+            modifier = Modifier.fillMaxSize().glassBackdrop(MaterialTheme.colorScheme.background).safeDrawingPadding().verticalScroll(rememberScrollState()).padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Spacer(Modifier.size(24.dp))

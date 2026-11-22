@@ -1,5 +1,6 @@
 package app.vaultchat.ui.snap
 
+import app.vaultchat.ui.theme.glossy
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
@@ -288,6 +289,7 @@ fun SnapCameraScreen(
                         .padding(12.dp)
                         .clip(CircleShape)
                         .background(if (viewOnce) VaultGreen.Mint else VaultGreen.Deepest.copy(alpha = 0.55f))
+                        .glossy(CircleShape, strength = 0.6f)
                         .clickable(enabled = !sending, role = Role.Switch, onClickLabel = stringResource(R.string.snap_view_once)) { viewOnce = !viewOnce }
                         .padding(horizontal = 14.dp, vertical = 10.dp),
                 ) {
@@ -621,6 +623,7 @@ private fun CaptureView(
                     .border(5.dp, if (recording != null) MaterialTheme.colorScheme.error else VaultGreen.Mint, CircleShape)
                     .padding(8.dp)
                     .background(if (recording != null) MaterialTheme.colorScheme.error else VaultGreen.Sage, CircleShape)
+                    .glossy(CircleShape)
                     .pointerInput(Unit) {
                         detectTapGestures(
                             onTap = {
@@ -683,7 +686,7 @@ private fun CaptureView(
             ) {
                 Box(
                     contentAlignment = Alignment.Center,
-                    modifier = Modifier.size(46.dp).clip(RoundedCornerShape(12.dp)).background(VaultGreen.Deepest.copy(alpha = 0.55f)).border(2.dp, Color.White, RoundedCornerShape(12.dp)),
+                    modifier = Modifier.size(46.dp).clip(RoundedCornerShape(12.dp)).background(VaultGreen.Deepest.copy(alpha = 0.55f)).glossy(RoundedCornerShape(12.dp), strength = 0.6f).border(2.dp, Color.White, RoundedCornerShape(12.dp)),
                 ) {
                     Icon(AppIcons.Gallery, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
                 }
@@ -706,6 +709,7 @@ private fun CameraToggle(icon: ImageVector, description: String, on: Boolean, on
             .size(46.dp)
             .clip(CircleShape)
             .background(if (on) VaultGreen.Mint else VaultGreen.Deepest.copy(alpha = 0.55f))
+            .glossy(CircleShape, strength = 0.6f)
             .clickable(enabled = enabled, role = Role.Button, onClickLabel = description, onClick = onClick)
             .semantics { contentDescription = description },
     ) {
@@ -771,6 +775,7 @@ private fun ReviewTool(label: String, description: String, onClick: () -> Unit) 
             .size(46.dp)
             .clip(CircleShape)
             .background(VaultGreen.Deepest.copy(alpha = 0.55f))
+            .glossy(CircleShape, strength = 0.6f)
             .clickable(role = Role.Button, onClickLabel = description, onClick = onClick),
     ) {
         Text(label, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)

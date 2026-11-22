@@ -1,5 +1,6 @@
 package app.vaultchat.ui.about
 
+import app.vaultchat.ui.theme.glassBackdrop
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
@@ -102,7 +103,7 @@ fun UpgradeRequiredScreen(api: AppVersionApi) {
     val hash = rememberApkHash()
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
-            modifier = Modifier.fillMaxSize().safeDrawingPadding().padding(24.dp),
+            modifier = Modifier.fillMaxSize().glassBackdrop(MaterialTheme.colorScheme.background).safeDrawingPadding().padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text(

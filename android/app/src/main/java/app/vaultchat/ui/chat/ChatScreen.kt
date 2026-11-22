@@ -1,6 +1,5 @@
 package app.vaultchat.ui.chat
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.offset
@@ -109,6 +108,9 @@ import app.vaultchat.ui.theme.Motion
 import app.vaultchat.ui.theme.Radii
 import app.vaultchat.ui.theme.Sizes
 import app.vaultchat.ui.theme.Spacing
+import app.vaultchat.ui.theme.glass
+import app.vaultchat.ui.theme.glassBackdrop
+import app.vaultchat.ui.theme.glossy
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -131,7 +133,6 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import kotlinx.coroutines.launch
@@ -268,7 +269,7 @@ fun ChatScreen(
     }
 
     Surface(modifier = Modifier.fillMaxSize(), color = Ref.Surface, contentColor = Ref.OnSurface) {
-        Column(modifier = Modifier.fillMaxSize().safeDrawingPadding().imePadding()) {
+        Column(modifier = Modifier.fillMaxSize().glassBackdrop(Ref.Surface).safeDrawingPadding().imePadding()) {
             ChatHeader(
                 peerUsername = peerUsername,
                 typing = state.peerTyping,
@@ -286,8 +287,8 @@ fun ChatScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Ref.PrimaryContainer)
+                        .glass(RoundedCornerShape(18.dp))
+                        .background(Ref.PrimaryContainer.copy(alpha = 0.55f))
                         .clickable(onClick = onOpenSnaps)
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                 ) {
@@ -399,8 +400,9 @@ private fun ChatComposer(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Ref.ContainerLow)
-                .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 2.dp),
+                .padding(horizontal = 12.dp, vertical = 4.dp)
+                .glass(RoundedCornerShape(18.dp))
+                .padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(Modifier.width(3.dp).height(32.dp).background(Ref.Primary, RoundedCornerShape(2.dp)))
@@ -417,18 +419,18 @@ private fun ChatComposer(
         }
     }
     // Composer: text only. The round button on the left takes a snap (the reference's place for it).
-    Column(modifier = Modifier.fillMaxWidth().background(Ref.Surface)) {
-        Box(Modifier.fillMaxWidth().height(1.dp).background(Ref.OutlineVariant))
+    // Liquid Glass (owner 2026-11-22): no bar behind the composer, only floating glass pieces.
+    Column(modifier = Modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.Bottom,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             RoundAction(
                 icon = AppIcons.PhotoCamera,
                 description = stringResource(R.string.snap_button),
-                container = Ref.Container,
-                tint = Ref.OnSurfaceVariant,
+                container = GLASS,
+                tint = Ref.OnSurface,
                 onClick = onSnap,
             )
             PrivateTextInput(
@@ -464,8 +466,7 @@ private fun ChatComposer(
 /**
  * Message input as a platform EditText, because Compose text fields cannot ask the keyboard not to
  * learn from what is typed (docs/07 §4 rule 6). The keyboard may still ignore the request. The text
- * is never put in saved instance state. Styled as the reference: a grey pill that turns white with a
- * blue outline while typing.
+ * is never put in saved instance state. A glass pill with a green outline while typing.
  */
 @Composable
 private fun PrivateTextInput(
@@ -479,15 +480,12 @@ private fun PrivateTextInput(
     val hintColor = Ref.OnSurfaceVariant.toArgb()
     val onChange by rememberUpdatedState(onValueChange)
     var focused by remember { mutableStateOf(false) }
-    // Not named "background": inside the EditText's apply {} below that would hide View.background.
-    val fieldFill by animateColorAsState(if (focused) Ref.Surface else Ref.Container, tween(120), label = "inputBg")
-    val fieldOutline by animateColorAsState(if (focused) Ref.Primary else Color.Transparent, tween(120), label = "inputBorder")
+    val fieldOutline by animateColorAsState(if (focused) Ref.Primary.copy(alpha = 0.6f) else Color.Transparent, tween(120), label = "inputBorder")
     AndroidView(
         modifier = modifier
             .heightIn(min = 44.dp)
-            .clip(RoundedCornerShape(50))
-            .background(fieldFill)
-            .border(1.dp, fieldOutline, RoundedCornerShape(50))
+            .glass(RoundedCornerShape(22.dp))
+            .border(1.dp, fieldOutline, RoundedCornerShape(22.dp))
             .padding(horizontal = 16.dp, vertical = 2.dp),
         factory = { context ->
             EditText(context).apply {
@@ -524,7 +522,13 @@ private fun PrivateTextInput(
     )
 }
 
-/** Round 44 dp button of the reference (composer and header). */
+/** [RoundAction]'s container for a glass button. */
+private val GLASS = Color.Unspecified
+
+/**
+ * Round 44 dp button (composer and header): glass for [GLASS], a glossy solid colour otherwise, nothing for a
+ * transparent [container].
+ */
 @Composable
 private fun RoundAction(
     icon: ImageVector,
@@ -534,11 +538,15 @@ private fun RoundAction(
     onClick: () -> Unit,
     enabled: Boolean = true,
 ) {
+    val look = when {
+        container == GLASS -> Modifier.glass(CircleShape)
+        container.alpha == 0f -> Modifier.clip(CircleShape)
+        else -> Modifier.clip(CircleShape).background(container).glossy(CircleShape, strength = 0.8f)
+    }
     Box(
         modifier = Modifier
             .size(44.dp)
-            .clip(CircleShape)
-            .background(container)
+            .then(look)
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -564,23 +572,23 @@ private fun ChatHeader(
     onTalk: () -> Unit,
     onDisappearing: () -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxWidth().background(Ref.Surface)) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(8.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            RoundAction(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back), Color.Transparent, Ref.OnSurface, onBack)
+            RoundAction(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back), GLASS, Ref.OnSurface, onBack)
             Row(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).padding(start = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Box(
-                    modifier = Modifier.size(40.dp).background(Ref.PrimaryContainer, CircleShape).clearAndSetSemantics { },
+                    modifier = Modifier.size(40.dp).background(Ref.Primary, CircleShape).glossy(CircleShape).clearAndSetSemantics { },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(initialsOf(peerUsername), color = Ref.OnPrimaryContainer, fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold)
+                    Text(initialsOf(peerUsername), color = Ref.OnPrimary, fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold)
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -602,11 +610,11 @@ private fun ChatHeader(
                     }
                 }
             }
-            RoundAction(Icons.Filled.Call, stringResource(R.string.home_voice_call), Color.Transparent, Ref.OnSurface, onVoice)
-            RoundAction(AppIcons.Videocam, stringResource(R.string.home_video_call), Color.Transparent, Ref.OnSurface, onVideo)
+            RoundAction(Icons.Filled.Call, stringResource(R.string.home_voice_call), GLASS, Ref.OnSurface, onVoice)
+            RoundAction(AppIcons.Videocam, stringResource(R.string.home_video_call), GLASS, Ref.OnSurface, onVideo)
             var menu by remember { mutableStateOf(false) }
             Box {
-                RoundAction(Icons.Filled.MoreVert, stringResource(R.string.chat_options), Color.Transparent, Ref.OnSurface, { menu = true })
+                RoundAction(Icons.Filled.MoreVert, stringResource(R.string.chat_options), GLASS, Ref.OnSurface, { menu = true })
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.expiry_title)) },
@@ -621,7 +629,6 @@ private fun ChatHeader(
                 }
             }
         }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(Ref.OutlineVariant))
     }
 }
 
@@ -641,9 +648,9 @@ private fun expiryLabel(seconds: Int?): String = when (seconds) {
  */
 @Composable
 private fun StatusStrip(disappearSeconds: Int?, onExpiry: () -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth().background(Ref.ContainerLow)) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 18.dp, end = 14.dp, top = 2.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
@@ -656,17 +663,14 @@ private fun StatusStrip(disappearSeconds: Int?, onExpiry: () -> Unit) {
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 modifier = Modifier
                     .padding(start = 8.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(Ref.Surface)
-                    .border(1.dp, Ref.OutlineVariant, RoundedCornerShape(50))
+                    .glass(RoundedCornerShape(50))
                     .clickable(role = Role.Button, onClick = onExpiry)
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
             ) {
                 Icon(AppIcons.Timer, contentDescription = null, tint = Ref.OnSurfaceVariant, modifier = Modifier.size(12.dp))
                 Text(expiryLabel(disappearSeconds), color = Ref.OnSurfaceVariant, fontSize = 11.sp, lineHeight = 14.sp, letterSpacing = 0.3.sp, fontWeight = FontWeight.Medium)
             }
         }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(Ref.OutlineVariant))
     }
 }
 
@@ -687,7 +691,7 @@ private fun DayChip(epochMs: Long) {
             lineHeight = 14.sp,
             letterSpacing = 0.3.sp,
             fontWeight = FontWeight.Medium,
-            modifier = Modifier.clip(RoundedCornerShape(50)).background(Ref.Container).padding(horizontal = 12.dp, vertical = 4.dp),
+            modifier = Modifier.glass(RoundedCornerShape(50)).padding(horizontal = 12.dp, vertical = 4.dp),
         )
     }
 }
@@ -713,7 +717,7 @@ private fun DisappearLine(m: ChatMessage, mine: Boolean, peerUsername: String) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.clip(RoundedCornerShape(50)).background(Ref.ContainerLow).border(1.dp, Ref.OutlineVariant, RoundedCornerShape(50)).padding(horizontal = 12.dp, vertical = 6.dp),
+            modifier = Modifier.glass(RoundedCornerShape(50)).padding(horizontal = 12.dp, vertical = 6.dp),
         ) {
             Icon(AppIcons.Timer, contentDescription = null, tint = Ref.OnSurfaceVariant, modifier = Modifier.size(14.dp))
             Text(text, color = Ref.OnSurfaceVariant, fontSize = 12.sp, lineHeight = 16.sp)
@@ -794,8 +798,8 @@ private fun MessageList(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
         ) {
-            Box(Modifier.size(64.dp).background(Ref.PrimaryContainer, CircleShape), contentAlignment = Alignment.Center) {
-                Text(initialsOf(peerUsername), color = Ref.OnPrimaryContainer, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            Box(Modifier.size(64.dp).background(Ref.Primary, CircleShape).glossy(CircleShape), contentAlignment = Alignment.Center) {
+                Text(initialsOf(peerUsername), color = Ref.OnPrimary, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
             }
             Text(peerUsername, color = Ref.OnSurface, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(stringResource(R.string.chat_empty), color = Ref.OnSurfaceVariant, fontSize = 14.sp, textAlign = TextAlign.Center)
@@ -971,8 +975,7 @@ private fun MessageList(
                 Box(Modifier.fillMaxWidth().padding(top = MESSAGE_GAP).animateItem(), contentAlignment = Alignment.CenterStart) {
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 16.dp))
-                            .background(Ref.Container)
+                            .glass(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 6.dp, bottomEnd = 18.dp))
                             .padding(horizontal = 16.dp, vertical = 14.dp),
                     ) { TypingDots(color = Ref.OnSurfaceVariant) }
                 }
@@ -990,9 +993,7 @@ private fun MessageList(
             Box(
                 modifier = Modifier
                     .size(40.dp)
-                    .shadow(4.dp, CircleShape)
-                    .clip(CircleShape)
-                    .background(Ref.ContainerLow)
+                    .glass(CircleShape, strong = true, elevation = 6.dp)
                     .clickable(role = Role.Button, onClickLabel = stringResource(R.string.chat_to_newest)) {
                         unseen = 0
                         scope.launch { listState.animateScrollToItem(lastIndex) }
@@ -1004,7 +1005,7 @@ private fun MessageList(
             if (unseen > 0) {
                 Box(
                     modifier = Modifier.align(Alignment.TopEnd).offset(x = 4.dp, y = (-4).dp)
-                        .size(18.dp).background(Ref.Primary, CircleShape),
+                        .size(18.dp).background(Ref.Primary, CircleShape).glossy(CircleShape, strength = 0.8f),
                     contentAlignment = Alignment.Center,
                 ) { Text(if (unseen > 9) "9+" else "$unseen", color = Ref.OnPrimary, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
             }
@@ -1040,8 +1041,7 @@ private fun QuotedMessage(who: String, text: String, onClick: () -> Unit) {
         modifier = Modifier
             .widthIn(max = 290.dp)
             .padding(bottom = 2.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(Ref.Container)
+            .glass(RoundedCornerShape(12.dp))
             .clickable(onClickLabel = stringResource(R.string.chat_go_to_message), onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 6.dp),
     ) {
@@ -1072,8 +1072,7 @@ private fun MissedCallLine(m: ChatMessage, mine: Boolean, onCallBack: (video: Bo
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier
-                .clip(RoundedCornerShape(50))
-                .background(Ref.Container)
+                .glass(RoundedCornerShape(50))
                 .then(if (mine) Modifier else Modifier.clickable(onClickLabel = stringResource(R.string.chat_call_back)) { onCallBack(video) })
                 .padding(horizontal = 14.dp, vertical = 8.dp),
         ) {
@@ -1090,8 +1089,8 @@ private fun MissedCallLine(m: ChatMessage, mine: Boolean, onCallBack: (video: Bo
 }
 
 /**
- * Message bubbles of the reference: theirs on the left in light grey, mine on the right in blue, 16 dp
- * corners with a 4 dp corner next to the sender, at most 82 % of the width.
+ * Message bubbles: theirs on the left in glass, mine on the right in glossy green, 18 dp corners with a
+ * 6 dp corner next to the sender, at most 82 % of the width.
  */
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
@@ -1106,9 +1105,9 @@ private fun Bubble(
 ) {
     // Only the last bubble of a group has the small corner next to the sender.
     val shape = when {
-        !tail -> RoundedCornerShape(16.dp)
-        mine -> RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 4.dp)
-        else -> RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 16.dp)
+        !tail -> RoundedCornerShape(18.dp)
+        mine -> RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 6.dp)
+        else -> RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 6.dp, bottomEnd = 18.dp)
     }
     val press = if (onLongPress != null) {
         Modifier.combinedClickable(
@@ -1135,7 +1134,13 @@ private fun Bubble(
     val container = when {
         failed -> Ref.ErrorContainer
         mine -> Ref.Primary
-        else -> Ref.Container
+        else -> GLASS
+    }
+    // Liquid Glass (owner 2026-11-22): theirs is glass, mine a glossy green.
+    val look = if (container == GLASS) {
+        Modifier.glass(shape)
+    } else {
+        Modifier.clip(shape).background(container.copy(alpha = if (faded) 0.8f else 1f)).glossy(shape, strength = 0.7f)
     }
     val content = when {
         failed -> Ref.OnErrorContainer
@@ -1157,8 +1162,7 @@ private fun Bubble(
                     val placeable = measurable.measure(constraints.copy(minWidth = 0, maxWidth = limit))
                     layout(placeable.width, placeable.height) { placeable.place(0, 0) }
                 }
-                .clip(shape)
-                .background(container.copy(alpha = if (faded) 0.8f else 1f))
+                .then(look)
                 .then(press)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
         )
@@ -1178,7 +1182,7 @@ private fun ReactionPicker(chosen: String?, alignEnd: Boolean, onPick: (String) 
         onDismissRequest = onDismiss,
         properties = PopupProperties(focusable = true),
     ) {
-        Surface(shape = RoundedCornerShape(28.dp), color = Ref.Surface, shadowElevation = 6.dp) {
+        Box(modifier = Modifier.glass(RoundedCornerShape(28.dp), strong = true, elevation = 8.dp)) {
             Row(modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                 QUICK_REACTIONS.forEach { emoji ->
                     Box(
@@ -1200,12 +1204,8 @@ private fun ReactionPicker(chosen: String?, alignEnd: Boolean, onPick: (String) 
 @Composable
 private fun ReactionPill(reactions: List<Reaction>, onClick: () -> Unit) {
     val counts = reactions.groupingBy { it.emoji }.eachCount()
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = Ref.Surface,
-        border = BorderStroke(1.dp, Ref.OutlineVariant),
-        shadowElevation = 1.dp,
-        modifier = Modifier.padding(horizontal = 8.dp).offset(y = (-6).dp).clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick),
+    Box(
+        modifier = Modifier.padding(horizontal = 8.dp).offset(y = (-6).dp).glass(RoundedCornerShape(12.dp), strong = true).clickable(onClick = onClick),
     ) {
         Row(modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             counts.forEach { (emoji, n) ->
@@ -1225,13 +1225,13 @@ private fun DisappearingScreen(peerUsername: String, current: Int?, onBack: () -
     BackHandler(onBack = onBack)
     var chosen by remember(current) { mutableStateOf(current) }
     Surface(modifier = Modifier.fillMaxSize(), color = Ref.Surface, contentColor = Ref.OnSurface) {
-        Column(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
+        Column(modifier = Modifier.fillMaxSize().glassBackdrop(Ref.Surface).safeDrawingPadding()) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(8.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                RoundAction(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back), Color.Transparent, Ref.OnSurface, onBack)
+                RoundAction(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back), GLASS, Ref.OnSurface, onBack)
                 Text(
                     stringResource(R.string.expiry_title),
                     color = Ref.OnSurface,
@@ -1241,7 +1241,6 @@ private fun DisappearingScreen(peerUsername: String, current: Int?, onBack: () -
                     modifier = Modifier.semantics { heading() },
                 )
             }
-            Box(Modifier.fillMaxWidth().height(1.dp).background(Ref.OutlineVariant))
             Column(
                 modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(24.dp),
@@ -1249,9 +1248,7 @@ private fun DisappearingScreen(peerUsername: String, current: Int?, onBack: () -
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Ref.ContainerLow)
-                        .border(1.dp, Ref.OutlineVariant, RoundedCornerShape(12.dp))
+                        .glass(RoundedCornerShape(Radii.card))
                         .padding(16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
@@ -1274,9 +1271,7 @@ private fun DisappearingScreen(peerUsername: String, current: Int?, onBack: () -
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .border(1.dp, Ref.OutlineVariant, RoundedCornerShape(12.dp))
-                            .background(Ref.Surface)
+                            .glass(RoundedCornerShape(Radii.card))
                             .selectableGroup(),
                     ) {
                         DISAPPEAR_CHOICES.forEachIndexed { i, seconds ->
@@ -1310,14 +1305,14 @@ private fun DisappearingScreen(peerUsername: String, current: Int?, onBack: () -
                     }
                 }
             }
-            Box(Modifier.fillMaxWidth().height(1.dp).background(Ref.OutlineVariant))
-            Box(modifier = Modifier.fillMaxWidth().background(Ref.Surface).padding(16.dp)) {
+            Box(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(min = 48.dp)
+                        .heightIn(min = 52.dp)
                         .clip(RoundedCornerShape(50))
                         .background(Ref.Primary)
+                        .glossy(RoundedCornerShape(50))
                         .clickable(role = Role.Button, onClick = { onSet(chosen) })
                         .padding(horizontal = 24.dp, vertical = 12.dp),
                     contentAlignment = Alignment.Center,

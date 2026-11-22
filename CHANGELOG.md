@@ -3,6 +3,14 @@
 Versions of the Android app (`versionName`) and the backend (`package.json`). The in-app update number
 (`versionCode`, "v170" and so on) still goes up with every build sent to the phones.
 
+## Unreleased
+
+### Look
+- **Liquid Glass:** the whole app has a new look, from the mockup the owner approved:
+  - light grey screens (near-black in dark mode) with a soft warm glow;
+  - glass cards, buttons, chips and a floating tab bar;
+  - glossy green buttons, bubbles and coloured avatars.
+
 ## 0.2.0 — 2026-11-22
 
 The first named release since 0.1.0, collecting the work shipped as builds v154–v173.

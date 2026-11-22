@@ -1,5 +1,6 @@
 package app.vaultchat.ui.call
 
+import app.vaultchat.ui.theme.glossy
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.border
@@ -739,6 +740,7 @@ private fun RefHeader(
                         .size(44.dp)
                         .clip(CircleShape)
                         .background(RefContainer.copy(alpha = 0.9f))
+                        .glossy(CircleShape, strength = 0.6f)
                         .clickable(role = Role.Button, onClickLabel = stringResource(R.string.call_minimize), onClick = onMinimize),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -941,6 +943,7 @@ private fun RefRound(icon: ImageVector, label: String, highlighted: Boolean, onC
             .size(48.dp)
             .clip(CircleShape)
             .background(if (highlighted) RefOnSurface else RefContainerHigh)
+            .glossy(CircleShape, strength = 0.6f)
             .clickable(role = Role.Button, onClick = onClick)
             .semantics(mergeDescendants = true) { if (state != null) stateDescription = state },
         contentAlignment = Alignment.Center,
@@ -1104,7 +1107,7 @@ private fun RoundToggle(
             .semantics(mergeDescendants = true) { if (state != null) stateDescription = state },
     ) {
         Box(
-            modifier = Modifier.size(64.dp).background(if (on) VaultGreen.Mint else Tonal, CircleShape),
+            modifier = Modifier.size(64.dp).background(if (on) VaultGreen.Mint else Tonal, CircleShape).glossy(CircleShape, strength = 0.6f),
             contentAlignment = Alignment.Center,
         ) {
             Icon(icon, contentDescription = null, tint = if (on) VaultGreen.Deepest else VaultGreen.Mint, modifier = Modifier.size(26.dp))
@@ -1160,7 +1163,7 @@ private fun RoundAction(label: String, icon: ImageVector, container: Color, onCl
         verticalArrangement = Arrangement.spacedBy(10.dp),
         modifier = Modifier.clickable(role = Role.Button, onClick = onClick).semantics(mergeDescendants = true) {},
     ) {
-        Box(modifier = Modifier.size(72.dp).background(container, CircleShape), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.size(72.dp).background(container, CircleShape).glossy(CircleShape), contentAlignment = Alignment.Center) {
             Icon(icon, contentDescription = null, tint = VaultGreen.Mint, modifier = Modifier.size(30.dp))
         }
         Text(label, style = MaterialTheme.typography.bodyMedium, color = VaultGreen.Mint)

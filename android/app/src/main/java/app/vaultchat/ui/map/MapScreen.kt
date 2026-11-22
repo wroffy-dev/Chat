@@ -4,6 +4,15 @@ import android.graphics.BitmapFactory
 import android.text.format.DateUtils
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.semantics.Role
+import app.vaultchat.ui.theme.LightGlass
+import app.vaultchat.ui.theme.LocalGlass
+import app.vaultchat.ui.theme.glass
+import app.vaultchat.ui.theme.glossy
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -163,19 +172,26 @@ private fun Message(text: String) {
     }
 }
 
-/** A round floating button of the reference: white with a dark icon, or dark with a white icon. */
+/**
+ * A round floating button: light glass with a dark icon, or glossy dark with a white icon (Liquid Glass,
+ * owner 2026-11-22). The map stays light in dark mode too, so the light glass is fixed.
+ */
 @Composable
 private fun RoundButton(icon: ImageVector, description: String, light: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Surface(
-        onClick = onClick,
-        shape = CircleShape,
-        color = if (light) Color.White else DarkButton,
-        contentColor = if (light) Color(0xFF111111) else Color.White,
-        shadowElevation = 6.dp,
-        modifier = modifier.size(52.dp),
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription = description, modifier = Modifier.size(24.dp))
+    CompositionLocalProvider(LocalGlass provides LightGlass) {
+        val look = if (light) {
+            Modifier.glass(CircleShape, strong = true, elevation = 6.dp)
+        } else {
+            Modifier.shadow(6.dp, CircleShape).clip(CircleShape).background(DarkButton).glossy(CircleShape, strength = 0.7f)
+        }
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = modifier
+                .size(52.dp)
+                .then(look)
+                .clickable(role = Role.Button, onClick = onClick),
+        ) {
+            Icon(icon, contentDescription = description, tint = if (light) Color(0xFF111111) else Color.White, modifier = Modifier.size(24.dp))
         }
     }
 }

@@ -1,5 +1,11 @@
 package app.vaultchat.ui.connect
 
+import app.vaultchat.ui.theme.glass
+import app.vaultchat.ui.theme.glassBackdrop
+import app.vaultchat.ui.theme.glossy
+import app.vaultchat.ui.theme.Radii
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -87,7 +93,7 @@ private fun ScreenScaffold(
     content: @Composable () -> Unit,
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxSize().glassBackdrop(MaterialTheme.colorScheme.background)) {
             Column(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
                 TopBar(title, onBack)
                 Box(
@@ -198,23 +204,26 @@ private fun minutesLeft(epochMs: Long): Int =
 @Composable
 private fun ActionTile(label: String, icon: ImageVector, filled: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(20.dp),
-        color = if (filled) colors.primary else colors.surface,
-        contentColor = if (filled) colors.onPrimary else colors.onSurface,
-        modifier = modifier.height(128.dp),
+    // Liquid Glass (owner 2026-11-22): the filled tile is glossy green, the other one glass.
+    val shape = RoundedCornerShape(Radii.card)
+    val look = if (filled) Modifier.clip(shape).background(colors.primary).glossy(shape) else Modifier.glass(shape)
+    val content = if (filled) colors.onPrimary else colors.onSurface
+    Column(
+        modifier = modifier
+            .height(128.dp)
+            .then(look)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(18.dp),
+        verticalArrangement = Arrangement.SpaceBetween,
     ) {
-        Column(modifier = Modifier.fillMaxSize().padding(18.dp), verticalArrangement = Arrangement.SpaceBetween) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(28.dp))
-            Text(label, style = MaterialTheme.typography.titleMedium)
-        }
+        Icon(icon, contentDescription = null, tint = content, modifier = Modifier.size(28.dp))
+        Text(label, style = MaterialTheme.typography.titleMedium, color = content)
     }
 }
 
 @Composable
 private fun RequestCard(peerUsername: String, title: String, meta: String, busy: Boolean, actions: @Composable () -> Unit) {
-    Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
+    Box(modifier = Modifier.fillMaxWidth().glass(RoundedCornerShape(Radii.card))) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 InitialsAvatar(peerUsername, size = 40.dp)
@@ -410,7 +419,7 @@ fun ScanQrScreen(
             }
             ScanStage.Submitting -> FullScreenLoading(Modifier.padding(32.dp))
             is ScanStage.Waiting -> {
-                Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
+                Box(modifier = Modifier.fillMaxWidth().glass(RoundedCornerShape(Radii.card))) {
                     Row(
                         modifier = Modifier.padding(16.dp).semantics { liveRegion = LiveRegionMode.Polite },
                         verticalAlignment = Alignment.CenterVertically,

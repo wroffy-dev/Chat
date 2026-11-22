@@ -8,38 +8,54 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-// Green palette chosen by the owner on 2026-11-19 (docs/15-android-ui-ux.md §1). Six shades, darkest first.
+/**
+ * Fixed colours for the always-dark screens (camera, snap viewer, calls) and the avatar initials. The green
+ * palette of 2026-11-19 was replaced by the Liquid Glass look (owner 2026-11-22): near-black glass greys with
+ * one bright green accent. The names keep their old roles: Deepest is the darkest ground, Mint the text on
+ * it, Sage the accent.
+ */
 object VaultGreen {
-    val Deepest = Color(0xFF051F20)
-    val Deep = Color(0xFF0B2B26)
-    val Forest = Color(0xFF163832)
-    val Pine = Color(0xFF235347)
-    val Sage = Color(0xFF8EB69B)
-    val Mint = Color(0xFFDAF1DE)
+    val Deepest = Color(0xFF0C0C0F)
+    val Deep = Color(0xFF18191D)
+    val Forest = Color(0xFF26282D)
+    val Pine = Color(0xFF3A3D44)
+    val Sage = Color(0xFF3DDC97)
+    val Mint = Color(0xFFEDEFF1)
+}
+
+/** The Liquid Glass colours of the mockup (owner 2026-11-22). */
+object Glass {
+    val Green = Color(0xFF0C7F57)
+    val GreenBright = Color(0xFF3DDC97)
+    val Ground = Color(0xFFF2F2F5)
+    val GroundDark = Color(0xFF0C0C0F)
+    val Ink = Color(0xFF12161A)
+    val InkDark = Color(0xFFEDEFF1)
 }
 
 private val LightColors = lightColorScheme(
-    primary = VaultGreen.Forest,
-    onPrimary = VaultGreen.Mint,
-    primaryContainer = VaultGreen.Sage,
-    onPrimaryContainer = VaultGreen.Deepest,
-    secondary = VaultGreen.Pine,
-    onSecondary = VaultGreen.Mint,
-    secondaryContainer = VaultGreen.Sage,
-    onSecondaryContainer = VaultGreen.Deepest,
-    background = VaultGreen.Mint,
-    onBackground = VaultGreen.Deepest,
-    // Cards, bubbles and bars stay near-white over the mint background, so text keeps its contrast.
-    surface = Color(0xFFF6FBF7),
-    onSurface = VaultGreen.Deepest,
-    surfaceVariant = Color(0xFFC3DCC9),
-    onSurfaceVariant = VaultGreen.Pine,
-    outline = VaultGreen.Sage,
+    primary = Glass.Green,
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFFCDEFE0),
+    onPrimaryContainer = Color(0xFF05301F),
+    secondary = Color(0xFF0B7650),
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFFDCEFE6),
+    onSecondaryContainer = Color(0xFF05301F),
+    background = Glass.Ground,
+    onBackground = Glass.Ink,
+    // Cards, bubbles and bars are white over the light grey screen, so text keeps its contrast.
+    surface = Color.White,
+    onSurface = Glass.Ink,
+    surfaceVariant = Color(0xFFE6E7EC),
+    onSurfaceVariant = Color(0xFF575E66),
+    outline = Color(0xFFC5C9D0),
     error = Color(0xFFB3261E),
     onError = Color.White,
     errorContainer = Color(0xFFF9DEDC),
@@ -47,21 +63,21 @@ private val LightColors = lightColorScheme(
 )
 
 private val DarkColors = darkColorScheme(
-    primary = VaultGreen.Sage,
-    onPrimary = VaultGreen.Deepest,
-    primaryContainer = VaultGreen.Pine,
-    onPrimaryContainer = VaultGreen.Mint,
-    secondary = VaultGreen.Sage,
-    onSecondary = VaultGreen.Deepest,
-    secondaryContainer = VaultGreen.Pine,
-    onSecondaryContainer = VaultGreen.Mint,
-    background = VaultGreen.Deepest,
-    onBackground = VaultGreen.Mint,
-    surface = VaultGreen.Deep,
-    onSurface = VaultGreen.Mint,
-    surfaceVariant = VaultGreen.Forest,
-    onSurfaceVariant = VaultGreen.Sage,
-    outline = VaultGreen.Pine,
+    primary = Glass.GreenBright,
+    onPrimary = Color(0xFF04150D),
+    primaryContainer = Color(0xFF0E4D35),
+    onPrimaryContainer = Color(0xFFCFF5E3),
+    secondary = Color(0xFF6FD9AE),
+    onSecondary = Color(0xFF04150D),
+    secondaryContainer = Color(0xFF173A2C),
+    onSecondaryContainer = Color(0xFFCFF5E3),
+    background = Glass.GroundDark,
+    onBackground = Glass.InkDark,
+    surface = Color(0xFF1A1B1F),
+    onSurface = Glass.InkDark,
+    surfaceVariant = Color(0xFF26282D),
+    onSurfaceVariant = Color(0xFFA6ACB3),
+    outline = Color(0xFF3E4148),
     error = Color(0xFFF2B8B5),
     onError = Color(0xFF601410),
     errorContainer = Color(0xFF8C1D18),
@@ -95,6 +111,7 @@ fun VaultChatTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composa
         colorScheme = if (darkTheme) DarkColors else LightColors,
         typography = AppTypography,
         shapes = AppShapes,
-        content = content,
-    )
+    ) {
+        CompositionLocalProvider(LocalGlass provides if (darkTheme) DarkGlass else LightGlass, content = content)
+    }
 }

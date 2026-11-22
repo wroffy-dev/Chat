@@ -30,6 +30,10 @@ import app.vaultchat.ui.theme.Motion
 import app.vaultchat.ui.theme.Radii
 import app.vaultchat.ui.theme.Sizes
 import app.vaultchat.ui.theme.Spacing
+import app.vaultchat.ui.theme.glass
+import app.vaultchat.ui.theme.glassBackdrop
+import app.vaultchat.ui.theme.glossy
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -64,7 +68,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.foundation.layout.width
 import app.vaultchat.ui.components.AppIcons
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.foundation.border
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.platform.LocalDensity
@@ -154,7 +157,7 @@ fun HomeScreen(
         },
         color = MaterialTheme.colorScheme.background,
     ) {
-        Column(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
+        Column(modifier = Modifier.fillMaxSize().glassBackdrop(MaterialTheme.colorScheme.background).safeDrawingPadding()) {
             var searching by rememberSaveable { mutableStateOf(false) }
             Header(
                 searching = searching || state.query.isNotEmpty(),
@@ -217,12 +220,12 @@ fun HomeScreen(
 @Composable
 private fun Header(searching: Boolean, onSearch: () -> Unit, onConnect: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(start = Spacing.xl, end = Spacing.sm, top = Spacing.md, bottom = Spacing.xs),
+        modifier = Modifier.fillMaxWidth().padding(start = Spacing.xl, end = Spacing.sm, top = Spacing.lg, bottom = Spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             stringResource(R.string.app_name),
-            style = MaterialTheme.typography.headlineMedium,
+            style = MaterialTheme.typography.headlineMedium.copy(fontSize = 34.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1).sp),
             maxLines = 1,
             modifier = Modifier.weight(1f).semantics { heading() },
         )
@@ -231,20 +234,14 @@ private fun Header(searching: Boolean, onSearch: () -> Unit, onConnect: () -> Un
             contentDescription = stringResource(if (searching) R.string.home_search_close else R.string.home_search_hint),
             onClick = onSearch,
         )
-        VaultIconButton(
-            Icons.Filled.Add,
-            stringResource(R.string.home_connect_new),
-            onConnect,
-            container = MaterialTheme.colorScheme.primary,
-            tint = MaterialTheme.colorScheme.onPrimary,
-        )
+        VaultIconButton(Icons.Filled.Add, stringResource(R.string.home_connect_new), onConnect)
     }
 }
 
-/** A white circle holding one icon, as in the reference design's header. */
+/** A glass circle holding one icon, as in the header. */
 @Composable
 fun RoundIconButton(onClick: () -> Unit, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surface, modifier = modifier.padding(4.dp).size(44.dp)) {
+    Box(modifier = modifier.padding(4.dp).size(44.dp).glass(CircleShape), contentAlignment = Alignment.Center) {
         IconButton(onClick = onClick) { content() }
     }
 }
@@ -380,20 +377,27 @@ private fun SearchField(query: String, onQuery: (String) -> Unit) {
         },
         shape = RoundedCornerShape(Radii.input),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = MaterialTheme.colorScheme.surface,
-            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-            unfocusedBorderColor = MaterialTheme.colorScheme.surface,
+            focusedContainerColor = Color.Transparent,
+            unfocusedContainerColor = Color.Transparent,
+            unfocusedBorderColor = Color.Transparent,
             focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
         ),
-        modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.screen, vertical = Spacing.xs),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = Spacing.screen, vertical = Spacing.xs)
+            .glass(RoundedCornerShape(Radii.input)),
     )
 }
 
 @Composable
 private fun FilterRow(selected: ChatFilter, unread: Int, onSelect: (ChatFilter) -> Unit) {
+    // Both pills sit in one glass capsule, as in the mockup (owner 2026-11-22).
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .glass(RoundedCornerShape(50))
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Pill(stringResource(R.string.home_filter_all), selected == ChatFilter.ALL) { onSelect(ChatFilter.ALL) }
         Pill(
@@ -406,16 +410,20 @@ private fun FilterRow(selected: ChatFilter, unread: Int, onSelect: (ChatFilter) 
 @Composable
 private fun Pill(label: String, selected: Boolean, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
-    val container by animateColorAsState(if (selected) colors.primary else colors.surface, tween(Motion.MEDIUM), label = "pill")
+    val container by animateColorAsState(if (selected) colors.primary else Color.Transparent, tween(Motion.MEDIUM), label = "pill")
     val content by animateColorAsState(if (selected) colors.onPrimary else colors.onSurface, tween(Motion.MEDIUM), label = "pillText")
-    Surface(
-        shape = RoundedCornerShape(50),
-        color = container,
-        contentColor = content,
-        modifier = Modifier.semantics { this.selected = selected }.clip(RoundedCornerShape(50)).clickable(role = Role.Tab, onClick = onClick),
-    ) {
-        Text(label, style = MaterialTheme.typography.labelLarge.copy(fontSize = 14.sp), modifier = Modifier.padding(horizontal = 16.dp, vertical = 7.dp))
-    }
+    Text(
+        label,
+        style = MaterialTheme.typography.labelLarge.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
+        color = content,
+        modifier = Modifier
+            .semantics { this.selected = selected }
+            .clip(RoundedCornerShape(50))
+            .background(container)
+            .then(if (selected) Modifier.glossy(RoundedCornerShape(50), strength = 0.8f) else Modifier)
+            .clickable(role = Role.Tab, onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 8.dp),
+    )
 }
 
 @Composable
@@ -426,16 +434,16 @@ private fun ChatList(chats: List<Connection>, onChat: (Connection) -> Unit, onSn
         }
         return
     }
-    LazyColumn(modifier = modifier.fillMaxWidth(), contentPadding = PaddingValues(vertical = Spacing.xs)) {
+    // Each chat is its own glass card (Liquid Glass, owner 2026-11-22).
+    LazyColumn(
+        modifier = modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = Spacing.screen, vertical = Spacing.xs),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
         items(chats, key = { it.id }) { chat ->
             // Rows slide to their new place when the order changes (a new message moves a chat up).
-            Column(modifier = Modifier.animateItem()) {
+            Box(modifier = Modifier.animateItem()) {
                 ChatRow(chat, onClick = { onChat(chat) }, onSnap = { onSnap(chat) })
-                HorizontalDivider(
-                    modifier = Modifier.padding(start = Spacing.screen + Sizes.avatarRow + Spacing.md),
-                    thickness = 0.5.dp,
-                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
-                )
             }
         }
     }
@@ -456,9 +464,10 @@ private fun ChatRow(chat: Connection, onClick: () -> Unit, onSnap: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 72.dp)
+            .heightIn(min = 76.dp)
+            .glass(RoundedCornerShape(Radii.card))
             .clickable(onClick = onClick)
-            .padding(start = Spacing.screen, end = Spacing.xs, top = Spacing.sm, bottom = Spacing.sm),
+            .padding(start = 14.dp, end = Spacing.sm, top = Spacing.md, bottom = Spacing.md),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
@@ -519,9 +528,7 @@ private fun ChatRow(chat: Connection, onClick: () -> Unit, onSnap: () -> Unit) {
                 UnreadBadge(chat.unreadCount, modifier = Modifier.padding(start = Spacing.sm))
             }
         }
-        IconButton(onClick = onSnap) {
-            Icon(AppIcons.PhotoCamera, contentDescription = stringResource(R.string.snap_button), tint = colors.onSurfaceVariant, modifier = Modifier.size(22.dp))
-        }
+        VaultIconButton(AppIcons.PhotoCamera, stringResource(R.string.snap_button), onSnap, tint = colors.onSurface)
     }
 }
 
