@@ -204,7 +204,7 @@
     <string name="chat_notice_cleared_not_sent">The chat was cleared before your message was sent. It is back in the input box.</string>
     <string name="chat_notice_left_while_away">You were away for more than a minute, so you left the chat.</string>
     <string name="chat_notice_rate_limited">You are sending too fast. Wait a moment.</string>
-    <string name="about_version">App version %1$d · APK SHA-256: %2$s</string>
+    <string name="about_version">App version %1$s (%2$d) · APK SHA-256: %3$s</string>
     <string name="about_last_crash">Last crash (stays on this phone; copy it to send to the developer)</string>
     <string name="about_copy_crash">Copy</string>
     <string name="about_clear_crash">Clear</string>

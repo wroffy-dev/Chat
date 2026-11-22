@@ -76,7 +76,7 @@ android {
         targetSdk = 35
         // The phone APK workflow numbers each build (in-app updates install only a higher number).
         versionCode = findProperty("vaultchat.versionCode")?.toString()?.toInt() ?: 1
-        versionName = "0.1.0"
+        versionName = "0.2.0"
     }
 
     signingConfigs {
