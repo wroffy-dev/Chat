@@ -89,6 +89,8 @@ interface MediaSession {
      * could not (no light, front camera, camera off). A no-op returning false where there is no camera.
      */
     suspend fun setTorch(on: Boolean): Boolean = false
+    /** Night mode for the sent camera video (owner, 2026-11-21): dark parts of each frame are brightened. */
+    fun setNightVideo(on: Boolean) = Unit
     /**
      * Asks the other person's phone to flip its own camera (front/back) during the call. Their app
      * switches its already-shared camera and shows that it happened; it cannot turn a camera on.
