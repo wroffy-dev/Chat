@@ -1,5 +1,8 @@
 package app.vaultchat.ui.navigation
 
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -68,7 +71,6 @@ import app.vaultchat.ui.location.LocationRequiredScreen
 import kotlinx.serialization.Serializable
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
@@ -124,12 +126,18 @@ data class CallRoute(
     val callId: String? = null,
 )
 
-/** Camera, snaps and calls open full screen: they grow slightly into place and fade in, and shrink away. */
+/**
+ * Camera, snaps and calls open full screen: they grow into place with a soft spring and fade in, and shrink
+ * away (owner 2026-11-22: premium motion).
+ */
 private fun riseIn(): EnterTransition =
-    fadeIn(tween(Motion.MEDIUM)) + scaleIn(tween(Motion.SLOW, easing = FastOutSlowInEasing), initialScale = 0.92f)
+    fadeIn(tween(Motion.MEDIUM)) + scaleIn(spring(dampingRatio = 0.86f, stiffness = 320f), initialScale = 0.9f)
 
 private fun sinkOut(): ExitTransition =
-    fadeOut(tween(Motion.MEDIUM)) + scaleOut(tween(Motion.MEDIUM), targetScale = 0.92f)
+    fadeOut(tween(Motion.MEDIUM)) + scaleOut(spring(dampingRatio = 1f, stiffness = 420f), targetScale = 0.92f)
+
+/** The push of a new screen: a critically damped spring, quick to start and soft to land, as on iOS. */
+private val PushSpring = spring(dampingRatio = 1f, stiffness = 340f, visibilityThreshold = IntOffset.VisibilityThreshold)
 
 /** Clears the whole back stack, so Back never returns to a screen from the previous state. */
 private fun NavHostController.replaceAll(route: Any) {
@@ -238,16 +246,14 @@ fun VaultChatNavHost(container: AppContainer) {
         startDestination = start,
         // Smooth, iPhone-like screen changes (owner 2026-11-21): a new screen slides in over the old one, which
         // drifts a little to the left and dims; Back plays it in reverse.
-        enterTransition = { slideInHorizontally(tween(Motion.SLOW, easing = FastOutSlowInEasing)) { it } },
+        enterTransition = { slideInHorizontally(PushSpring) { it } },
         exitTransition = {
-            slideOutHorizontally(tween(Motion.SLOW, easing = FastOutSlowInEasing)) { -it / 4 } +
-                fadeOut(tween(Motion.SLOW), targetAlpha = 0.6f)
+            slideOutHorizontally(PushSpring) { -it / 4 } + fadeOut(tween(Motion.SLOW), targetAlpha = 0.5f)
         },
         popEnterTransition = {
-            slideInHorizontally(tween(Motion.SLOW, easing = FastOutSlowInEasing)) { -it / 4 } +
-                fadeIn(tween(Motion.SLOW), initialAlpha = 0.6f)
+            slideInHorizontally(PushSpring) { -it / 4 } + fadeIn(tween(Motion.SLOW), initialAlpha = 0.5f)
         },
-        popExitTransition = { slideOutHorizontally(tween(Motion.SLOW, easing = FastOutSlowInEasing)) { it } },
+        popExitTransition = { slideOutHorizontally(PushSpring) { it } },
     ) {
         composable<LoginRoute> {
             val viewModel: LoginViewModel = viewModel(

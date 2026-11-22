@@ -318,7 +318,7 @@ fun SnapCameraScreen(
                         if (!preparing) gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
                     },
                 )
-                else -> ReviewView(taken!!)
+                else -> taken?.let { ReviewView(it) }
             }
 
             val photo = taken as? Taken.Photo

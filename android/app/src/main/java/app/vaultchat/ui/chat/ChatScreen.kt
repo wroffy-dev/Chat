@@ -1,5 +1,8 @@
 package app.vaultchat.ui.chat
 
+import app.vaultchat.ui.components.popOnChange
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.AnimatedContent
 import app.vaultchat.ui.theme.MintGradient
 import app.vaultchat.ui.theme.glow
 import androidx.compose.ui.graphics.Brush
@@ -402,8 +405,17 @@ private fun ChatComposer(
             textAlign = TextAlign.End,
         )
     }
-    replyTo?.let { target ->
-        Row(
+    // The reply bar slides open above the input and folds away again (owner 2026-11-22: premium motion).
+    AnimatedContent(
+        targetState = replyTo,
+        transitionSpec = {
+            (fadeIn() + expandVertically(spring(dampingRatio = 0.85f, stiffness = 450f))) togetherWith
+                (fadeOut() + shrinkVertically(spring(dampingRatio = 1f, stiffness = 500f)))
+        },
+        contentKey = { it?.id },
+        label = "replyBar",
+    ) { target ->
+        if (target != null) Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 4.dp)
@@ -1218,7 +1230,14 @@ private fun ReactionPicker(chosen: String?, alignEnd: Boolean, onPick: (String) 
 private fun ReactionPill(reactions: List<Reaction>, onClick: () -> Unit) {
     val counts = reactions.groupingBy { it.emoji }.eachCount()
     Box(
-        modifier = Modifier.padding(horizontal = 8.dp).offset(y = (-6).dp).glass(RoundedCornerShape(12.dp), strong = true).clickable(onClick = onClick),
+        // It rises in when the first reaction lands, and pops when one is added or changed.
+        modifier = Modifier
+            .padding(horizontal = 8.dp)
+            .offset(y = (-6).dp)
+            .staggeredAppear(0)
+            .popOnChange(reactions.map { it.emoji })
+            .glass(RoundedCornerShape(12.dp), strong = true)
+            .clickable(onClick = onClick),
     ) {
         Row(modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             counts.forEach { (emoji, n) ->
