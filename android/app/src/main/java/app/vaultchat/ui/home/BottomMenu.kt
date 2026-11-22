@@ -1,5 +1,6 @@
 package app.vaultchat.ui.home
 
+import app.vaultchat.ui.theme.sheenOnce
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material3.ripple
@@ -101,6 +102,8 @@ fun VaultBottomBar(selected: BottomTab, onChat: () -> Unit, onCamera: () -> Unit
                     .clip(CircleShape)
                     .background(SilverButton)
                     .glossy(CircleShape, strength = 0.6f)
+                    // Light sweeps once across the silver when the screen opens.
+                    .sheenOnce(CircleShape)
                     .clickable(
                         interactionSource = interaction,
                         indication = ripple(bounded = true),

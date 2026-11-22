@@ -1,5 +1,11 @@
 package app.vaultchat.ui.chat
 
+import app.vaultchat.ui.components.popOnChange
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.AnimatedContent
+import app.vaultchat.ui.theme.MintGradient
+import app.vaultchat.ui.theme.glow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.offset
@@ -399,8 +405,17 @@ private fun ChatComposer(
             textAlign = TextAlign.End,
         )
     }
-    replyTo?.let { target ->
-        Row(
+    // The reply bar slides open above the input and folds away again (owner 2026-11-22: premium motion).
+    AnimatedContent(
+        targetState = replyTo,
+        transitionSpec = {
+            (fadeIn() + expandVertically(spring(dampingRatio = 0.85f, stiffness = 450f))) togetherWith
+                (fadeOut() + shrinkVertically(spring(dampingRatio = 1f, stiffness = 500f)))
+        },
+        contentKey = { it?.id },
+        label = "replyBar",
+    ) { target ->
+        if (target != null) Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 4.dp)
@@ -456,7 +471,9 @@ private fun ChatComposer(
                 container = if (canSend) Ref.Primary else Ref.Primary.copy(alpha = 0.4f),
                 tint = Ref.OnPrimary,
                 enabled = canSend,
-                modifier = Modifier.graphicsLayer {
+                fill = MintGradient,
+                // A soft mint light around it once it can send.
+                modifier = Modifier.glow(Ref.Primary, spread = 14.dp, strength = 0.38f * ready.coerceIn(0f, 1f)).graphicsLayer {
                     val scale = 0.82f + 0.18f * ready
                     scaleX = scale
                     scaleY = scale
@@ -549,9 +566,11 @@ private fun RoundAction(
     onClick: () -> Unit,
     enabled: Boolean = true,
     modifier: Modifier = Modifier,
+    fill: Brush? = null,
 ) {
     val look = when {
         container == GLASS -> Modifier.glass(CircleShape)
+        fill != null -> Modifier.clip(CircleShape).background(fill, alpha = container.alpha).glossy(CircleShape, strength = 0.8f)
         container.alpha == 0f -> Modifier.clip(CircleShape)
         else -> Modifier.clip(CircleShape).background(container).glossy(CircleShape, strength = 0.8f)
     }
@@ -1006,7 +1025,7 @@ private fun MessageList(
             if (unseen > 0) {
                 Box(
                     modifier = Modifier.align(Alignment.TopEnd).offset(x = 4.dp, y = (-4).dp)
-                        .size(18.dp).background(Ref.Primary, CircleShape).glossy(CircleShape, strength = 0.8f),
+                        .size(18.dp).background(MintGradient, CircleShape).glossy(CircleShape, strength = 0.8f),
                     contentAlignment = Alignment.Center,
                 ) { Text(if (unseen > 9) "9+" else "$unseen", color = Ref.OnPrimary, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
             }
@@ -1142,7 +1161,9 @@ private fun Bubble(
     val look = if (container == GLASS) {
         Modifier.glass(shape)
     } else {
-        Modifier.clip(shape).background(container.copy(alpha = if (faded) 0.8f else 1f)).glossy(shape, strength = 0.7f)
+        // Mine: mint with depth (lighter at the top) and a glossy shine; a failed one stays in the error colour.
+        val base = if (mine && !failed) Modifier.background(MintGradient, alpha = if (faded) 0.8f else 1f) else Modifier.background(container.copy(alpha = if (faded) 0.8f else 1f))
+        Modifier.clip(shape).then(base).glossy(shape, strength = 0.7f)
     }
     val content = when {
         failed -> Ref.OnErrorContainer
@@ -1209,7 +1230,14 @@ private fun ReactionPicker(chosen: String?, alignEnd: Boolean, onPick: (String) 
 private fun ReactionPill(reactions: List<Reaction>, onClick: () -> Unit) {
     val counts = reactions.groupingBy { it.emoji }.eachCount()
     Box(
-        modifier = Modifier.padding(horizontal = 8.dp).offset(y = (-6).dp).glass(RoundedCornerShape(12.dp), strong = true).clickable(onClick = onClick),
+        // It rises in when the first reaction lands, and pops when one is added or changed.
+        modifier = Modifier
+            .padding(horizontal = 8.dp)
+            .offset(y = (-6).dp)
+            .staggeredAppear(0)
+            .popOnChange(reactions.map { it.emoji })
+            .glass(RoundedCornerShape(12.dp), strong = true)
+            .clickable(onClick = onClick),
     ) {
         Row(modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             counts.forEach { (emoji, n) ->
@@ -1314,8 +1342,9 @@ private fun DisappearingScreen(peerUsername: String, current: Int?, onBack: () -
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 52.dp)
+                        .glow(Ref.Primary, spread = 10.dp, strength = 0.22f)
                         .clip(RoundedCornerShape(50))
-                        .background(Ref.Primary)
+                        .background(MintGradient)
                         .glossy(RoundedCornerShape(50))
                         .clickable(role = Role.Button, onClick = { onSet(chosen) })
                         .padding(horizontal = 24.dp, vertical = 12.dp),

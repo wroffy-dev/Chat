@@ -1,5 +1,15 @@
 package app.vaultchat.ui.call
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.material3.ripple
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.drawscope.Stroke
+import app.vaultchat.ui.components.pressScale
+import app.vaultchat.ui.theme.glass
+import app.vaultchat.ui.theme.glassBackdrop
+import app.vaultchat.ui.theme.glassTrack
+import app.vaultchat.ui.theme.glow
 import app.vaultchat.ui.theme.glossy
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
@@ -293,7 +303,8 @@ fun CallScreen(
         contentColor = if (videoLayout) RefOnSurface else VaultGreen.Mint,
     ) {
         Box(
-            modifier = Modifier.fillMaxSize().pointerInput(Unit) {
+            // Voice calls, ringing and the end screen sit on the app's dark glass screen (owner 2026-11-22).
+            modifier = Modifier.fillMaxSize().then(if (videoLayout) Modifier else Modifier.glassBackdrop()).pointerInput(Unit) {
                 // Sees every touch before the buttons do, without consuming it, so a button press
                 // also restarts the timer.
                 awaitPointerEventScope {
@@ -631,6 +642,7 @@ fun CallScreen(
                             label = stringResource(if (permissionsReady) R.string.call_accept else R.string.call_allow_and_accept),
                             icon = Icons.Filled.Call,
                             container = AcceptGreen,
+                            breathing = true,
                             onClick = {
                                 if (permissionsReady) viewModel.controller.accept()
                                 else if (mic.status != PermissionStatus.Granted) mic.request() else camera.request()
@@ -863,9 +875,7 @@ private fun RefControls(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(24.dp))
-                .background(RefContainer)
-                .border(1.dp, RefOutlineVariant, RoundedCornerShape(24.dp))
+                .glassTrack(RoundedCornerShape(30.dp))
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -922,12 +932,16 @@ private fun RefControls(
                 onClick = onSpeaker,
                 state = stringResource(if (speakerOn) R.string.state_on else R.string.state_off),
             )
+            val endPress = remember { MutableInteractionSource() }
             Box(
                 modifier = Modifier
                     .size(width = 56.dp, height = 48.dp)
+                    .pressScale(endPress, 0.88f)
+                    .glow(RefError, spread = 8.dp, strength = 0.3f)
                     .clip(RoundedCornerShape(50))
                     .background(RefError)
-                    .clickable(role = Role.Button, onClick = onEnd),
+                    .glossy(RoundedCornerShape(50), strength = 0.6f)
+                    .clickable(interactionSource = endPress, indication = ripple(), role = Role.Button, onClick = onEnd),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(AppIcons.CallEnd, contentDescription = stringResource(R.string.call_end), tint = Color.White, modifier = Modifier.size(24.dp))
@@ -938,13 +952,13 @@ private fun RefControls(
 
 @Composable
 private fun RefRound(icon: ImageVector, label: String, highlighted: Boolean, onClick: () -> Unit, state: String? = null) {
+    val interaction = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
             .size(48.dp)
-            .clip(CircleShape)
-            .background(if (highlighted) RefOnSurface else RefContainerHigh)
-            .glossy(CircleShape, strength = 0.6f)
-            .clickable(role = Role.Button, onClick = onClick)
+            .pressScale(interaction, 0.86f)
+            .then(if (highlighted) Modifier.clip(CircleShape).background(RefOnSurface).glossy(CircleShape, strength = 0.6f) else Modifier.glass(CircleShape))
+            .clickable(interactionSource = interaction, indication = ripple(), role = Role.Button, onClick = onClick)
             .semantics(mergeDescendants = true) { if (state != null) stateDescription = state },
         contentAlignment = Alignment.Center,
     ) {
@@ -955,26 +969,26 @@ private fun RefRound(icon: ImageVector, label: String, highlighted: Boolean, onC
 /** The large avatar of a voice call (or a video call without video), with a gentle pulse while waiting. */
 @Composable
 private fun CallAvatar(name: String, pulsing: Boolean) {
+    // While waiting: two soft rings keep spreading out from the avatar, one after the other (owner 2026-11-22).
     val transition = rememberInfiniteTransition(label = "callPulse")
-    val pulse by transition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.18f,
-        animationSpec = infiniteRepeatable(tween(1_200), RepeatMode.Reverse),
+    val wave by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(2_400, easing = LinearEasing)),
         label = "ring",
     )
-    Box(contentAlignment = Alignment.Center) {
-        if (pulsing) {
-            Box(
-                Modifier
-                    .size(Sizes.avatarCall)
-                    .graphicsLayer {
-                        scaleX = pulse
-                        scaleY = pulse
-                        alpha = (1.18f - pulse) / 0.18f * 0.35f
-                    }
-                    .background(VaultGreen.Sage, CircleShape),
-            )
-        }
+    val ring = VaultGreen.Sage
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier.drawBehind {
+            if (!pulsing) return@drawBehind
+            val r = Sizes.avatarCall.toPx() / 2f
+            for (phase in floatArrayOf(0f, 0.5f)) {
+                val t = (wave + phase) % 1f
+                drawCircle(ring.copy(alpha = 0.45f * (1f - t)), radius = r * (1f + 0.55f * t), style = Stroke(2.dp.toPx()))
+            }
+        },
+    ) {
         InitialsAvatar(name, size = Sizes.avatarCall)
     }
 }
@@ -1097,17 +1111,21 @@ private fun RoundToggle(
     enabled: Boolean = true,
     state: String? = null,
 ) {
+    val interaction = remember { MutableInteractionSource() }
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier
             .width(64.dp)
             .alpha(if (enabled) 1f else 0.4f)
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .pressScale(interaction, 0.9f)
+            .clickable(interactionSource = interaction, indication = null, enabled = enabled, role = Role.Button, onClick = onClick)
             .semantics(mergeDescendants = true) { if (state != null) stateDescription = state },
     ) {
         Box(
-            modifier = Modifier.size(64.dp).background(if (on) VaultGreen.Mint else Tonal, CircleShape).glossy(CircleShape, strength = 0.6f),
+            modifier = Modifier
+                .size(64.dp)
+                .then(if (on) Modifier.background(VaultGreen.Mint, CircleShape).glossy(CircleShape, strength = 0.6f) else Modifier.glass(CircleShape)),
             contentAlignment = Alignment.Center,
         ) {
             Icon(icon, contentDescription = null, tint = if (on) VaultGreen.Deepest else VaultGreen.Mint, modifier = Modifier.size(26.dp))
@@ -1157,13 +1175,31 @@ private fun SwitchCameraControl(
 
 /** Incoming call's Decline and Accept: large coloured circles with a label. */
 @Composable
-private fun RoundAction(label: String, icon: ImageVector, container: Color, onClick: () -> Unit) {
+private fun RoundAction(label: String, icon: ImageVector, container: Color, onClick: () -> Unit, breathing: Boolean = false) {
+    val interaction = remember { MutableInteractionSource() }
+    // Accept gently breathes while the phone rings, inviting the tap.
+    val breath = rememberInfiniteTransition(label = "accept")
+    val swell by breath.animateFloat(1f, if (breathing) 1.07f else 1f, infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "acceptSwell")
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(10.dp),
-        modifier = Modifier.clickable(role = Role.Button, onClick = onClick).semantics(mergeDescendants = true) {},
+        modifier = Modifier
+            .pressScale(interaction, 0.9f)
+            .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick)
+            .semantics(mergeDescendants = true) {},
     ) {
-        Box(modifier = Modifier.size(72.dp).background(container, CircleShape).glossy(CircleShape), contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier
+                .graphicsLayer {
+                    scaleX = swell
+                    scaleY = swell
+                }
+                .glow(container, spread = 16.dp, strength = 0.35f)
+                .size(72.dp)
+                .background(container, CircleShape)
+                .glossy(CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
             Icon(icon, contentDescription = null, tint = VaultGreen.Mint, modifier = Modifier.size(30.dp))
         }
         Text(label, style = MaterialTheme.typography.bodyMedium, color = VaultGreen.Mint)

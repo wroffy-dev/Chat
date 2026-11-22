@@ -5,7 +5,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.ImageShader
+import androidx.compose.ui.graphics.ShaderBrush
+import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.asImageBitmap
+import kotlinx.coroutines.delay
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
@@ -23,6 +34,11 @@ import kotlin.math.max
  * morphism and a glass "Inbox / Draft" switch). A glass panel is a see-through fill that is lighter at the top
  * left, a thin light border, a bright line along the top edge and a softer one along the bottom, over the dark
  * screen of [glassBackdrop].
+ *
+ * Premium finish (owner 2026-11-22: "luxury … premium", with full freedom over how strong the glass is): the rim
+ * catches light like a cut edge, brightest at the top-left corner; a thin lip of light runs along the top inside
+ * edge; and a very fine grain gives the glass a frosted, physical surface (and keeps dark gradients from
+ * banding). The grain is one small tile drawn once and repeated.
  *
  * The blur of real frosted glass is not drawn: Compose has no blur of what lies behind a view, and blurring
  * the screen on every frame would cost battery and smoothness (owner 2026-11-21: no lag). The screen behind
@@ -45,21 +61,24 @@ class GlassStyle(
     val lightTop: Color,
     val lightBottom: Color,
     val ground: Color,
+    /** How strongly the fine grain shows on glass (0 = none). */
+    val grain: Float = 0f,
 )
 
 /** The app's glass: always dark (owner 2026-11-22). */
 val DarkGlass = GlassStyle(
-    fillTop = Color.White.copy(alpha = 0.12f),
+    fillTop = Color.White.copy(alpha = 0.13f),
     fillMiddle = Color.White.copy(alpha = 0.03f),
-    fillBottom = Color.White.copy(alpha = 0.06f),
-    base = Color(0xF0141719),
-    border = Color.White.copy(alpha = 0.13f),
-    rimTop = Color.White.copy(alpha = 0.30f),
-    rimBottom = Color.White.copy(alpha = 0.16f),
+    fillBottom = Color.White.copy(alpha = 0.055f),
+    base = Color(0xF2141719),
+    border = Color.White.copy(alpha = 0.11f),
+    rimTop = Color.White.copy(alpha = 0.44f),
+    rimBottom = Color.White.copy(alpha = 0.17f),
     shadow = Color.Transparent,
     lightTop = Glass.TealLight,
     lightBottom = Glass.WarmLight,
     ground = Glass.Ground,
+    grain = 0.045f,
 )
 
 /** Light glass, for the map's buttons: the map itself stays light (owner 2026-11-02). */
@@ -103,18 +122,26 @@ fun Modifier.glass(shape: Shape = CircleShape, strong: Boolean = false, elevatio
                 start = Offset.Zero,
                 end = Offset(size.width, size.height),
             )
-            // Border and edge lights in one stroke: bright along the top, soft along the bottom.
-            val rim = Brush.verticalGradient(
+            // A thin lip of light along the top inside edge.
+            val lipHeight = 14.dp.toPx().coerceAtMost(size.height * 0.4f)
+            val lip = Brush.verticalGradient(0f to g.rimTop.copy(alpha = g.rimTop.alpha * 0.22f), 1f to Color.Transparent, endY = lipHeight)
+            // The cut edge: brightest at the top-left corner, fading along the sides, a softer light at the bottom
+            // right, as if lit from above.
+            val rim = Brush.linearGradient(
                 0f to g.rimTop,
-                0.18f to g.border,
-                0.82f to g.border,
+                0.25f to g.border,
+                0.7f to g.border.copy(alpha = g.border.alpha * 0.7f),
                 1f to g.rimBottom,
+                start = Offset.Zero,
+                end = Offset(size.width * 0.6f, size.height),
             )
             // Twice the visible width: half of the stroke falls outside the clip.
             val stroke = Stroke(width = 2.5.dp.toPx())
             onDrawBehind {
                 if (strong && g.base.alpha > 0f) drawOutline(outline, g.base)
                 drawOutline(outline, fill)
+                drawOutline(outline, lip)
+                if (g.grain > 0f) drawOutline(outline, GrainBrush, alpha = g.grain)
                 drawOutline(outline, rim, style = stroke)
             }
         }
@@ -140,6 +167,7 @@ fun Modifier.glassTrack(shape: Shape = CircleShape): Modifier {
         onDrawBehind {
             drawOutline(outline, g.base.copy(alpha = 0.55f))
             drawOutline(outline, fill)
+            if (g.grain > 0f) drawOutline(outline, GrainBrush, alpha = g.grain)
             drawOutline(outline, rim, style = stroke)
         }
     }
@@ -208,10 +236,75 @@ fun Modifier.glassBackdrop(): Modifier {
         val bottomRadius = max(size.width, size.height) * 0.6f
         val bottomCentre = Offset(0f, size.height)
         val bottom = Brush.radialGradient(0f to g.lightBottom, 1f to g.lightBottom.copy(alpha = 0f), center = bottomCentre, radius = bottomRadius)
+        // Edges a little darker than the middle, which draws the eye inwards.
+        val vignette = Brush.radialGradient(
+            0.55f to Color.Transparent,
+            1f to Color.Black.copy(alpha = 0.45f),
+            center = Offset(size.width / 2f, size.height * 0.45f),
+            radius = max(size.width, size.height) * 0.75f,
+        )
         onDrawBehind {
             drawRect(g.ground)
             drawRect(top)
             drawRect(bottom)
+            drawRect(vignette)
+            // A trace of grain keeps the soft lights from showing steps on phone screens.
+            if (g.grain > 0f) drawRect(GrainBrush, alpha = g.grain * 0.5f)
+        }
+    }
+}
+
+/** One small tile of random fine grain, made once and repeated wherever grain is drawn. */
+private val GrainBrush: ShaderBrush by lazy {
+    val side = 96
+    val random = java.util.Random(7)
+    val pixels = IntArray(side * side) { (random.nextInt(256) shl 24) or 0xFFFFFF }
+    val tile = android.graphics.Bitmap.createBitmap(pixels, side, side, android.graphics.Bitmap.Config.ARGB_8888).asImageBitmap()
+    ShaderBrush(ImageShader(tile, TileMode.Repeated, TileMode.Repeated))
+}
+
+/**
+ * A soft light of [color] around an element, reaching [spread] beyond it. Put it before any clip, so the light
+ * can spill outside the element's bounds.
+ */
+fun Modifier.glow(color: Color, spread: Dp = 18.dp, strength: Float = 0.35f): Modifier = drawBehind {
+    val radius = size.minDimension / 2f + spread.toPx()
+    drawCircle(
+        Brush.radialGradient(0f to color.copy(alpha = strength), 0.6f to color.copy(alpha = strength * 0.35f), 1f to Color.Transparent, center = center, radius = radius),
+        radius = radius,
+        center = center,
+    )
+}
+
+/**
+ * A band of light that sweeps once across the element after [delayMillis], like light catching polished metal.
+ * It is drawn over the content and only while it moves.
+ */
+@Composable
+fun Modifier.sheenOnce(shape: Shape, delayMillis: Long = 450L): Modifier {
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        delay(delayMillis)
+        progress.animateTo(1f, tween(1100, easing = FastOutSlowInEasing))
+    }
+    return drawWithCache {
+        val outline = shape.createOutline(size, layoutDirection, this)
+        onDrawWithContent {
+            drawContent()
+            val p = progress.value
+            if (p > 0f && p < 1f) {
+                val x = -size.width + p * 3f * size.width
+                val band = Brush.linearGradient(
+                    0f to Color.Transparent,
+                    0.42f to Color.Transparent,
+                    0.5f to Color.White.copy(alpha = 0.55f),
+                    0.58f to Color.Transparent,
+                    1f to Color.Transparent,
+                    start = Offset(x, 0f),
+                    end = Offset(x + size.width, size.height),
+                )
+                drawOutline(outline, band)
+            }
         }
     }
 }

@@ -1,5 +1,6 @@
 package app.vaultchat.ui.login
 
+import app.vaultchat.ui.theme.SilverText
 import app.vaultchat.ui.theme.glass
 import app.vaultchat.ui.theme.glassBackdrop
 import app.vaultchat.ui.theme.glossy
@@ -174,7 +175,7 @@ private fun LoginContent(
                             lineHeight = 34.sp,
                             letterSpacing = (-0.4).sp,
                             fontWeight = FontWeight.Bold,
-                            color = RefOnSurface,
+                            style = TextStyle(brush = SilverText),
                             modifier = Modifier.semantics { heading() },
                         )
                         Text(stringResource(R.string.login_intro), fontSize = 14.sp, lineHeight = 20.sp, color = RefOnSurfaceVariant)

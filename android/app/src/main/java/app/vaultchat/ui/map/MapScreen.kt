@@ -1,5 +1,27 @@
 package app.vaultchat.ui.map
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.material3.ripple
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import app.vaultchat.ui.components.pressScale
+import app.vaultchat.ui.components.staggeredAppear
+import app.vaultchat.ui.theme.Glass
+import app.vaultchat.ui.theme.glassBackdrop
 import android.graphics.BitmapFactory
 import android.text.format.DateUtils
 import androidx.compose.foundation.Canvas
@@ -110,7 +132,6 @@ private sealed interface MapLoad {
 // same day: "Map ko light hi rhne do"), as OpenStreetMap draws it.
 private val MapGround = Color(0xFFE5E3DF)
 private val DarkButton = Color(0xFF262D44)
-private val LabelFill = Color(0xF0121626)
 private val MeBlue = Color(0xFF1E88FF)
 
 /** Marker colours; each person keeps the same one (picked from their name). */
@@ -143,11 +164,23 @@ fun MapScreen(
             ApiResult.NetworkError -> MapLoad.Offline
         }
     }
-    Surface(modifier = Modifier.fillMaxSize(), color = MapGround) {
-        Column(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
-            Box(modifier = Modifier.weight(1f).fillMaxWidth().background(MapGround)) {
+    // The app's dark glass screen around a rounded map card (owner 2026-11-22: premium). The dark ground keeps the
+    // status bar's light icons and the glass tab bar readable; the map itself stays light (owner 2026-11-02).
+    Surface(modifier = Modifier.fillMaxSize(), color = Glass.Ground) {
+        Column(modifier = Modifier.fillMaxSize().glassBackdrop().safeDrawingPadding()) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(start = 10.dp, end = 10.dp, top = 6.dp)
+                    .clip(RoundedCornerShape(30.dp))
+                    .background(MapGround),
+            ) {
                 when (val l = load) {
-                    MapLoad.Loading -> CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                    MapLoad.Loading -> MapCard(Modifier.align(Alignment.Center)) {
+                        CircularProgressIndicator(color = Glass.Mint, strokeWidth = 3.dp, modifier = Modifier.size(28.dp))
+                        Text(stringResource(R.string.loading), color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                    }
                     MapLoad.SharingOff -> Message(stringResource(R.string.map_sharing_off))
                     MapLoad.Offline -> Message(stringResource(R.string.server_unreachable))
                     is MapLoad.Ready -> TileMap(l.pins, onOpenChat, onCallPerson)
@@ -155,9 +188,9 @@ fun MapScreen(
                 RoundButton(
                     icon = Icons.Filled.Refresh,
                     description = stringResource(R.string.action_retry),
-                    light = false,
+                    light = true,
                     onClick = { load = MapLoad.Loading; reloads++ },
-                    modifier = Modifier.align(Alignment.TopEnd).padding(16.dp),
+                    modifier = Modifier.align(Alignment.TopEnd).padding(14.dp).staggeredAppear(0),
                 )
             }
             VaultBottomBar(selected = BottomTab.MAP, onChat = onChat, onCamera = onCamera, onMap = {})
@@ -167,9 +200,24 @@ fun MapScreen(
 
 @Composable
 private fun Message(text: String) {
-    Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-        Text(text, fontSize = 16.sp, lineHeight = 22.sp, color = Color(0xFF333333), textAlign = TextAlign.Center)
+    Box(modifier = Modifier.fillMaxSize().padding(28.dp), contentAlignment = Alignment.Center) {
+        MapCard {
+            Text(text, fontSize = 16.sp, lineHeight = 22.sp, color = Color.White, textAlign = TextAlign.Center)
+        }
     }
+}
+
+/** A floating dark glass card over the light map, rising in. */
+@Composable
+private fun MapCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    Column(
+        modifier = modifier
+            .staggeredAppear(0)
+            .glass(RoundedCornerShape(24.dp), strong = true)
+            .padding(horizontal = 22.dp, vertical = 18.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) { content() }
 }
 
 /**
@@ -184,12 +232,14 @@ private fun RoundButton(icon: ImageVector, description: String, light: Boolean, 
         } else {
             Modifier.shadow(6.dp, CircleShape).clip(CircleShape).background(DarkButton).glossy(CircleShape, strength = 0.7f)
         }
+        val interaction = remember { MutableInteractionSource() }
         Box(
             contentAlignment = Alignment.Center,
             modifier = modifier
                 .size(52.dp)
+                .pressScale(interaction, 0.88f)
                 .then(look)
-                .clickable(role = Role.Button, onClick = onClick),
+                .clickable(interactionSource = interaction, indication = ripple(), role = Role.Button, onClick = onClick),
         ) {
             Icon(icon, contentDescription = description, tint = if (light) Color(0xFF111111) else Color.White, modifier = Modifier.size(24.dp))
         }
@@ -286,14 +336,29 @@ private fun TileMap(
             visibleTiles(cx, cy, zoom, IntSize(size.width.toInt(), size.height.toInt()), tilePx).forEach { (tx, ty, z) ->
                 val n = 1 shl z
                 val ts = world / n
-                val image = tiles.images[TileKey(z, Math.floorMod(tx, n), ty)] ?: return@forEach
                 val x = tx * ts - left
                 val y = ty * ts - top
-                drawImage(
-                    image,
-                    dstOffset = IntOffset(x.toInt(), y.toInt()),
-                    dstSize = IntSize((x + ts).toInt() - x.toInt(), (y + ts).toInt() - y.toInt()),
-                )
+                val dstOffset = IntOffset(x.toInt(), y.toInt())
+                val dstSize = IntSize((x + ts).toInt() - x.toInt(), (y + ts).toInt() - y.toInt())
+                val wx = Math.floorMod(tx, n)
+                val image = tiles.images[TileKey(z, wx, ty)]
+                if (image != null) {
+                    drawImage(image, dstOffset = dstOffset, dstSize = dstSize)
+                } else if (z > MIN_ZOOM.toInt()) {
+                    // Until it arrives, the matching quarter of the tile one level out, enlarged: zooming in never
+                    // flashes empty squares.
+                    val parent = tiles.images[TileKey(z - 1, wx / 2, ty / 2)]
+                    if (parent != null) {
+                        val half = parent.width / 2
+                        drawImage(
+                            parent,
+                            srcOffset = IntOffset((wx % 2) * half, (ty % 2) * half),
+                            srcSize = IntSize(half, half),
+                            dstOffset = dstOffset,
+                            dstSize = dstSize,
+                        )
+                    }
+                }
             }
         }
         val now = System.currentTimeMillis()
@@ -318,17 +383,21 @@ private fun TileMap(
             )
         }
         if (pins.none { it.name != null }) {
-            Surface(
-                color = LabelFill,
-                contentColor = Color.White,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.align(Alignment.TopCenter).padding(start = 16.dp, end = 84.dp, top = 16.dp),
-            ) {
-                Text(stringResource(R.string.map_nobody), modifier = Modifier.padding(14.dp), fontSize = 14.sp, lineHeight = 20.sp)
-            }
+            Text(
+                stringResource(R.string.map_nobody),
+                color = Color.White,
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = 14.dp, end = 80.dp, top = 14.dp)
+                    .staggeredAppear(1)
+                    .glass(RoundedCornerShape(18.dp), strong = true)
+                    .padding(14.dp),
+            )
         }
         Column(
-            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 24.dp),
+            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = 20.dp).staggeredAppear(2),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             if (pins.size > 1) {
@@ -353,9 +422,9 @@ private fun TileMap(
             color = Color(0xFF333333),
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(8.dp)
-                .background(Color.White.copy(alpha = 0.7f), RoundedCornerShape(4.dp))
-                .padding(horizontal = 4.dp, vertical = 1.dp),
+                .padding(start = 14.dp, bottom = 12.dp)
+                .background(Color.White.copy(alpha = 0.75f), RoundedCornerShape(6.dp))
+                .padding(horizontal = 6.dp, vertical = 2.dp),
         )
     }
 }
@@ -363,10 +432,18 @@ private fun TileMap(
 /** A small white round button in a marker's name label. */
 @Composable
 private fun LabelAction(icon: ImageVector, description: String, onClick: () -> Unit) {
-    Surface(onClick = onClick, shape = CircleShape, color = Color.White, contentColor = Color(0xFF111111), modifier = Modifier.size(38.dp)) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription = description, modifier = Modifier.size(20.dp))
-        }
+    val interaction = remember { MutableInteractionSource() }
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .size(40.dp)
+            .pressScale(interaction, 0.86f)
+            .clip(CircleShape)
+            .background(Color.White)
+            .glossy(CircleShape, strength = 0.5f)
+            .clickable(interactionSource = interaction, indication = ripple(), role = Role.Button, onClick = onClick),
+    ) {
+        Icon(icon, contentDescription = description, tint = Color(0xFF111111), modifier = Modifier.size(20.dp))
     }
 }
 
@@ -401,9 +478,15 @@ private fun Marker(
             layout(0, 0) { p.place(at.x - p.width / 2, at.y - p.height + anchor.roundToPx()) }
         },
     ) {
-        if (selected) {
-            Surface(color = LabelFill, contentColor = Color.White, shape = RoundedCornerShape(12.dp), shadowElevation = 4.dp) {
-                Column(modifier = Modifier.widthIn(max = 200.dp).padding(horizontal = 12.dp, vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        // The name card grows out of the marker with a spring (owner 2026-11-22: premium motion).
+        AnimatedVisibility(
+            visible = selected,
+            enter = fadeIn() + scaleIn(spring(dampingRatio = 0.7f, stiffness = 500f), initialScale = 0.6f, transformOrigin = TransformOrigin(0.5f, 1f)),
+            exit = fadeOut() + scaleOut(targetScale = 0.8f, transformOrigin = TransformOrigin(0.5f, 1f)),
+        ) {
+          Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(modifier = Modifier.glass(RoundedCornerShape(18.dp), strong = true)) {
+                Column(modifier = Modifier.widthIn(max = 220.dp).padding(horizontal = 14.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         pin.name ?: stringResource(R.string.map_me),
                         fontSize = 14.sp,
@@ -423,17 +506,38 @@ private fun Marker(
                 }
             }
             Spacer(Modifier.height(6.dp))
+          }
+        }
+        // Markers drop in with a small bounce, and the chosen one stands a little taller.
+        val appear = remember { Animatable(0f) }
+        LaunchedEffect(Unit) { appear.animateTo(1f, spring(dampingRatio = 0.55f, stiffness = 380f)) }
+        val lift by animateFloatAsState(if (selected) 1.12f else 1f, spring(dampingRatio = 0.6f, stiffness = 500f), label = "markerLift")
+        val pop = Modifier.graphicsLayer {
+            val scale = appear.value * lift
+            scaleX = scale
+            scaleY = scale
+            transformOrigin = TransformOrigin(0.5f, 1f)
         }
         if (me) {
             // Me as before v162 (owner, 2026-11-20): a round marker in the theme's own colour with "M".
             val colors = MaterialTheme.colorScheme
+            // Where I am: a soft ring that keeps spreading out from my marker, like a beacon.
+            val beacon = rememberInfiniteTransition(label = "beacon")
+            val wave by beacon.animateFloat(0f, 1f, infiniteRepeatable(tween(2400, easing = LinearEasing)), label = "beaconWave")
+            val ringColor = colors.tertiary
             Surface(
                 onClick = onClick,
                 shape = CircleShape,
                 color = colors.tertiary,
                 contentColor = colors.onTertiary,
                 shadowElevation = 6.dp,
-                modifier = Modifier.size(48.dp),
+                modifier = Modifier
+                    .then(pop)
+                    .drawBehind {
+                        val r = size.minDimension / 2f
+                        drawCircle(ringColor.copy(alpha = 0.35f * (1f - wave)), radius = r * (1f + 0.9f * wave))
+                    }
+                    .size(48.dp),
             ) {
                 Box(
                     contentAlignment = Alignment.Center,
@@ -451,7 +555,7 @@ private fun Marker(
                 color = color,
                 contentColor = Color.White,
                 shadowElevation = 6.dp,
-                modifier = Modifier.size(54.dp).semantics { contentDescription = name },
+                modifier = Modifier.then(pop).size(54.dp).semantics { contentDescription = name },
             ) {
                 Box(
                     contentAlignment = Alignment.Center,

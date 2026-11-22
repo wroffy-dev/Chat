@@ -1,5 +1,9 @@
 package app.vaultchat.ui.home
 
+import app.vaultchat.ui.theme.SilverText
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Offset
 import android.Manifest
 import android.annotation.SuppressLint
 import android.os.Build
@@ -235,7 +239,8 @@ private fun Header(listState: LazyListState, searching: Boolean, onSearch: () ->
     ) {
         Text(
             stringResource(R.string.app_name),
-            style = MaterialTheme.typography.headlineMedium.copy(fontSize = 38.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1.2).sp),
+            // Brushed silver, white at the top (owner 2026-11-22: premium).
+            style = MaterialTheme.typography.headlineMedium.copy(fontSize = 38.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1.2).sp, brush = SilverText),
             maxLines = 1,
             modifier = Modifier
                 .weight(1f)
@@ -471,6 +476,7 @@ private fun ChatRow(chat: Connection, onClick: () -> Unit, onSnap: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val snap = chat.pendingSnaps > 0
     val unread = chat.unreadCount > 0
+    val mintLight = colors.primary.copy(alpha = 0.12f)
     val interaction = remember { MutableInteractionSource() }
     Row(
         modifier = Modifier
@@ -478,6 +484,8 @@ private fun ChatRow(chat: Connection, onClick: () -> Unit, onSnap: () -> Unit) {
             .heightIn(min = 76.dp)
             .pressScale(interaction, 0.97f)
             .glass(RoundedCornerShape(Radii.card))
+            // Something new: a faint mint light in the card's top-left corner.
+            .then(if (snap || unread) Modifier.drawBehind { drawRect(Brush.radialGradient(0f to mintLight, 1f to Color.Transparent, center = Offset.Zero, radius = size.width * 0.55f)) } else Modifier)
             .clickable(interactionSource = interaction, indication = ripple(), onClick = onClick)
             .padding(start = 14.dp, end = Spacing.sm, top = Spacing.md, bottom = Spacing.md),
         verticalAlignment = Alignment.CenterVertically,
