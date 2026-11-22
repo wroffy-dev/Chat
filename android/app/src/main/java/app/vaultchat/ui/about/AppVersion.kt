@@ -62,7 +62,7 @@ fun AboutApp(modifier: Modifier = Modifier, onCleared: () -> Unit = {}) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SelectionContainer {
             Text(
-                stringResource(R.string.about_version, BuildConfig.VERSION_CODE, hash ?: "…"),
+                stringResource(R.string.about_version, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE, hash ?: "…"),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
