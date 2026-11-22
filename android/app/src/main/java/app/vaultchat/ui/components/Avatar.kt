@@ -47,8 +47,9 @@ fun InitialsAvatar(name: String, modifier: Modifier = Modifier, size: Dp = 44.dp
                     val light = Brush.radialGradient(
                         0f to Color.White.copy(alpha = 0.35f),
                         1f to Color.Transparent,
-                        center = Offset(size.width * 0.32f, size.height * 0.26f),
-                        radius = size.minDimension * 0.5f,
+                        // this.size: the drawing area, not the avatar's size parameter.
+                        center = Offset(this.size.width * 0.32f, this.size.height * 0.26f),
+                        radius = this.size.minDimension * 0.5f,
                     )
                     onDrawBehind { drawCircle(light) }
                 }
