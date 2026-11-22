@@ -1,5 +1,29 @@
 package app.vaultchat.ui.snap
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ripple
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import app.vaultchat.ui.components.pressScale
+import app.vaultchat.ui.components.staggeredAppear
+import app.vaultchat.ui.theme.MintGradient
+import app.vaultchat.ui.theme.glass
+import app.vaultchat.ui.theme.glassBackdrop
+import app.vaultchat.ui.theme.glossy
 import android.app.Activity
 import android.graphics.BitmapFactory
 import android.view.WindowManager
@@ -14,19 +38,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,7 +65,6 @@ import app.vaultchat.domain.snap.SnapResult
 import app.vaultchat.domain.snap.SnapRules
 import app.vaultchat.ui.theme.VaultGreen
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -108,13 +126,25 @@ fun SnapViewerScreen(repo: SnapRepository, snapIds: List<String>, onClose: () ->
     Surface(modifier = Modifier.fillMaxSize(), color = VaultGreen.Deepest, contentColor = VaultGreen.Mint) {
         Box(modifier = Modifier.fillMaxSize()) {
             when (stage) {
-                Stage.OPENING -> Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = VaultGreen.Sage)
-                    Text(stringResource(R.string.snap_opening), modifier = Modifier.padding(top = 12.dp))
+                // Waiting, gone and the end of a snap sit on the app's glass screen in a glass card (owner 2026-11-22).
+                Stage.OPENING -> Box(Modifier.fillMaxSize().glassBackdrop(), contentAlignment = Alignment.Center) {
+                    Column(
+                        Modifier.staggeredAppear(0).glass(RoundedCornerShape(24.dp)).padding(horizontal = 28.dp, vertical = 22.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        CircularProgressIndicator(color = VaultGreen.Sage, strokeWidth = 3.dp)
+                        Text(stringResource(R.string.snap_opening), modifier = Modifier.padding(top = 12.dp))
+                    }
                 }
-                Stage.GONE -> Column(Modifier.align(Alignment.Center).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(stringResource(R.string.snap_gone), style = MaterialTheme.typography.bodyLarge)
-                    TextButton(onClick = ::next) { Text(stringResource(R.string.call_close), color = VaultGreen.Mint) }
+                Stage.GONE -> Box(Modifier.fillMaxSize().glassBackdrop().padding(24.dp), contentAlignment = Alignment.Center) {
+                    Column(
+                        Modifier.staggeredAppear(0).glass(RoundedCornerShape(28.dp)).padding(horizontal = 24.dp, vertical = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        Text(stringResource(R.string.snap_gone), style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
+                        ViewerButton(stringResource(R.string.call_close), primary = false, onClick = ::next)
+                    }
                 }
                 Stage.SHOWING -> {
                     val current = snap
@@ -131,20 +161,24 @@ fun SnapViewerScreen(repo: SnapRepository, snapIds: List<String>, onClose: () ->
                                 }
                                 // Pinch or double-tap to zoom; a single tap still closes the photo.
                                 bitmap?.let { ZoomableImage(it, onTap = { stage = Stage.AFTER }) }
-                                var progress by remember(showing) { mutableFloatStateOf(1f) }
+                                // Time left as a thin bar along the top that empties smoothly (drawn, not recomposed).
+                                val progress = remember(showing) { Animatable(1f) }
                                 LaunchedEffect(showing) {
-                                    val steps = SnapRules.PHOTO_SECONDS * 10
-                                    for (i in steps downTo 0) {
-                                        progress = i / steps.toFloat()
-                                        delay(100)
-                                    }
+                                    progress.animateTo(0f, tween(SnapRules.PHOTO_SECONDS * 1000, easing = LinearEasing))
                                     stage = Stage.AFTER
                                 }
-                                LinearProgressIndicator(
-                                    progress = { progress },
-                                    color = VaultGreen.Sage,
-                                    trackColor = VaultGreen.Forest,
-                                    modifier = Modifier.align(Alignment.TopCenter).safeDrawingPadding().padding(12.dp),
+                                Box(
+                                    Modifier
+                                        .align(Alignment.TopCenter)
+                                        .safeDrawingPadding()
+                                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                                        .fillMaxWidth()
+                                        .height(3.dp)
+                                        .drawBehind {
+                                            val r = CornerRadius(size.height / 2f)
+                                            drawRoundRect(Color.White.copy(alpha = 0.28f), cornerRadius = r)
+                                            drawRoundRect(Color.White, size = Size(size.width * progress.value, size.height), cornerRadius = r)
+                                        },
                                 )
                             } else {
                                 videoFile?.let { file ->
@@ -161,7 +195,8 @@ fun SnapViewerScreen(repo: SnapRepository, snapIds: List<String>, onClose: () ->
                                         .align(Alignment.TopStart)
                                         .safeDrawingPadding()
                                         .padding(top = 28.dp, start = 16.dp)
-                                        .background(VaultGreen.Deepest.copy(alpha = 0.6f), CircleShape)
+                                        .background(Color.Black.copy(alpha = 0.32f), CircleShape)
+                                        .glass(CircleShape)
                                         .padding(horizontal = 12.dp, vertical = 6.dp),
                                 )
                             }
@@ -173,24 +208,42 @@ fun SnapViewerScreen(repo: SnapRepository, snapIds: List<String>, onClose: () ->
                         }
                     }
                 }
-                Stage.AFTER -> Column(
-                    modifier = Modifier.align(Alignment.Center).padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    if (replaysLeft > 0 && snap != null) {
-                        Button(
-                            onClick = {
+                Stage.AFTER -> Box(Modifier.fillMaxSize().glassBackdrop(), contentAlignment = Alignment.Center) {
+                    Column(
+                        modifier = Modifier.staggeredAppear(0).glass(RoundedCornerShape(28.dp)).padding(horizontal = 24.dp, vertical = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        if (replaysLeft > 0 && snap != null) {
+                            ViewerButton(stringResource(R.string.snap_replay), primary = true) {
                                 replaysLeft--
                                 showing++
                                 stage = Stage.SHOWING
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = VaultGreen.Sage, contentColor = VaultGreen.Deepest),
-                        ) { Text(stringResource(R.string.snap_replay)) }
+                            }
+                        }
+                        ViewerButton(stringResource(R.string.call_close), primary = false, onClick = ::next)
                     }
-                    TextButton(onClick = ::next) { Text(stringResource(R.string.call_close), color = VaultGreen.Mint) }
                 }
             }
         }
+    }
+}
+
+/** A wide pill on the snap viewer: mint with depth for the main action, glass otherwise. */
+@Composable
+private fun ViewerButton(label: String, primary: Boolean, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    val shape = RoundedCornerShape(50)
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .widthIn(min = 180.dp)
+            .heightIn(min = 48.dp)
+            .pressScale(interaction, 0.95f)
+            .then(if (primary) Modifier.clip(shape).background(MintGradient).glossy(shape, strength = 0.7f) else Modifier.glass(shape))
+            .clickable(interactionSource = interaction, indication = ripple(), role = Role.Button, onClick = onClick)
+            .padding(horizontal = 24.dp, vertical = 12.dp),
+    ) {
+        Text(label, color = if (primary) VaultGreen.Deepest else Color.White, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
     }
 }

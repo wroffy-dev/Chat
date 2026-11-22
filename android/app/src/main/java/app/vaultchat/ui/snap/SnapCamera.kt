@@ -1,5 +1,44 @@
 package app.vaultchat.ui.snap
 
+import app.vaultchat.ui.components.InitialsAvatar
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateIntAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.material3.ripple
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.style.TextAlign
+import app.vaultchat.ui.components.pressScale
+import app.vaultchat.ui.components.staggeredAppear
+import app.vaultchat.ui.permissions.openAppSettings
+import app.vaultchat.ui.theme.MintGradient
+import app.vaultchat.ui.theme.glass
+import app.vaultchat.ui.theme.glassBackdrop
+import app.vaultchat.ui.theme.glow
+import java.util.Locale
 import app.vaultchat.ui.theme.glossy
 import android.Manifest
 import android.annotation.SuppressLint
@@ -48,7 +87,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -56,14 +94,11 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -247,13 +282,32 @@ fun SnapCameraScreen(
     Surface(modifier = Modifier.fillMaxSize(), color = VaultGreen.Deepest, contentColor = VaultGreen.Mint) {
         Box(modifier = Modifier.fillMaxSize()) {
             when {
-                camera.status != PermissionStatus.Granted -> Column(
-                    modifier = Modifier.fillMaxSize().padding(32.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                camera.status != PermissionStatus.Granted -> Box(
+                    modifier = Modifier.fillMaxSize().glassBackdrop().safeDrawingPadding().padding(24.dp),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Text(stringResource(R.string.snap_needs_camera), style = MaterialTheme.typography.bodyLarge)
-                    TextButton(onClick = camera::request) { Text(stringResource(R.string.talk_allow_microphone)) }
+                    // A glass card; when Android will no longer ask, its button opens the app's settings instead.
+                    val blocked = camera.status == PermissionStatus.PermanentlyDenied
+                    Column(
+                        modifier = Modifier.staggeredAppear(0).glass(RoundedCornerShape(28.dp)).padding(horizontal = 24.dp, vertical = 28.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Box(
+                            modifier = Modifier.size(64.dp).background(MintGradient, CircleShape).glossy(CircleShape),
+                            contentAlignment = Alignment.Center,
+                        ) { Icon(AppIcons.PhotoCamera, contentDescription = null, tint = VaultGreen.Deepest, modifier = Modifier.size(30.dp)) }
+                        Text(
+                            stringResource(if (blocked) R.string.scan_qr_camera_denied else R.string.snap_needs_camera),
+                            style = MaterialTheme.typography.bodyLarge,
+                            textAlign = TextAlign.Center,
+                        )
+                        CameraPillButton(
+                            label = stringResource(if (blocked) R.string.action_open_settings else R.string.talk_allow_microphone),
+                            primary = true,
+                            onClick = { if (blocked) openAppSettings(context) else camera.request() },
+                        )
+                    }
                 }
                 taken == null -> CaptureView(
                     withAudio = mic.status == PermissionStatus.Granted,
@@ -287,9 +341,7 @@ fun SnapCameraScreen(
                         .align(Alignment.TopStart)
                         .safeDrawingPadding()
                         .padding(12.dp)
-                        .clip(CircleShape)
-                        .background(if (viewOnce) VaultGreen.Mint else VaultGreen.Deepest.copy(alpha = 0.55f))
-                        .glossy(CircleShape, strength = 0.6f)
+                        .cameraGlass(CircleShape, on = viewOnce)
                         .clickable(enabled = !sending, role = Role.Switch, onClickLabel = stringResource(R.string.snap_view_once)) { viewOnce = !viewOnce }
                         .padding(horizontal = 14.dp, vertical = 10.dp),
                 ) {
@@ -301,15 +353,17 @@ fun SnapCameraScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    TextButton(onClick = ::discard, enabled = !sending) { Text(stringResource(R.string.snap_retake), color = VaultGreen.Mint) }
+                    CameraPillButton(stringResource(R.string.snap_retake), enabled = !sending, onClick = ::discard)
                     // Save your own photo or video to the phone (owner, 2026-11-20). Received snaps have no Save, and
                     // one picked from the gallery is already there.
                     val savedText = stringResource(R.string.snap_saved)
                     val saveFailedText = stringResource(R.string.snap_save_failed)
-                    if (taken?.fromGallery != true) TextButton(
+                    if (taken?.fromGallery != true) CameraPillButton(
+                        label = stringResource(R.string.snap_save),
+                        icon = AppIcons.Download,
                         enabled = !sending && !saving,
                         onClick = {
-                            val item = taken ?: return@TextButton
+                            val item = taken ?: return@CameraPillButton
                             saving = true
                             scope.launch {
                                 val ok = withContext(Dispatchers.IO) {
@@ -322,19 +376,15 @@ fun SnapCameraScreen(
                                 notice = if (ok) savedText else saveFailedText
                             }
                         },
-                    ) {
-                        Icon(AppIcons.Download, contentDescription = null, tint = VaultGreen.Mint, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(stringResource(R.string.snap_save), color = VaultGreen.Mint)
-                    }
-                    Button(
+                    )
+                    CameraPillButton(
+                        label = stringResource(R.string.snap_send_to),
+                        icon = AppIcons.ArrowUpward,
+                        primary = true,
+                        busy = sending,
                         enabled = !sending,
-                        colors = ButtonDefaults.buttonColors(containerColor = VaultGreen.Sage, contentColor = VaultGreen.Deepest),
                         onClick = { picking = true },
-                    ) {
-                        if (sending) CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = VaultGreen.Deepest)
-                        else Text(stringResource(R.string.snap_send_to))
-                    }
+                    )
                 }
             }
             val mode = editing
@@ -350,25 +400,33 @@ fun SnapCameraScreen(
                 )
             }
             if (preparing) {
-                Column(
-                    modifier = Modifier.fillMaxSize().background(VaultGreen.Deepest.copy(alpha = 0.85f)),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                Box(
+                    modifier = Modifier.fillMaxSize().background(VaultGreen.Deepest.copy(alpha = 0.7f)),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    CircularProgressIndicator(color = VaultGreen.Sage)
-                    Text(stringResource(R.string.snap_preparing), modifier = Modifier.padding(top = 12.dp))
+                    Column(
+                        modifier = Modifier.staggeredAppear(0).glass(RoundedCornerShape(24.dp)).padding(horizontal = 28.dp, vertical = 22.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        CircularProgressIndicator(color = VaultGreen.Sage, strokeWidth = 3.dp)
+                        Text(stringResource(R.string.snap_preparing), modifier = Modifier.padding(top = 12.dp))
+                    }
                 }
             }
             if (picking) {
                 RecipientPicker(recipients, preselect, onSend = ::sendTo, onDismiss = { picking = false })
             }
             notice?.let {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.align(Alignment.TopCenter).safeDrawingPadding().padding(top = 24.dp)
-                        .background(VaultGreen.Forest, CircleShape).padding(horizontal = 16.dp, vertical = 8.dp),
-                )
+                key(it) {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.align(Alignment.TopCenter).safeDrawingPadding().padding(top = 24.dp)
+                            .staggeredAppear(0)
+                            .cameraGlass(CircleShape, on = false)
+                            .padding(horizontal = 18.dp, vertical = 10.dp),
+                    )
+                }
                 LaunchedEffect(it) { delay(3_000); notice = null }
             }
         }
@@ -437,6 +495,20 @@ private fun CaptureView(
     var nightPhotoOnly by remember { mutableStateOf(false) }
     var focusAt by remember { mutableStateOf<Offset?>(null) }
     var focusTick by remember { mutableIntStateOf(0) }
+    val haptics = LocalHapticFeedback.current
+    // Premium camera motion (owner 2026-11-22). A black cover hides the moment the camera starts or switches, then
+    // fades away; a white flash marks the shutter; the zoom level shows while it is not 1x.
+    val cover = remember { Animatable(1f) }
+    var binds by remember { mutableIntStateOf(0) }
+    LaunchedEffect(front, night) {
+        if (binds++ > 0) cover.snapTo(1f)
+        delay(260)
+        cover.animateTo(0f, tween(380, easing = FastOutSlowInEasing))
+    }
+    val shutterFlash = remember { Animatable(0f) }
+    var zoom by remember { mutableFloatStateOf(1f) }
+    LaunchedEffect(front) { zoom = 1f }
+    var shutterDown by remember { mutableStateOf(false) }
     val glowing = screenFlash || (recording != null && flash && front)
     val window = remember(context) { context.findActivity()?.window }
     DisposableEffect(glowing, window) {
@@ -509,6 +581,7 @@ private fun CaptureView(
             }
         }
         if (flash && !front) boundCamera?.cameraControl?.enableTorch(true)
+        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
         secondsLeft = SnapRules.MAX_VIDEO_SECONDS
         scope.launch {
             while (recording != null && secondsLeft > 0) {
@@ -521,6 +594,11 @@ private fun CaptureView(
 
     fun capturePhoto() {
         val mirror = front
+        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        scope.launch {
+            shutterFlash.snapTo(0.85f)
+            shutterFlash.animateTo(0f, tween(280, easing = FastOutSlowInEasing))
+        }
         imageCapture.takePicture(ContextCompat.getMainExecutor(context), object : ImageCapture.OnImageCapturedCallback() {
             override fun onCaptureSuccess(image: ImageProxy) {
                 screenFlash = false
@@ -571,6 +649,7 @@ private fun CaptureView(
                         val zoomState = cam.cameraInfo.zoomState.value ?: return@detectTransformGestures
                         val next = (zoomState.zoomRatio * change).coerceIn(zoomState.minZoomRatio, zoomState.maxZoomRatio)
                         cam.cameraControl.setZoomRatio(next)
+                        zoom = next
                     }
                 }
                 .pointerInput(boundCamera) {
@@ -596,34 +675,111 @@ private fun CaptureView(
                 delay(900)
                 focusAt = null
             }
-            Box(
-                Modifier
-                    .offset { IntOffset(at.x.roundToInt() - 36.dp.roundToPx(), at.y.roundToInt() - 36.dp.roundToPx()) }
-                    .size(72.dp)
-                    .border(2.dp, Color.White, CircleShape),
-            )
+            key(focusTick) {
+                // The ring closes in on the point with a spring, like a lens finding focus.
+                val ring = remember { Animatable(1.35f) }
+                LaunchedEffect(Unit) { ring.animateTo(1f, spring(dampingRatio = 0.55f, stiffness = 420f)) }
+                Box(
+                    Modifier
+                        .offset { IntOffset(at.x.roundToInt() - 36.dp.roundToPx(), at.y.roundToInt() - 36.dp.roundToPx()) }
+                        .size(72.dp)
+                        .graphicsLayer {
+                            scaleX = ring.value
+                            scaleY = ring.value
+                        }
+                        .border(1.5.dp, Color.White, CircleShape),
+                )
+            }
         }
         Column(
-            modifier = Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(bottom = 28.dp),
+            modifier = Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(bottom = 28.dp).staggeredAppear(1),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(
+            // The zoom level, while it is not 1x; tap it to go back to 1x.
+            AnimatedVisibility(
+                visible = zoom > 1.04f && recording == null,
+                enter = fadeIn() + scaleIn(spring(dampingRatio = 0.6f, stiffness = 500f), initialScale = 0.7f),
+                exit = fadeOut() + scaleOut(targetScale = 0.7f),
+            ) {
+                Text(
+                    String.format(Locale.US, "%.1f×", zoom),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color.White,
+                    modifier = Modifier
+                        .padding(bottom = 12.dp)
+                        .cameraGlass(CircleShape, on = false)
+                        .clickable(role = Role.Button) {
+                            val cam = boundCamera ?: return@clickable
+                            val min = cam.cameraInfo.zoomState.value?.minZoomRatio ?: 1f
+                            cam.cameraControl.setZoomRatio(min)
+                            zoom = min
+                        }
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                )
+            }
+            // While recording: a breathing red dot and the time; otherwise the hint.
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.cameraGlass(CircleShape, on = false).padding(horizontal = 14.dp, vertical = 7.dp),
+            ) {
+                if (recording != null) {
+                    RecordingDot()
+                    Text(String.format(Locale.US, "0:%02d", SnapRules.MAX_VIDEO_SECONDS - secondsLeft), style = MaterialTheme.typography.labelLarge, color = Color.White)
+                } else {
+                    Text(
+                        if (nightPhotoOnly) stringResource(R.string.snap_night_photos_only) else stringResource(R.string.snap_hint, SnapRules.MAX_VIDEO_SECONDS),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Color.White,
+                    )
+                }
+            }
+            // The shutter: a white ring around a white disc. The disc dips under the finger; while a video records it
+            // shrinks into a red rounded square and a red arc runs round the ring for the time allowed.
+            val recordingNow = recording != null
+            val progress = remember { Animatable(0f) }
+            LaunchedEffect(recordingNow) {
+                if (recordingNow) {
+                    progress.snapTo(0f)
+                    progress.animateTo(1f, tween(SnapRules.MAX_VIDEO_SECONDS * 1000, easing = LinearEasing))
+                } else {
+                    progress.snapTo(0f)
+                }
+            }
+            val discScale by animateFloatAsState(
                 when {
-                    recording != null -> "● $secondsLeft s"
-                    nightPhotoOnly -> stringResource(R.string.snap_night_photos_only)
-                    else -> stringResource(R.string.snap_hint, SnapRules.MAX_VIDEO_SECONDS)
+                    recordingNow -> 0.56f
+                    shutterDown -> 0.86f
+                    else -> 1f
                 },
-                style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.background(VaultGreen.Deepest.copy(alpha = 0.6f), CircleShape).padding(horizontal = 12.dp, vertical = 6.dp),
+                spring(dampingRatio = 0.55f, stiffness = 600f),
+                label = "shutterDisc",
             )
+            val discColor by animateColorAsState(if (recordingNow) RecordRed else Color.White, label = "shutterColor")
+            val corner by animateIntAsState(if (recordingNow) 28 else 50, label = "shutterCorner")
+            val error = RecordRed
             Box(
+                contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .padding(top = 16.dp)
-                    .size(78.dp)
-                    .border(5.dp, if (recording != null) MaterialTheme.colorScheme.error else VaultGreen.Mint, CircleShape)
-                    .padding(8.dp)
-                    .background(if (recording != null) MaterialTheme.colorScheme.error else VaultGreen.Sage, CircleShape)
-                    .glossy(CircleShape)
+                    .size(84.dp)
+                    .drawBehind {
+                        val stroke = 5.dp.toPx()
+                        val inset = stroke / 2f
+                        drawCircle(Color.White.copy(alpha = 0.92f), radius = size.minDimension / 2f - inset, style = Stroke(stroke))
+                        val p = progress.value
+                        if (p > 0f) {
+                            drawArc(
+                                error,
+                                startAngle = -90f,
+                                sweepAngle = 360f * p,
+                                useCenter = false,
+                                topLeft = Offset(inset, inset),
+                                size = Size(size.width - stroke, size.height - stroke),
+                                style = Stroke(stroke, cap = StrokeCap.Round),
+                            )
+                        }
+                    }
                     .pointerInput(Unit) {
                         detectTapGestures(
                             onTap = {
@@ -634,22 +790,46 @@ private fun CaptureView(
                             },
                             onLongPress = { if (!nightPhotoOnly) startVideo() },
                             onPress = {
+                                shutterDown = true
                                 tryAwaitRelease()
+                                shutterDown = false
                                 recording?.stop()
                             },
                         )
-                    },
-            )
-            TextButton(onClick = { front = !front }, enabled = recording == null) { Text(stringResource(R.string.snap_flip), color = VaultGreen.Mint) }
+                    }
+                    .semantics { contentDescription = context.getString(R.string.snap_hint, SnapRules.MAX_VIDEO_SECONDS) },
+            ) {
+                Box(
+                    Modifier
+                        .size(64.dp)
+                        .graphicsLayer {
+                            scaleX = discScale
+                            scaleY = discScale
+                        }
+                        .clip(RoundedCornerShape(corner))
+                        .background(discColor)
+                        .glossy(RoundedCornerShape(corner), strength = 0.5f),
+                )
+            }
         }
         // Front camera video with flash: a warm white glow around the picture lights the face.
         if (recording != null && flash && front) {
             Box(Modifier.fillMaxSize().border(40.dp, GlowWhite))
         }
         Column(
-            modifier = Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(12.dp),
+            modifier = Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(12.dp).staggeredAppear(0),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            // Flip (also a double-tap on the picture): the icon turns over as the camera switches.
+            val turn by animateFloatAsState(if (front) 180f else 0f, spring(dampingRatio = 0.7f, stiffness = 300f), label = "flipTurn")
+            CameraToggle(
+                icon = AppIcons.FlipCamera,
+                description = stringResource(R.string.snap_flip),
+                on = false,
+                enabled = recording == null,
+                iconModifier = Modifier.graphicsLayer { rotationZ = turn },
+                onClick = { front = !front },
+            )
             CameraToggle(
                 icon = AppIcons.NightMode,
                 description = stringResource(if (night) R.string.snap_night_on else R.string.snap_night_off),
@@ -673,20 +853,25 @@ private fun CaptureView(
             )
         }
         // Pick a photo or a video (up to 30 s) from the gallery (owner, 2026-11-21), bottom left as in Snapchat.
-        if (recording == null) {
+        AnimatedVisibility(
+            visible = recording == null,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.BottomStart),
+        ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
-                    .align(Alignment.BottomStart)
                     .safeDrawingPadding()
                     .padding(start = 28.dp, bottom = 64.dp)
+                    .staggeredAppear(2)
                     .clip(RoundedCornerShape(12.dp))
                     .clickable(role = Role.Button, onClickLabel = stringResource(R.string.snap_gallery), onClick = onGallery)
                     .padding(6.dp),
             ) {
                 Box(
                     contentAlignment = Alignment.Center,
-                    modifier = Modifier.size(46.dp).clip(RoundedCornerShape(12.dp)).background(VaultGreen.Deepest.copy(alpha = 0.55f)).glossy(RoundedCornerShape(12.dp), strength = 0.6f).border(2.dp, Color.White, RoundedCornerShape(12.dp)),
+                    modifier = Modifier.size(48.dp).cameraGlass(RoundedCornerShape(14.dp), on = false),
                 ) {
                     Icon(AppIcons.Gallery, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
                 }
@@ -697,23 +882,99 @@ private fun CaptureView(
         if (screenFlash) {
             Box(Modifier.fillMaxSize().background(Color.White))
         }
+        // The shutter's white blink, and the black cover while the camera starts or switches. Drawn only while
+        // visible, read in the draw phase.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .drawBehind {
+                    val c = cover.value
+                    if (c > 0f) drawRect(Color.Black, alpha = c)
+                    val f = shutterFlash.value
+                    if (f > 0f) drawRect(Color.White, alpha = f)
+                },
+        )
+    }
+}
+
+/** The red of a recording: brighter than the error colour, so it reads over any picture. */
+private val RecordRed = Color(0xFFFF453A)
+
+/** A red dot that breathes while a video records. */
+@Composable
+private fun RecordingDot() {
+    val transition = rememberInfiniteTransition(label = "rec")
+    val a by transition.animateFloat(1f, 0.35f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "recDot")
+    Box(Modifier.size(9.dp).graphicsLayer { alpha = a }.background(RecordRed, CircleShape))
+}
+
+/**
+ * Glass over the camera: a dark tint first, so white icons and text read over a bright picture, then the glass
+ * rim and grain. [on] makes it a bright glossy white, for a control that is switched on.
+ */
+@Composable
+private fun Modifier.cameraGlass(shape: androidx.compose.ui.graphics.Shape, on: Boolean): Modifier =
+    if (on) {
+        clip(shape).background(Color.White.copy(alpha = 0.94f)).glossy(shape, strength = 0.5f)
+    } else {
+        background(Color.Black.copy(alpha = 0.32f), shape).glass(shape)
+    }
+
+/** A pill button on the camera screens: glass, or mint with depth for the main action. */
+@Composable
+private fun CameraPillButton(
+    label: String,
+    onClick: () -> Unit,
+    icon: ImageVector? = null,
+    primary: Boolean = false,
+    enabled: Boolean = true,
+    busy: Boolean = false,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val shape = RoundedCornerShape(50)
+    val content = if (primary) VaultGreen.Deepest else Color.White
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier
+            .heightIn(min = 48.dp)
+            .pressScale(interaction, 0.94f)
+            .then(if (primary) Modifier.glow(VaultGreen.Sage, spread = 10.dp, strength = 0.3f).clip(shape).background(MintGradient).glossy(shape, strength = 0.7f) else Modifier.cameraGlass(shape, on = false))
+            .clickable(interactionSource = interaction, indication = ripple(), enabled = enabled, role = Role.Button, onClick = onClick)
+            .graphicsLayer { alpha = if (enabled || busy) 1f else 0.5f }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    ) {
+        if (busy) {
+            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = content)
+        } else if (icon != null) {
+            Icon(icon, contentDescription = null, tint = content, modifier = Modifier.size(18.dp))
+        }
+        Text(label, color = content, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
     }
 }
 
 /** A round button over the camera: flash or sound, bright when on. */
 @Composable
-private fun CameraToggle(icon: ImageVector, description: String, on: Boolean, onClick: () -> Unit, enabled: Boolean = true) {
+private fun CameraToggle(
+    icon: ImageVector,
+    description: String,
+    on: Boolean,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    iconModifier: Modifier = Modifier,
+) {
+    val interaction = remember { MutableInteractionSource() }
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .size(46.dp)
-            .clip(CircleShape)
-            .background(if (on) VaultGreen.Mint else VaultGreen.Deepest.copy(alpha = 0.55f))
-            .glossy(CircleShape, strength = 0.6f)
-            .clickable(enabled = enabled, role = Role.Button, onClickLabel = description, onClick = onClick)
+            .pressScale(interaction, 0.86f)
+            .cameraGlass(CircleShape, on = on)
+            .clickable(interactionSource = interaction, indication = ripple(), enabled = enabled, role = Role.Button, onClickLabel = description, onClick = onClick)
+            .graphicsLayer { alpha = if (enabled) 1f else 0.45f }
             .semantics { contentDescription = description },
     ) {
-        Icon(icon, contentDescription = null, tint = if (on) VaultGreen.Deepest else Color.White, modifier = Modifier.size(24.dp))
+        Icon(icon, contentDescription = null, tint = if (on) VaultGreen.Deepest else Color.White, modifier = iconModifier.size(22.dp))
     }
 }
 
@@ -773,9 +1034,7 @@ private fun ReviewTool(label: String, description: String, onClick: () -> Unit) 
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .size(46.dp)
-            .clip(CircleShape)
-            .background(VaultGreen.Deepest.copy(alpha = 0.55f))
-            .glossy(CircleShape, strength = 0.6f)
+            .cameraGlass(CircleShape, on = false)
             .clickable(role = Role.Button, onClickLabel = description, onClick = onClick),
     ) {
         Text(label, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
@@ -784,6 +1043,22 @@ private fun ReviewTool(label: String, description: String, onClick: () -> Unit) 
 
 @Composable
 private fun ReviewView(taken: Taken) {
+    // The picture settles into place: from a touch larger and faded to full, like a photo developing.
+    val shown = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { shown.animateTo(1f, spring(dampingRatio = 0.85f, stiffness = 320f)) }
+    Box(
+        Modifier.fillMaxSize().graphicsLayer {
+            val v = shown.value
+            alpha = v.coerceIn(0f, 1f)
+            val scale = 1.06f - 0.06f * v
+            scaleX = scale
+            scaleY = scale
+        },
+    ) { ReviewContent(taken) }
+}
+
+@Composable
+private fun ReviewContent(taken: Taken) {
     when (taken) {
         // Pinch or double-tap to zoom the photo before sending it (owner request 2026-11-20).
         is Taken.Photo -> {
@@ -823,14 +1098,23 @@ private fun RecipientPicker(people: List<Connection>, preselect: String?, onSend
                 Text(stringResource(R.string.snap_no_people))
             } else {
                 Column(modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                    // Each person as a row with their avatar; a chosen row lights up softly (owner 2026-11-22: premium).
                     people.forEach { p ->
+                        val picked = p.id in chosen
+                        val tint by animateColorAsState(if (picked) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent, label = "pickRow")
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth().clickable { chosen = if (p.id in chosen) chosen - p.id else chosen + p.id }.padding(vertical = 6.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(tint)
+                                .toggleable(value = picked, role = Role.Checkbox) { chosen = if (picked) chosen - p.id else chosen + p.id }
+                                .padding(horizontal = 8.dp, vertical = 8.dp),
                         ) {
-                            Checkbox(checked = p.id in chosen, onCheckedChange = null)
-                            Text(p.peerUsername, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 8.dp).weight(1f))
-                            if (p.streak > 0) Text("\uD83D\uDD25 ${p.streak}", style = MaterialTheme.typography.labelLarge)
+                            InitialsAvatar(p.peerUsername, size = 36.dp)
+                            Text(p.peerUsername, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 12.dp).weight(1f))
+                            if (p.streak > 0) Text("\uD83D\uDD25 ${p.streak}", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(end = 4.dp))
+                            Checkbox(checked = picked, onCheckedChange = null)
                         }
                     }
                 }
