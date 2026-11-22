@@ -256,6 +256,9 @@ class CallController(
     /** The back camera's light in a video call (owner, 2026-11-21); false when it could not be turned on. */
     suspend fun setTorch(on: Boolean): Boolean = media.setTorch(on)
 
+    /** Night mode of this phone's sent video (owner, 2026-11-21). */
+    fun setNightVideo(on: Boolean) = media.setNightVideo(on)
+
     /** Asks the other person's phone to flip its camera (front/back). Both sides can do this. */
     fun switchPeerCamera() {
         if (_state.value.kind != CallKind.VIDEO) return

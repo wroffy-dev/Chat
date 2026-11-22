@@ -127,7 +127,24 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
     @Volatile private var zoom = 1f
 
     /** Every camera track gets the zoom processor, so the zoom survives flips and size changes. */
-    private fun zoomProcessor() = ZoomVideoProcessor { zoom }
+    private fun zoomProcessor() = ZoomVideoProcessor(level = { zoom }, night = { nightVideo })
+
+    /** Night mode of the sent camera video (owner, 2026-11-21); read by [ZoomVideoProcessor] on every frame. */
+    @Volatile private var nightVideo = false
+
+    override fun setNightVideo(on: Boolean) {
+        nightVideo = on
+        // On LiveKit's CameraX camera (after the light was used) the camera's own exposure is raised as well.
+        val camera = (room.localParticipant.getTrackPublication(Track.Source.CAMERA)?.track as? LocalVideoTrack)?.capturer?.getCameraX()?.value
+        if (camera != null) {
+            runCatching {
+                val exposure = camera.cameraInfo.exposureState
+                if (exposure.isExposureCompensationSupported) {
+                    camera.cameraControl.setExposureCompensationIndex(if (on) exposure.exposureCompensationRange.upper else 0)
+                }
+            }
+        }
+    }
 
     init {
         scope.launch {

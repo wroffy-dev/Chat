@@ -44,6 +44,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Call
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -144,6 +145,9 @@ fun CallScreen(
     // Light in a video call (owner, 2026-11-21): on the back camera the phone's torch; on the front camera a
     // warm white glow around the screen at full brightness, which lights the face.
     var light by rememberSaveable { mutableStateOf(false) }
+    // Night mode of the sent video (owner, 2026-11-21): dark parts of the picture are brightened.
+    var nightVideo by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(nightVideo) { if (kind == CallKind.VIDEO) viewModel.controller.setNightVideo(nightVideo) }
     var lightNotice by remember { mutableStateOf(false) }
     LaunchedEffect(light, localFront, state.cameraOn, state.phase) {
         if (kind != CallKind.VIDEO) return@LaunchedEffect
@@ -523,6 +527,8 @@ fun CallScreen(
                             onSpeaker = viewModel.controller::toggleSpeaker,
                             light = light,
                             onLight = { light = !light },
+                            night = nightVideo,
+                            onNight = { nightVideo = !nightVideo },
                             onEnd = viewModel.controller::hangup,
                             menu = { dismiss ->
                                 // Everything the old controls had stays one tap away under the switch button.
@@ -845,6 +851,8 @@ private fun RefControls(
     onSpeaker: () -> Unit,
     light: Boolean,
     onLight: () -> Unit,
+    night: Boolean,
+    onNight: () -> Unit,
     onEnd: () -> Unit,
     menu: @Composable ColumnScope.(dismiss: () -> Unit) -> Unit,
     onMenuOpen: (Boolean) -> Unit,
@@ -879,13 +887,32 @@ private fun RefControls(
                 RefRound(icon = AppIcons.FlipCamera, label = stringResource(R.string.call_switch), highlighted = false, onClick = { expanded = true })
                 DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) { menu(this) { expanded = false } }
             }
-            RefRound(
-                icon = AppIcons.Flashlight,
-                label = stringResource(R.string.call_light),
-                highlighted = light,
-                onClick = onLight,
-                state = stringResource(if (light) R.string.state_on else R.string.state_off),
-            )
+            // Light and Night mode share one button (owner, 2026-11-21): a small menu with both.
+            var lightMenu by remember { mutableStateOf(false) }
+            LaunchedEffect(lightMenu) { onMenuOpen(lightMenu) }
+            Box {
+                RefRound(
+                    icon = AppIcons.Flashlight,
+                    label = stringResource(R.string.call_light),
+                    highlighted = light || night,
+                    onClick = { lightMenu = true },
+                    state = stringResource(if (light || night) R.string.state_on else R.string.state_off),
+                )
+                DropdownMenu(expanded = lightMenu, onDismissRequest = { lightMenu = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.call_light)) },
+                        leadingIcon = { Icon(AppIcons.Flashlight, contentDescription = null) },
+                        trailingIcon = { if (light) Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.state_on)) },
+                        onClick = { lightMenu = false; onLight() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.call_night)) },
+                        leadingIcon = { Icon(AppIcons.NightMode, contentDescription = null) },
+                        trailingIcon = { if (night) Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.state_on)) },
+                        onClick = { lightMenu = false; onNight() },
+                    )
+                }
+            }
             RefRound(
                 icon = AppIcons.VolumeUp,
                 label = stringResource(R.string.call_speaker),
