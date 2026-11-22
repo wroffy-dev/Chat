@@ -6,10 +6,12 @@ Versions of the Android app (`versionName`) and the backend (`package.json`). Th
 ## Unreleased
 
 ### Look
-- **Liquid Glass:** the whole app has a new look, from the mockup the owner approved:
-  - light grey screens (near-black in dark mode) with a soft warm glow;
-  - glass cards, buttons, chips and a floating tab bar;
-  - glossy green buttons, bubbles and coloured avatars.
+- **Dark glass:** the app is always dark, as in the mockup the owner approved:
+  - near-black screens with a faint teal and warm light;
+  - glass cards, buttons, chips, the All/Unread switch and the tab bar, with a silver camera button;
+  - mint bubbles, badges and send button; dark grey-teal avatars.
+- **Chat:** the person's name sits in a glass capsule that opens the chat options; the timer pill is centred
+  under it; "Read" is shown as text. The doodle background is gone.
 
 ## 0.2.0 — 2026-11-22
 

@@ -19,56 +19,70 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.max
 
 /**
- * The glass look of the app (owner 2026-11-22: the Liquid Glass mockup, "pure app mein"). A glass panel is a
- * see-through white fill with a shine on its top half, a faint reflection at the bottom and a bright rim, over
- * the plain screen and its warm glow ([glassBackdrop]).
+ * The glass look of the app, from the owner's dark glass mockup (2026-11-22, after reference pictures of glass
+ * morphism and a glass "Inbox / Draft" switch). A glass panel is a see-through fill that is lighter at the top
+ * left, a thin light border, a bright line along the top edge and a softer one along the bottom, over the dark
+ * screen of [glassBackdrop].
  *
  * The blur of real frosted glass is not drawn: Compose has no blur of what lies behind a view, and blurring
- * the screen on every frame would cost battery and smoothness (owner 2026-11-21: no lag). The fills are
- * therefore more solid than in the mockup, which also keeps text readable.
+ * the screen on every frame would cost battery and smoothness (owner 2026-11-21: no lag). The screen behind
+ * the glass is plain, so there is little a blur would show.
  */
 @Immutable
 class GlassStyle(
-    val fill: Color,
-    val fillStrong: Color,
-    val gloss: Color,
-    val glossLow: Color,
+    /** Fill at the top-left corner, in the middle and at the bottom-right corner. */
+    val fillTop: Color,
+    val fillMiddle: Color,
+    val fillBottom: Color,
+    /** Solid colour under floating glass that sits over other content (popups), so text stays readable. */
+    val base: Color,
+    val border: Color,
     val rimTop: Color,
     val rimBottom: Color,
-    /** Shadow under floating glass; transparent in dark mode, where it would not show. */
+    /** Shadow under floating glass; transparent where it would not show. */
     val shadow: Color,
-    /** The warm glow behind the screen. */
-    val glow: Color,
+    /** The two soft lights of the screen behind the glass. */
+    val lightTop: Color,
+    val lightBottom: Color,
+    val ground: Color,
 )
 
-val LightGlass = GlassStyle(
-    fill = Color.White.copy(alpha = 0.72f),
-    fillStrong = Color.White.copy(alpha = 0.86f),
-    gloss = Color.White.copy(alpha = 0.95f),
-    glossLow = Color.White.copy(alpha = 0.55f),
-    rimTop = Color.White,
-    rimBottom = Color(0x1A101820),
-    shadow = Color(0x33202838),
-    glow = Color(0xFFFFC9A8),
-)
-
+/** The app's glass: always dark (owner 2026-11-22). */
 val DarkGlass = GlassStyle(
-    fill = Color.White.copy(alpha = 0.07f),
-    fillStrong = Color.White.copy(alpha = 0.11f),
-    gloss = Color.White.copy(alpha = 0.20f),
-    glossLow = Color.White.copy(alpha = 0.08f),
-    rimTop = Color.White.copy(alpha = 0.34f),
-    rimBottom = Color.White.copy(alpha = 0.10f),
+    fillTop = Color.White.copy(alpha = 0.12f),
+    fillMiddle = Color.White.copy(alpha = 0.03f),
+    fillBottom = Color.White.copy(alpha = 0.06f),
+    base = Color(0xF0141719),
+    border = Color.White.copy(alpha = 0.13f),
+    rimTop = Color.White.copy(alpha = 0.30f),
+    rimBottom = Color.White.copy(alpha = 0.16f),
     shadow = Color.Transparent,
-    glow = Color(0xFF6A3A20),
+    lightTop = Glass.TealLight,
+    lightBottom = Glass.WarmLight,
+    ground = Glass.Ground,
 )
 
-val LocalGlass = staticCompositionLocalOf { LightGlass }
+/** Light glass, for the map's buttons: the map itself stays light (owner 2026-11-02). */
+val LightGlass = GlassStyle(
+    fillTop = Color.White.copy(alpha = 0.92f),
+    fillMiddle = Color.White.copy(alpha = 0.80f),
+    fillBottom = Color.White.copy(alpha = 0.86f),
+    base = Color.Transparent,
+    border = Color(0x1A101820),
+    rimTop = Color.White,
+    rimBottom = Color(0x22101820),
+    shadow = Color(0x33202838),
+    lightTop = Color.Transparent,
+    lightBottom = Color.Transparent,
+    ground = Color.White,
+)
+
+val LocalGlass = staticCompositionLocalOf { DarkGlass }
 
 /**
  * Draws a glass panel behind the content, in [shape], and clips the content (and ripples) to it. [strong]
- * is for floating panels that sit over other content (the tab bar, popups). [elevation] adds a soft shadow
- * in light mode.
+ * is for floating panels that sit over other content (popups, the ↓ button). [elevation] adds a soft shadow
+ * where the style has one.
  */
 @Composable
 fun Modifier.glass(shape: Shape = CircleShape, strong: Boolean = false, elevation: Dp = 0.dp): Modifier {
@@ -82,22 +96,72 @@ fun Modifier.glass(shape: Shape = CircleShape, strong: Boolean = false, elevatio
         .clip(shape)
         .drawWithCache {
             val outline = shape.createOutline(size, layoutDirection, this)
-            val sheen = Brush.verticalGradient(
-                0f to g.gloss.copy(alpha = g.gloss.alpha * 0.55f),
-                0.46f to Color.Transparent,
-                0.72f to Color.Transparent,
-                1f to g.glossLow.copy(alpha = g.glossLow.alpha * 0.6f),
+            val fill = Brush.linearGradient(
+                0f to g.fillTop,
+                0.55f to g.fillMiddle,
+                1f to g.fillBottom,
+                start = Offset.Zero,
+                end = Offset(size.width, size.height),
             )
-            val rim = Brush.verticalGradient(0f to g.rimTop, 0.5f to g.rimTop.copy(alpha = g.rimTop.alpha * 0.35f), 1f to g.rimBottom)
+            // Border and edge lights in one stroke: bright along the top, soft along the bottom.
+            val rim = Brush.verticalGradient(
+                0f to g.rimTop,
+                0.18f to g.border,
+                0.82f to g.border,
+                1f to g.rimBottom,
+            )
             // Twice the visible width: half of the stroke falls outside the clip.
-            val stroke = Stroke(width = 2.dp.toPx())
-            val fill = if (strong) g.fillStrong else g.fill
+            val stroke = Stroke(width = 2.5.dp.toPx())
             onDrawBehind {
+                if (strong && g.base.alpha > 0f) drawOutline(outline, g.base)
                 drawOutline(outline, fill)
-                drawOutline(outline, sheen)
                 drawOutline(outline, rim, style = stroke)
             }
         }
+}
+
+/**
+ * A glass track holding segments, like the mockup's All / Unread switch and the tab bar: a glass capsule
+ * with a stronger light line along its bottom edge.
+ */
+@Composable
+fun Modifier.glassTrack(shape: Shape = CircleShape): Modifier {
+    val g = LocalGlass.current
+    return clip(shape).drawWithCache {
+        val outline = shape.createOutline(size, layoutDirection, this)
+        val fill = Brush.verticalGradient(0f to g.fillTop.copy(alpha = g.fillTop.alpha * 0.85f), 1f to g.fillMiddle)
+        val rim = Brush.verticalGradient(
+            0f to g.rimTop.copy(alpha = g.rimTop.alpha * 0.4f),
+            0.3f to g.border.copy(alpha = g.border.alpha * 0.8f),
+            0.75f to g.border,
+            1f to g.rimTop.copy(alpha = g.rimTop.alpha * 1.1f),
+        )
+        val stroke = Stroke(width = 3.dp.toPx())
+        onDrawBehind {
+            drawOutline(outline, g.base.copy(alpha = 0.55f))
+            drawOutline(outline, fill)
+            drawOutline(outline, rim, style = stroke)
+        }
+    }
+}
+
+/**
+ * The chosen segment inside a [glassTrack]: pressed into the glass, darker, with a shadow along its top
+ * inside edge.
+ */
+fun Modifier.glassInset(shape: Shape = CircleShape): Modifier = clip(shape).drawWithCache {
+    val outline = shape.createOutline(size, layoutDirection, this)
+    val shade = Brush.verticalGradient(
+        0f to Color.Black.copy(alpha = 0.55f),
+        0.35f to Color.Black.copy(alpha = 0.28f),
+        1f to Color.Black.copy(alpha = 0.24f),
+    )
+    val rim = Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.35f), 0.7f to Color.Transparent, 1f to Color.White.copy(alpha = 0.10f))
+    val stroke = Stroke(width = 2.dp.toPx())
+    onDrawBehind {
+        drawOutline(outline, shade)
+        drawOutline(outline, rim, style = stroke)
+    }
 }
 
 /**
@@ -130,25 +194,24 @@ fun Modifier.glossy(shape: Shape = CircleShape, strength: Float = 1f, over: Bool
 }
 
 /**
- * The screen behind the glass: the plain background with one soft warm glow low on the left, as in the
- * mockup (owner 2026-11-22: no green or blue gradient). Drawn once per size, not per frame.
+ * The screen behind the glass, as in the mockup: near-black, with a faint teal light from the top right and a
+ * faint warm light from the bottom left (owner 2026-11-22: no bubbles in the background). Drawn once per size,
+ * not per frame.
  */
 @Composable
-fun Modifier.glassBackdrop(background: Color): Modifier {
-    val glow = LocalGlass.current.glow
+fun Modifier.glassBackdrop(): Modifier {
+    val g = LocalGlass.current
     return drawWithCache {
-        val radius = max(size.width, size.height) * 0.42f
-        val centre = Offset(size.width * 0.08f, size.height * 0.66f)
-        val brush = Brush.radialGradient(
-            0f to glow.copy(alpha = 0.55f),
-            0.55f to glow.copy(alpha = 0.18f),
-            1f to Color.Transparent,
-            center = centre,
-            radius = radius,
-        )
+        val topRadius = max(size.width, size.height) * 0.75f
+        val topCentre = Offset(size.width * 0.8f, 0f)
+        val top = Brush.radialGradient(0f to g.lightTop, 1f to g.lightTop.copy(alpha = 0f), center = topCentre, radius = topRadius)
+        val bottomRadius = max(size.width, size.height) * 0.6f
+        val bottomCentre = Offset(0f, size.height)
+        val bottom = Brush.radialGradient(0f to g.lightBottom, 1f to g.lightBottom.copy(alpha = 0f), center = bottomCentre, radius = bottomRadius)
         onDrawBehind {
-            drawRect(background)
-            drawCircle(brush, radius = radius, center = centre)
+            drawRect(g.ground)
+            drawRect(top)
+            drawRect(bottom)
         }
     }
 }

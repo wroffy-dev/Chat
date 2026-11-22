@@ -19,7 +19,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.height
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import app.vaultchat.ui.theme.glass
+import app.vaultchat.ui.theme.Glass
+import app.vaultchat.ui.theme.glassInset
+import app.vaultchat.ui.theme.glassTrack
+import androidx.compose.ui.graphics.Brush
 import app.vaultchat.ui.theme.glossy
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -36,22 +39,24 @@ import androidx.compose.ui.unit.dp
 import app.vaultchat.R
 import app.vaultchat.ui.components.AppIcons
 
+/** The camera button's brushed-silver face, as in the mockup (owner 2026-11-22). */
+private val SilverButton = Brush.verticalGradient(0f to Color(0xFFFFFFFF), 0.55f to Color(0xFFD9DEE0), 1f to Color(0xFFBFC6C9))
+
 /** The tabs of the bottom menu (owner, 2026-11-19): Chat (the default), Camera, Map. */
 enum class BottomTab { CHAT, CAMERA, MAP }
 
 /**
  * The bottom menu: Chat, the round Camera button in the middle (also reached by swiping right on the
- * chat list), and Map. Chat is what the app opens on. A floating glass capsule with a glossy camera
- * button (Liquid Glass, owner 2026-11-22).
+ * chat list), and Map. Chat is what the app opens on. A glass track with the chosen tab pressed in and a
+ * silver camera button (dark glass mockup, owner 2026-11-22).
  */
 @Composable
 fun VaultBottomBar(selected: BottomTab, onChat: () -> Unit, onCamera: () -> Unit, onMap: () -> Unit) {
-    val colors = MaterialTheme.colorScheme
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 18.dp, vertical = 10.dp)
-            .glass(RoundedCornerShape(36.dp), strong = true, elevation = 10.dp)
+            .glassTrack(RoundedCornerShape(36.dp))
             .height(72.dp)
             .padding(horizontal = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -66,8 +71,8 @@ fun VaultBottomBar(selected: BottomTab, onChat: () -> Unit, onCamera: () -> Unit
                 .size(60.dp)
                 .pressScale(interaction)
                 .clip(CircleShape)
-                .background(colors.primary)
-                .glossy(CircleShape)
+                .background(SilverButton)
+                .glossy(CircleShape, strength = 0.6f)
                 .clickable(
                     interactionSource = interaction,
                     indication = ripple(bounded = true),
@@ -76,7 +81,7 @@ fun VaultBottomBar(selected: BottomTab, onChat: () -> Unit, onCamera: () -> Unit
                     onClick = onCamera,
                 ),
         ) {
-            Icon(AppIcons.PhotoCamera, contentDescription = stringResource(R.string.tab_camera), tint = colors.onPrimary, modifier = Modifier.size(28.dp))
+            Icon(AppIcons.PhotoCamera, contentDescription = stringResource(R.string.tab_camera), tint = Glass.Ground, modifier = Modifier.size(28.dp))
         }
         Tab(AppIcons.Map, stringResource(R.string.tab_map), selected == BottomTab.MAP, onMap)
     }
@@ -85,15 +90,15 @@ fun VaultBottomBar(selected: BottomTab, onChat: () -> Unit, onCamera: () -> Unit
 @Composable
 private fun Tab(icon: ImageVector, label: String, isSelected: Boolean, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
-    val tint = if (isSelected) colors.primary else colors.onSurfaceVariant
+    val tint = if (isSelected) colors.onSurface else colors.onSurfaceVariant
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
         modifier = Modifier
-            .width(96.dp)
+            .width(104.dp)
             .height(56.dp)
             .clip(RoundedCornerShape(28.dp))
-            .background(if (isSelected) colors.primary.copy(alpha = 0.13f) else Color.Transparent)
+            .then(if (isSelected) Modifier.glassInset(RoundedCornerShape(28.dp)) else Modifier)
             .semantics { selected = isSelected }
             .clickable(role = Role.Tab, onClick = onClick),
     ) {

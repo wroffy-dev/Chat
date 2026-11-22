@@ -115,7 +115,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.RadioButton
@@ -269,7 +268,7 @@ fun ChatScreen(
     }
 
     Surface(modifier = Modifier.fillMaxSize(), color = Ref.Surface, contentColor = Ref.OnSurface) {
-        Column(modifier = Modifier.fillMaxSize().glassBackdrop(Ref.Surface).safeDrawingPadding().imePadding()) {
+        Column(modifier = Modifier.fillMaxSize().glassBackdrop().safeDrawingPadding().imePadding()) {
             ChatHeader(
                 peerUsername = peerUsername,
                 typing = state.peerTyping,
@@ -554,14 +553,7 @@ private fun RoundAction(
     }
 }
 
-/** Two letters for the header avatar ("EV" for "Elena Vance", "AL" for "alice"). */
-private fun initialsOf(name: String): String {
-    val words = name.split(' ', '.', '_', '-').filter { it.isNotBlank() }
-    val letters = if (words.size >= 2) "${words[0].first()}${words[1].first()}" else name.filter { it.isLetterOrDigit() }.take(2)
-    return letters.uppercase().ifEmpty { "?" }
-}
-
-/** Header of the reference: back, avatar and name, then voice, video and the options menu. */
+/** The chat's header: back, the person in a glass capsule (opens the options), then voice and video. */
 @Composable
 private fun ChatHeader(
     peerUsername: String,
@@ -572,63 +564,58 @@ private fun ChatHeader(
     onTalk: () -> Unit,
     onDisappearing: () -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            RoundAction(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back), GLASS, Ref.OnSurface, onBack)
+    // As in the dark glass mockup (owner 2026-11-22, "must be same"): back, the person in a glass capsule,
+    // then voice and video. Tapping the capsule opens the chat's options (disappearing messages, walkie-talkie).
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        RoundAction(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back), GLASS, Ref.OnSurface, onBack)
+        var menu by remember { mutableStateOf(false) }
+        Box(modifier = Modifier.weight(1f)) {
             Row(
-                modifier = Modifier.weight(1f).padding(start = 4.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .glass(RoundedCornerShape(50))
+                    .clickable(onClickLabel = stringResource(R.string.chat_options), role = Role.Button) { menu = true }
+                    .padding(start = 4.dp, end = 14.dp, top = 4.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Box(
-                    modifier = Modifier.size(40.dp).background(Ref.Primary, CircleShape).glossy(CircleShape).clearAndSetSemantics { },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(initialsOf(peerUsername), color = Ref.OnPrimary, fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold)
-                }
+                InitialsAvatar(peerUsername, size = 36.dp)
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         peerUsername,
                         color = Ref.OnSurface,
-                        fontSize = 16.sp,
-                        lineHeight = 22.sp,
+                        fontSize = 15.sp,
+                        lineHeight = 20.sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.semantics { heading() },
                     )
-                    // The reference's status line; Vault only knows when the other person is typing (no presence).
+                    // Vault only knows when the other person is typing (no presence).
                     if (typing) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(stringResource(R.string.chat_typing), color = Ref.Teal, fontSize = 11.sp, lineHeight = 14.sp, letterSpacing = 0.3.sp, fontWeight = FontWeight.Medium)
-                            TypingDots(color = Ref.Teal)
-                        }
+                        Text(stringResource(R.string.chat_typing), color = Ref.OnSurfaceVariant, fontSize = 11.5.sp, lineHeight = 15.sp)
                     }
                 }
             }
-            RoundAction(Icons.Filled.Call, stringResource(R.string.home_voice_call), GLASS, Ref.OnSurface, onVoice)
-            RoundAction(AppIcons.Videocam, stringResource(R.string.home_video_call), GLASS, Ref.OnSurface, onVideo)
-            var menu by remember { mutableStateOf(false) }
-            Box {
-                RoundAction(Icons.Filled.MoreVert, stringResource(R.string.chat_options), GLASS, Ref.OnSurface, { menu = true })
-                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.expiry_title)) },
-                        leadingIcon = { Icon(AppIcons.Timer, contentDescription = null) },
-                        onClick = { menu = false; onDisappearing() },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.talk_button)) },
-                        leadingIcon = { Icon(AppIcons.Mic, contentDescription = null) },
-                        onClick = { menu = false; onTalk() },
-                    )
-                }
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.expiry_title)) },
+                    leadingIcon = { Icon(AppIcons.Timer, contentDescription = null) },
+                    onClick = { menu = false; onDisappearing() },
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.talk_button)) },
+                    leadingIcon = { Icon(AppIcons.Mic, contentDescription = null) },
+                    onClick = { menu = false; onTalk() },
+                )
             }
         }
+        RoundAction(Icons.Filled.Call, stringResource(R.string.home_voice_call), GLASS, Ref.OnSurface, onVoice)
+        RoundAction(AppIcons.Videocam, stringResource(R.string.home_video_call), GLASS, Ref.OnSurface, onVideo)
     }
 }
 
@@ -642,34 +629,21 @@ private fun expiryLabel(seconds: Int?): String = when (seconds) {
     else -> stringResource(R.string.expiry_pill, "24h")
 }
 
-/**
- * The strip under the header: what protects the chat (left) and the disappearing timer (right, opens its
- * screen). The reference's "End-to-end encrypted" is not used: the app makes no encryption claim.
- */
+/** The disappearing timer under the header; tapping it opens its screen. */
 @Composable
 private fun StatusStrip(disappearSeconds: Int?, onExpiry: () -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth()) {
+    // Only the timer pill, centred under the header, as in the mockup (owner 2026-11-22, "must be same").
+    Box(modifier = Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 8.dp), contentAlignment = Alignment.Center) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 18.dp, end = 14.dp, top = 2.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier
+                .glass(RoundedCornerShape(50))
+                .clickable(role = Role.Button, onClick = onExpiry)
+                .padding(horizontal = 12.dp, vertical = 6.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.weight(1f, fill = false)) {
-                Icon(AppIcons.VerifiedUser, contentDescription = null, tint = Ref.Teal, modifier = Modifier.size(14.dp))
-                Text(stringResource(R.string.chat_strip_private), color = Ref.Teal, fontSize = 11.sp, lineHeight = 14.sp, letterSpacing = 0.3.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier
-                    .padding(start = 8.dp)
-                    .glass(RoundedCornerShape(50))
-                    .clickable(role = Role.Button, onClick = onExpiry)
-                    .padding(horizontal = 10.dp, vertical = 5.dp),
-            ) {
-                Icon(AppIcons.Timer, contentDescription = null, tint = Ref.OnSurfaceVariant, modifier = Modifier.size(12.dp))
-                Text(expiryLabel(disappearSeconds), color = Ref.OnSurfaceVariant, fontSize = 11.sp, lineHeight = 14.sp, letterSpacing = 0.3.sp, fontWeight = FontWeight.Medium)
-            }
+            Icon(AppIcons.Timer, contentDescription = null, tint = Ref.OnSurface.copy(alpha = 0.85f), modifier = Modifier.size(14.dp))
+            Text(expiryLabel(disappearSeconds), color = Ref.OnSurface.copy(alpha = 0.85f), fontSize = 12.sp, lineHeight = 16.sp)
         }
     }
 }
@@ -794,13 +768,11 @@ private fun MessageList(
     }
     if (total == 0) {
         Column(
-            modifier = modifier.fillMaxWidth().chatWallpaper().padding(32.dp),
+            modifier = modifier.fillMaxWidth().padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
         ) {
-            Box(Modifier.size(64.dp).background(Ref.Primary, CircleShape).glossy(CircleShape), contentAlignment = Alignment.Center) {
-                Text(initialsOf(peerUsername), color = Ref.OnPrimary, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-            }
+            InitialsAvatar(peerUsername, size = 64.dp)
             Text(peerUsername, color = Ref.OnSurface, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(stringResource(R.string.chat_empty), color = Ref.OnSurfaceVariant, fontSize = 14.sp, textAlign = TextAlign.Center)
         }
@@ -809,8 +781,8 @@ private fun MessageList(
     Box(modifier = modifier.fillMaxWidth()) {
     LazyColumn(
         state = listState,
-        // The doodle background (owner 2026-11-22), drawn once and repeated behind the messages.
-        modifier = Modifier.fillMaxSize().chatWallpaper(),
+        // No doodles: the plain dark glass screen of the mockup (owner 2026-11-22, "must be same").
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
     ) {
         // Indexed items: each row knows its place without searching the whole list (audit 2026-11-21, Q-2).
@@ -1016,7 +988,7 @@ private fun MessageList(
 
 private enum class MetaStatus { SENT, READ, DISAPPEARING }
 
-/** Time under a message, with ✓ (sent), ✓✓ in blue (read) or ⏱ (will disappear). */
+/** Time under a message, with ✓ (sent), "· Read" (read) or ⏱ (will disappear). */
 @Composable
 private fun MetaRow(time: String, status: MetaStatus?) {
     Row(
@@ -1027,7 +999,8 @@ private fun MetaRow(time: String, status: MetaStatus?) {
         Text(time, color = Ref.OnSurfaceVariant, fontSize = 11.sp, lineHeight = 14.sp, letterSpacing = 0.3.sp, fontWeight = FontWeight.Medium)
         when (status) {
             MetaStatus.SENT -> Icon(AppIcons.Done, contentDescription = stringResource(R.string.chat_status_sent), tint = Ref.OnSurfaceVariant, modifier = Modifier.size(14.dp))
-            MetaStatus.READ -> Icon(AppIcons.DoneAll, contentDescription = stringResource(R.string.chat_status_read), tint = Ref.Primary, modifier = Modifier.size(14.dp))
+            // "7:03 pm · Read", as in the mockup (owner 2026-11-22).
+            MetaStatus.READ -> Text("· " + stringResource(R.string.chat_status_read), color = Ref.OnSurfaceVariant, fontSize = 11.sp, lineHeight = 14.sp, letterSpacing = 0.3.sp, fontWeight = FontWeight.Medium)
             MetaStatus.DISAPPEARING -> Icon(AppIcons.Timer, contentDescription = stringResource(R.string.chat_status_disappearing), tint = Ref.OnSurfaceVariant, modifier = Modifier.size(12.dp))
             null -> Unit
         }
@@ -1105,9 +1078,9 @@ private fun Bubble(
 ) {
     // Only the last bubble of a group has the small corner next to the sender.
     val shape = when {
-        !tail -> RoundedCornerShape(18.dp)
-        mine -> RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 6.dp)
-        else -> RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 6.dp, bottomEnd = 18.dp)
+        !tail -> RoundedCornerShape(20.dp)
+        mine -> RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 20.dp, bottomEnd = 6.dp)
+        else -> RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 6.dp, bottomEnd = 20.dp)
     }
     val press = if (onLongPress != null) {
         Modifier.combinedClickable(
@@ -1152,8 +1125,8 @@ private fun Bubble(
     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = if (mine) Alignment.CenterEnd else Alignment.CenterStart) {
         Text(
             text,
-            fontSize = 14.sp,
-            lineHeight = 20.sp,
+            fontSize = 15.sp,
+            lineHeight = 21.sp,
             color = content.copy(alpha = alpha),
             modifier = Modifier
                 .layout { measurable, constraints ->
@@ -1164,7 +1137,7 @@ private fun Bubble(
                 }
                 .then(look)
                 .then(press)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 15.dp, vertical = 11.dp),
         )
     }
 }
@@ -1225,7 +1198,7 @@ private fun DisappearingScreen(peerUsername: String, current: Int?, onBack: () -
     BackHandler(onBack = onBack)
     var chosen by remember(current) { mutableStateOf(current) }
     Surface(modifier = Modifier.fillMaxSize(), color = Ref.Surface, contentColor = Ref.OnSurface) {
-        Column(modifier = Modifier.fillMaxSize().glassBackdrop(Ref.Surface).safeDrawingPadding()) {
+        Column(modifier = Modifier.fillMaxSize().glassBackdrop().safeDrawingPadding()) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,

@@ -326,7 +326,6 @@
     <!-- Chat in the owner's reference design and disappearing messages (2026-11-20, D-30) -->
     <string name="chat_message_hint">Message %1$s…</string>
     <string name="chat_options">Conversation options</string>
-    <string name="chat_strip_private">Private chat · screenshots blocked</string>
     <string name="chat_today">Today</string>
     <string name="chat_status_sent">Sent</string>
     <string name="chat_status_read">Read</string>
