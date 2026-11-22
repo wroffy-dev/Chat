@@ -1,13 +1,14 @@
 package app.vaultchat.ui.theme
 
+import android.os.Build
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
-import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -15,81 +16,58 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * Fixed colours for the camera, snap viewer and call screens. The green palette of 2026-11-19 was replaced by
- * the dark glass look (owner 2026-11-22): near-black greys with one mint accent. The names keep their old
- * roles: Deepest is the darkest ground, Mint the text on it, Sage the accent.
+ * Fixed colours for the always-dark media screens (camera, snap viewer, calls). The names keep their old roles:
+ * Deepest is the darkest ground, Mint the text on it, Sage the accent.
  */
 object VaultGreen {
-    val Deepest = Color(0xFF0B0B0D)
-    val Deep = Color(0xFF16191B)
-    val Forest = Color(0xFF24282B)
-    val Pine = Color(0xFF3A3F43)
-    val Sage = Color(0xFF7FE0B5)
-    val Mint = Color(0xFFF4F6F7)
+    val Deepest = Color(0xFF111316)
+    val Deep = Color(0xFF1C1F23)
+    val Forest = Color(0xFF2B2E33)
+    val Pine = Color(0xFF44474E)
+    val Sage = Color(0xFFB4C5FF)
+    val Mint = Color(0xFFF1F0F7)
 }
 
 /**
- * The dark glass colours of the owner's mockup (2026-11-22: "Dark hi rhegi ab app"): a near-black screen with a
- * faint teal light at the top and a faint warm light at the bottom, glass panels, light grey text and a mint
- * accent. The app no longer has a light mode.
+ * The light Material 3 look (owner 2026-11-22: "google msg jaisa look", "dark app ko bhi light krdo"). On Android 12
+ * and later the colours come from the phone's wallpaper (Material You), as in Google's own apps; otherwise this
+ * calm blue scheme is used. The app is always light.
  */
-object Glass {
-    val Ground = Color(0xFF0B0B0D)
-    val TealLight = Color(0xFF1D2A2B)
-    val WarmLight = Color(0xFF1F1A16)
-    val Mint = Color(0xFF7FE0B5)
-    val OnMint = Color(0xFF06140E)
-    val Ink = Color(0xFFF4F6F7)
-    val InkSoft = Color(0xFFA3ACB1)
-
-    /** Premium finishes (owner 2026-11-22: "luxury … premium"). */
-    val MintLight = Color(0xFF9DECC9)
-    val MintDeep = Color(0xFF63D3A2)
-    val Silver = Color(0xFFC9D0D4)
-}
-
-/** Mint with depth: lighter at the top, deeper at the bottom, for my bubbles, the send button and badges. */
-val MintGradient = Brush.verticalGradient(0f to Glass.MintLight, 1f to Glass.MintDeep)
-
-/** Brushed silver for large titles: white at the top fading to silver. */
-val SilverText = Brush.verticalGradient(0f to Color.White, 1f to Glass.Silver)
-
-private val DarkColors = darkColorScheme(
-    primary = Glass.Mint,
-    onPrimary = Glass.OnMint,
-    primaryContainer = Color(0xFF1E3A30),
-    onPrimaryContainer = Color(0xFFCFF5E3),
-    secondary = Color(0xFF9FD9C2),
-    onSecondary = Glass.OnMint,
-    secondaryContainer = Color(0xFF1E2F2A),
-    onSecondaryContainer = Color(0xFFCFF5E3),
-    background = Glass.Ground,
-    onBackground = Glass.Ink,
-    // Dialogs, menus and sheets: a dark grey that matches the glass over the near-black screen.
-    surface = Color(0xFF1A1D1F),
-    onSurface = Glass.Ink,
-    surfaceVariant = Color(0xFF24282B),
-    onSurfaceVariant = Glass.InkSoft,
-    outline = Color(0xFF3A3F43),
-    outlineVariant = Color(0xFF2A2E32),
-    // Material's own surfaces (dialogs, menus, sheets, pickers) default to a purple-grey; these keep them in the
-    // app's neutral glass greys, and elevation lightens them with white instead of tinting them mint.
-    surfaceTint = Color.White,
-    surfaceDim = Glass.Ground,
-    surfaceBright = Color(0xFF2B2F33),
-    surfaceContainerLowest = Color(0xFF0E0F11),
-    surfaceContainerLow = Color(0xFF141618),
-    surfaceContainer = Color(0xFF181B1D),
-    surfaceContainerHigh = Color(0xFF1D2023),
-    surfaceContainerHighest = Color(0xFF24282B),
-    inverseSurface = Color(0xFFE8ECEE),
-    inverseOnSurface = Color(0xFF16191B),
-    inversePrimary = Color(0xFF0C7F57),
-    scrim = Color.Black,
-    error = Color(0xFFF2B8B5),
-    onError = Color(0xFF601410),
-    errorContainer = Color(0xFF8C1D18),
-    onErrorContainer = Color(0xFFF9DEDC),
+private val LightColors = lightColorScheme(
+    primary = Color(0xFF3557C6),
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFFDCE1FF),
+    onPrimaryContainer = Color(0xFF00174B),
+    secondary = Color(0xFF595D72),
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFFDDE1F9),
+    onSecondaryContainer = Color(0xFF161B2C),
+    tertiary = Color(0xFF75546F),
+    onTertiary = Color.White,
+    tertiaryContainer = Color(0xFFFFD7F5),
+    onTertiaryContainer = Color(0xFF2C1229),
+    background = Color(0xFFF8F9FF),
+    onBackground = Color(0xFF1A1B21),
+    surface = Color(0xFFF8F9FF),
+    onSurface = Color(0xFF1A1B21),
+    surfaceVariant = Color(0xFFE2E2EC),
+    onSurfaceVariant = Color(0xFF45464F),
+    outline = Color(0xFF767680),
+    outlineVariant = Color(0xFFC6C6D0),
+    surfaceDim = Color(0xFFD9D9E0),
+    surfaceBright = Color(0xFFF8F9FF),
+    surfaceContainerLowest = Color.White,
+    surfaceContainerLow = Color(0xFFF2F3FA),
+    surfaceContainer = Color(0xFFECEDF4),
+    surfaceContainerHigh = Color(0xFFE7E8EE),
+    surfaceContainerHighest = Color(0xFFE1E2E8),
+    inverseSurface = Color(0xFF2F3036),
+    inverseOnSurface = Color(0xFFF1F0F7),
+    inversePrimary = Color(0xFFB6C4FF),
+    error = Color(0xFFBA1A1A),
+    onError = Color.White,
+    errorContainer = Color(0xFFFFDAD6),
+    onErrorContainer = Color(0xFF410002),
 )
 
 /**
@@ -125,12 +103,8 @@ private val AppShapes = Shapes(
 
 @Composable
 fun VaultChatTheme(content: @Composable () -> Unit) {
-    // Always dark, whatever the phone's setting (owner 2026-11-22).
-    MaterialTheme(
-        colorScheme = DarkColors,
-        typography = AppTypography,
-        shapes = AppShapes,
-    ) {
-        CompositionLocalProvider(LocalGlass provides DarkGlass, content = content)
-    }
+    // Always light, whatever the phone's setting (owner 2026-11-22).
+    val context = LocalContext.current
+    val colors = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) dynamicLightColorScheme(context) else LightColors
+    MaterialTheme(colorScheme = colors, typography = AppTypography, shapes = AppShapes, content = content)
 }

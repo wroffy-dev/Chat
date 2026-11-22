@@ -1,16 +1,17 @@
 package app.vaultchat.ui.call
 
+import app.vaultchat.ui.theme.DarkPanel
+import app.vaultchat.ui.theme.LocalPanel
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material3.ripple
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.drawscope.Stroke
 import app.vaultchat.ui.components.pressScale
-import app.vaultchat.ui.theme.glass
-import app.vaultchat.ui.theme.glassBackdrop
-import app.vaultchat.ui.theme.glassTrack
-import app.vaultchat.ui.theme.glow
-import app.vaultchat.ui.theme.glossy
+import app.vaultchat.ui.theme.panel
+import app.vaultchat.ui.theme.screenBackground
+import app.vaultchat.ui.theme.panelTrack
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.border
@@ -297,401 +298,404 @@ fun CallScreen(
     // picture full screen under a dark gradient, a header with minimise, name and the live resolution, the
     // self view bottom-right and one bar of round controls. Voice calls, ringing and ended stay as before.
     val videoLayout = kind == CallKind.VIDEO && state.phase in setOf(CallPhase.CONNECTING, CallPhase.ACTIVE, CallPhase.RECONNECTING)
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = if (videoLayout) RefSurface else VaultGreen.Deepest,
-        contentColor = if (videoLayout) RefOnSurface else VaultGreen.Mint,
-    ) {
-        Box(
-            // Voice calls, ringing and the end screen sit on the app's dark glass screen (owner 2026-11-22).
-            modifier = Modifier.fillMaxSize().then(if (videoLayout) Modifier else Modifier.glassBackdrop()).pointerInput(Unit) {
-                // Sees every touch before the buttons do, without consuming it, so a button press
-                // also restarts the timer.
-                awaitPointerEventScope {
-                    while (true) {
-                        awaitPointerEvent(PointerEventPass.Initial)
-                        lastTouch++
-                    }
-                }
-            },
+    // Calls stay dark, with dark panels (owner 2026-11-22: the rest of the app is light).
+    CompositionLocalProvider(LocalPanel provides DarkPanel) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = if (videoLayout) RefSurface else VaultGreen.Deepest,
+            contentColor = if (videoLayout) RefOnSurface else VaultGreen.Mint,
         ) {
-            // WhatsApp-style: tap the small picture to swap which one fills the screen; drag it anywhere.
-            val selfShown = kind == CallKind.VIDEO && localVideo != null && state.cameraOn && state.phase != CallPhase.ENDED
-            val selfIsBig = selfBig && showVideo && selfShown
-            val room = viewModel.media.room
-            // Screen zoom (this phone only): pinch the big picture to enlarge it, drag to move, double-tap to
-            // reset (owner request 2026-11-03). It starts again at 1x when the pictures are swapped.
-            var viewZoom by remember(selfIsBig) { mutableFloatStateOf(1f) }
-            var viewPan by remember(selfIsBig) { mutableStateOf(Offset.Zero) }
-            val zoomedView = Modifier.fillMaxSize().graphicsLayer {
-                scaleX = viewZoom
-                scaleY = viewZoom
-                translationX = viewPan.x
-                translationY = viewPan.y
-            }
-            if (selfIsBig) {
-                VideoView(room, localVideo, mirror = localFront, modifier = zoomedView)
-            } else if (showVideo) {
-                VideoView(room, remoteVideo, mirror = false, modifier = zoomedView)
-            }
-            if (showVideo) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .pointerInput(selfIsBig) {
-                            detectTransformGestures { _, pan, zoomChange, _ ->
-                                val z = (viewZoom * zoomChange).coerceIn(1f, MAX_SCREEN_ZOOM)
-                                // Keep the enlarged picture covering the screen: no empty edges.
-                                val maxX = size.width * (z - 1f) / 2f
-                                val maxY = size.height * (z - 1f) / 2f
-                                viewZoom = z
-                                viewPan = Offset((viewPan.x + pan.x).coerceIn(-maxX, maxX), (viewPan.y + pan.y).coerceIn(-maxY, maxY))
-                            }
+            Box(
+                // Voice calls, ringing and the end screen sit on a plain dark screen.
+                modifier = Modifier.fillMaxSize().then(if (videoLayout) Modifier else Modifier.screenBackground()).pointerInput(Unit) {
+                    // Sees every touch before the buttons do, without consuming it, so a button press
+                    // also restarts the timer.
+                    awaitPointerEventScope {
+                        while (true) {
+                            awaitPointerEvent(PointerEventPass.Initial)
+                            lastTouch++
                         }
-                        .pointerInput(selfIsBig) {
-                            detectTapGestures(onDoubleTap = { viewZoom = 1f; viewPan = Offset.Zero })
-                        },
-                )
-            }
-            val smallTrack = when {
-                selfIsBig -> remoteVideo
-                selfShown -> localVideo
-                else -> null
-            }
-            if (videoLayout) {
-                // Darker at the top and bottom so the header and controls read over any picture.
-                Box(
-                    Modifier.fillMaxSize().background(
-                        Brush.verticalGradient(
-                            0f to RefSurface.copy(alpha = 0.7f),
-                            0.5f to Color.Transparent,
-                            1f to RefSurface.copy(alpha = 0.85f),
-                        ),
-                    ),
-                )
-                if (!showVideo) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CallAvatar(state.peerUsername.ifEmpty { "?" }, pulsing = state.phase != CallPhase.ACTIVE)
                     }
+                },
+            ) {
+                // WhatsApp-style: tap the small picture to swap which one fills the screen; drag it anywhere.
+                val selfShown = kind == CallKind.VIDEO && localVideo != null && state.cameraOn && state.phase != CallPhase.ENDED
+                val selfIsBig = selfBig && showVideo && selfShown
+                val room = viewModel.media.room
+                // Screen zoom (this phone only): pinch the big picture to enlarge it, drag to move, double-tap to
+                // reset (owner request 2026-11-03). It starts again at 1x when the pictures are swapped.
+                var viewZoom by remember(selfIsBig) { mutableFloatStateOf(1f) }
+                var viewPan by remember(selfIsBig) { mutableStateOf(Offset.Zero) }
+                val zoomedView = Modifier.fillMaxSize().graphicsLayer {
+                    scaleX = viewZoom
+                    scaleY = viewZoom
+                    translationX = viewPan.x
+                    translationY = viewPan.y
                 }
-                if (smallTrack != null) {
-                    RefSelfView(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .safeDrawingPadding()
-                            .padding(end = 16.dp, bottom = 112.dp)
-                            .offset { IntOffset(pipOffset.x.roundToInt(), pipOffset.y.roundToInt()) },
-                        content = { VideoView(room, smallTrack, mirror = !selfIsBig && localFront, modifier = Modifier.fillMaxSize()) },
-                        onDrag = { drag ->
-                            pipOffset = Offset(
-                                (pipOffset.x + drag.x).coerceIn(-maxPipX, 0f),
-                                (pipOffset.y + drag.y).coerceIn(-maxPipY, 0f),
-                            )
-                        },
-                        canSwap = showVideo && selfShown,
-                        onSwap = { selfBig = !selfBig },
-                        onSwitchCamera = viewModel.controller::switchCamera,
-                        switchEnabled = state.cameraOn,
-                    )
+                if (selfIsBig) {
+                    VideoView(room, localVideo, mirror = localFront, modifier = zoomedView)
+                } else if (showVideo) {
+                    VideoView(room, remoteVideo, mirror = false, modifier = zoomedView)
                 }
-            } else if (smallTrack != null) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .safeDrawingPadding()
-                        .padding(16.dp)
-                        .offset { IntOffset(pipOffset.x.roundToInt(), pipOffset.y.roundToInt()) }
-                        .size(width = 112.dp, height = 160.dp)
-                        .clip(RoundedCornerShape(12.dp)),
-                ) {
-                    VideoView(room, smallTrack, mirror = !selfIsBig && localFront, modifier = Modifier.fillMaxSize())
-                    // A transparent layer on top takes the taps and drags (the video view itself does not).
+                if (showVideo) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .pointerInput(Unit) {
-                                detectDragGestures { change, drag ->
-                                    change.consume()
-                                    pipOffset = Offset(
-                                        (pipOffset.x + drag.x).coerceIn(-maxPipX, 0f),
-                                        (pipOffset.y + drag.y).coerceIn(0f, maxPipY),
-                                    )
+                            .pointerInput(selfIsBig) {
+                                detectTransformGestures { _, pan, zoomChange, _ ->
+                                    val z = (viewZoom * zoomChange).coerceIn(1f, MAX_SCREEN_ZOOM)
+                                    // Keep the enlarged picture covering the screen: no empty edges.
+                                    val maxX = size.width * (z - 1f) / 2f
+                                    val maxY = size.height * (z - 1f) / 2f
+                                    viewZoom = z
+                                    viewPan = Offset((viewPan.x + pan.x).coerceIn(-maxX, maxX), (viewPan.y + pan.y).coerceIn(-maxY, maxY))
                                 }
                             }
-                            .clickable(
-                                enabled = showVideo && selfShown,
-                                onClickLabel = stringResource(R.string.call_swap_video),
-                            ) { selfBig = !selfBig },
+                            .pointerInput(selfIsBig) {
+                                detectTapGestures(onDoubleTap = { viewZoom = 1f; viewPan = Offset.Zero })
+                            },
                     )
                 }
-            }
-
-            // Front camera light: a warm white frame around the picture (the buttons stay on top of it).
-            if (screenLight) {
-                Box(Modifier.fillMaxSize().border(36.dp, CallGlow))
-            }
-            if (lightNotice) {
-                Text(
-                    stringResource(R.string.call_light_unavailable),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = VaultGreen.Mint,
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .safeDrawingPadding()
-                        .padding(top = 96.dp, start = 24.dp, end = 24.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(Color.Black.copy(alpha = 0.6f))
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                )
-                LaunchedEffect(Unit) {
-                    delay(3_000)
-                    lightNotice = false
+                val smallTrack = when {
+                    selfIsBig -> remoteVideo
+                    selfShown -> localVideo
+                    else -> null
                 }
-            }
-
-            // Debug builds only: live call statistics for the two-phone tests (docs/09). They fade with
-            // the controls after 4 s and come back on a touch.
-            val live = liveStats
-            if (BuildConfig.DEBUG && live != null && controlsVisible && state.phase in setOf(CallPhase.ACTIVE, CallPhase.RECONNECTING)) {
-                Text(
-                    statsOverlayText(live),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = VaultGreen.Mint,
-                    // Lower left, above the buttons, so it does not cover the name and status at the top.
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .safeDrawingPadding()
-                        .padding(start = 8.dp, bottom = 260.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color.Black.copy(alpha = 0.55f))
-                        .padding(6.dp),
-                )
-            }
-
-            // A brief, non-covert notice when either side flips the other's camera.
-            flipNotice?.let { text ->
-                MutedPill(
-                    text,
-                    Modifier.align(Alignment.TopCenter).safeDrawingPadding().padding(top = 72.dp),
-                )
-            }
-
-            // The other person's mute stays visible with the controls hidden too.
-            if (!controlsVisible && peerMuted) {
-                MutedPill(
-                    stringResource(R.string.call_peer_muted, state.peerUsername),
-                    Modifier.align(Alignment.TopCenter).safeDrawingPadding().padding(24.dp),
-                )
-            }
-
-            // With the controls hidden, a small reminder that the microphone is off.
-            if (!controlsVisible && !state.micOn) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .safeDrawingPadding()
-                        .padding(24.dp)
-                        .clip(RoundedCornerShape(50))
-                        .background(Color.Black.copy(alpha = 0.6f))
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
-                ) {
-                    Icon(AppIcons.MicOff, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(stringResource(R.string.call_muted), style = MaterialTheme.typography.labelLarge)
-                }
-            }
-            // Minimise (owner request 2026-11-13): back to the chat with the call still running.
-            if (!videoLayout && onMinimize != null && controlsVisible && state.phase in setOf(CallPhase.ACTIVE, CallPhase.RECONNECTING, CallPhase.CONNECTING)) {
-                FilledTonalButton(
-                    onClick = onMinimize,
-                    modifier = Modifier.align(Alignment.TopStart).safeDrawingPadding().padding(12.dp),
-                ) { Text(stringResource(R.string.call_minimize)) }
-            }
-            if (videoLayout) {
-                AnimatedVisibility(visible = controlsVisible, enter = fadeIn(), exit = fadeOut()) {
-                    Column(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
-                        val phase = phaseText(state.phase, state.endReason, incoming)
-                        val quality = qualityLevel(liveStats)
-                        RefHeader(
-                            name = state.peerUsername.ifEmpty { "…" },
-                            status = when {
-                                state.phase != CallPhase.ACTIVE -> phase
-                                elapsed != null && quality != null -> "$elapsed · ${stringResource(qualityLabel(quality))}"
-                                elapsed != null -> elapsed
-                                else -> phase
-                            },
-                            phase = phase,
-                            onMinimize = onMinimize,
-                            resolution = resolutionText(liveStats),
-                            quality = quality,
-                        )
-                        if (peerMuted) {
-                            MutedPill(stringResource(R.string.call_peer_muted, state.peerUsername), Modifier.align(Alignment.CenterHorizontally))
+                if (videoLayout) {
+                    // Darker at the top and bottom so the header and controls read over any picture.
+                    Box(
+                        Modifier.fillMaxSize().background(
+                            Brush.verticalGradient(
+                                0f to RefSurface.copy(alpha = 0.7f),
+                                0.5f to Color.Transparent,
+                                1f to RefSurface.copy(alpha = 0.85f),
+                            ),
+                        ),
+                    )
+                    if (!showVideo) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CallAvatar(state.peerUsername.ifEmpty { "?" }, pulsing = state.phase != CallPhase.ACTIVE)
                         }
-                        Spacer(Modifier.weight(1f))
-                        RefControls(
+                    }
+                    if (smallTrack != null) {
+                        RefSelfView(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .safeDrawingPadding()
+                                .padding(end = 16.dp, bottom = 112.dp)
+                                .offset { IntOffset(pipOffset.x.roundToInt(), pipOffset.y.roundToInt()) },
+                            content = { VideoView(room, smallTrack, mirror = !selfIsBig && localFront, modifier = Modifier.fillMaxSize()) },
+                            onDrag = { drag ->
+                                pipOffset = Offset(
+                                    (pipOffset.x + drag.x).coerceIn(-maxPipX, 0f),
+                                    (pipOffset.y + drag.y).coerceIn(-maxPipY, 0f),
+                                )
+                            },
+                            canSwap = showVideo && selfShown,
+                            onSwap = { selfBig = !selfBig },
+                            onSwitchCamera = viewModel.controller::switchCamera,
+                            switchEnabled = state.cameraOn,
+                        )
+                    }
+                } else if (smallTrack != null) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .safeDrawingPadding()
+                            .padding(16.dp)
+                            .offset { IntOffset(pipOffset.x.roundToInt(), pipOffset.y.roundToInt()) }
+                            .size(width = 112.dp, height = 160.dp)
+                            .clip(RoundedCornerShape(12.dp)),
+                    ) {
+                        VideoView(room, smallTrack, mirror = !selfIsBig && localFront, modifier = Modifier.fillMaxSize())
+                        // A transparent layer on top takes the taps and drags (the video view itself does not).
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .pointerInput(Unit) {
+                                    detectDragGestures { change, drag ->
+                                        change.consume()
+                                        pipOffset = Offset(
+                                            (pipOffset.x + drag.x).coerceIn(-maxPipX, 0f),
+                                            (pipOffset.y + drag.y).coerceIn(0f, maxPipY),
+                                        )
+                                    }
+                                }
+                                .clickable(
+                                    enabled = showVideo && selfShown,
+                                    onClickLabel = stringResource(R.string.call_swap_video),
+                                ) { selfBig = !selfBig },
+                        )
+                    }
+                }
+
+                // Front camera light: a warm white frame around the picture (the buttons stay on top of it).
+                if (screenLight) {
+                    Box(Modifier.fillMaxSize().border(36.dp, CallGlow))
+                }
+                if (lightNotice) {
+                    Text(
+                        stringResource(R.string.call_light_unavailable),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = VaultGreen.Mint,
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .safeDrawingPadding()
+                            .padding(top = 96.dp, start = 24.dp, end = 24.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(Color.Black.copy(alpha = 0.6f))
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                    LaunchedEffect(Unit) {
+                        delay(3_000)
+                        lightNotice = false
+                    }
+                }
+
+                // Debug builds only: live call statistics for the two-phone tests (docs/09). They fade with
+                // the controls after 4 s and come back on a touch.
+                val live = liveStats
+                if (BuildConfig.DEBUG && live != null && controlsVisible && state.phase in setOf(CallPhase.ACTIVE, CallPhase.RECONNECTING)) {
+                    Text(
+                        statsOverlayText(live),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = VaultGreen.Mint,
+                        // Lower left, above the buttons, so it does not cover the name and status at the top.
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .safeDrawingPadding()
+                            .padding(start = 8.dp, bottom = 260.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color.Black.copy(alpha = 0.55f))
+                            .padding(6.dp),
+                    )
+                }
+
+                // A brief, non-covert notice when either side flips the other's camera.
+                flipNotice?.let { text ->
+                    MutedPill(
+                        text,
+                        Modifier.align(Alignment.TopCenter).safeDrawingPadding().padding(top = 72.dp),
+                    )
+                }
+
+                // The other person's mute stays visible with the controls hidden too.
+                if (!controlsVisible && peerMuted) {
+                    MutedPill(
+                        stringResource(R.string.call_peer_muted, state.peerUsername),
+                        Modifier.align(Alignment.TopCenter).safeDrawingPadding().padding(24.dp),
+                    )
+                }
+
+                // With the controls hidden, a small reminder that the microphone is off.
+                if (!controlsVisible && !state.micOn) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .safeDrawingPadding()
+                            .padding(24.dp)
+                            .clip(RoundedCornerShape(50))
+                            .background(Color.Black.copy(alpha = 0.6f))
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                    ) {
+                        Icon(AppIcons.MicOff, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.call_muted), style = MaterialTheme.typography.labelLarge)
+                    }
+                }
+                // Minimise (owner request 2026-11-13): back to the chat with the call still running.
+                if (!videoLayout && onMinimize != null && controlsVisible && state.phase in setOf(CallPhase.ACTIVE, CallPhase.RECONNECTING, CallPhase.CONNECTING)) {
+                    FilledTonalButton(
+                        onClick = onMinimize,
+                        modifier = Modifier.align(Alignment.TopStart).safeDrawingPadding().padding(12.dp),
+                    ) { Text(stringResource(R.string.call_minimize)) }
+                }
+                if (videoLayout) {
+                    AnimatedVisibility(visible = controlsVisible, enter = fadeIn(), exit = fadeOut()) {
+                        Column(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
+                            val phase = phaseText(state.phase, state.endReason, incoming)
+                            val quality = qualityLevel(liveStats)
+                            RefHeader(
+                                name = state.peerUsername.ifEmpty { "…" },
+                                status = when {
+                                    state.phase != CallPhase.ACTIVE -> phase
+                                    elapsed != null && quality != null -> "$elapsed · ${stringResource(qualityLabel(quality))}"
+                                    elapsed != null -> elapsed
+                                    else -> phase
+                                },
+                                phase = phase,
+                                onMinimize = onMinimize,
+                                resolution = resolutionText(liveStats),
+                                quality = quality,
+                            )
+                            if (peerMuted) {
+                                MutedPill(stringResource(R.string.call_peer_muted, state.peerUsername), Modifier.align(Alignment.CenterHorizontally))
+                            }
+                            Spacer(Modifier.weight(1f))
+                            RefControls(
+                                micOn = state.micOn,
+                                cameraOn = state.cameraOn,
+                                speakerOn = state.speakerOn,
+                                onMic = viewModel.controller::toggleMicrophone,
+                                onCamera = viewModel.controller::toggleCamera,
+                                onSpeaker = viewModel.controller::toggleSpeaker,
+                                light = light,
+                                onLight = { light = !light },
+                                night = nightVideo,
+                                onNight = { nightVideo = !nightVideo },
+                                onEnd = viewModel.controller::hangup,
+                                menu = { dismiss ->
+                                    // Everything the old controls had stays one tap away under the switch button.
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.call_switch_my_camera)) },
+                                        enabled = state.cameraOn,
+                                        onClick = { dismiss(); viewModel.controller.switchCamera() },
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.call_switch_their_camera)) },
+                                        enabled = showVideo,
+                                        onClick = { dismiss(); viewModel.controller.switchPeerCamera(); sentFlips++ },
+                                    )
+                                    HorizontalDivider()
+                                    ZoomRow(stringResource(R.string.call_zoom_my_camera), state.cameraZoom, enabled = state.cameraOn) {
+                                        dismiss(); viewModel.controller.setMyCameraZoom(it)
+                                    }
+                                    ZoomRow(stringResource(R.string.call_zoom_their_camera), state.peerCameraZoom, enabled = showVideo) {
+                                        dismiss(); viewModel.controller.setPeerCameraZoom(it); sentZooms++
+                                    }
+                                    if (viewModel.controller.noiseReductionAvailable) {
+                                        HorizontalDivider()
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(if (state.noiseReduction) R.string.call_noise_filter_on else R.string.call_noise_filter_off)) },
+                                            onClick = { dismiss(); viewModel.controller.toggleNoiseReduction() },
+                                        )
+                                    }
+                                },
+                                onMenuOpen = { switchMenuOpen = it },
+                            )
+                        }
+                    }
+                } else AnimatedVisibility(visible = controlsVisible, enter = fadeIn(), exit = fadeOut()) {
+                Column(
+                    modifier = Modifier.fillMaxSize().safeDrawingPadding().padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Spacer(Modifier.height(40.dp))
+                    Text(state.peerUsername.ifEmpty { "…" }, style = MaterialTheme.typography.headlineMedium)
+                    val phase = phaseText(state.phase, state.endReason, incoming)
+                    Text(
+                        when {
+                            elapsed == null -> phase
+                            state.phase == CallPhase.ACTIVE || state.phase == CallPhase.ENDED -> "$phase · $elapsed"
+                            else -> phase
+                        },
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = VaultGreen.Mint.copy(alpha = 0.8f),
+                        textAlign = TextAlign.Center,
+                        // Announces phase changes only, not every tick of the timer.
+                        modifier = Modifier.clearAndSetSemantics {
+                            contentDescription = phase
+                            liveRegion = LiveRegionMode.Polite
+                        },
+                    )
+                    // Connection quality from the call's real statistics (round-trip time and packet loss);
+                    // nothing is shown until the first sample, and nothing is estimated.
+                    val quality = if (state.phase == CallPhase.ACTIVE || state.phase == CallPhase.RECONNECTING) qualityLevel(liveStats) else null
+                    if (quality != null) {
+                        Spacer(Modifier.height(6.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            SignalBars(quality, label = stringResource(qualityLabel(quality)), color = VaultGreen.Mint)
+                            Text(stringResource(qualityLabel(quality)), style = MaterialTheme.typography.labelMedium, color = VaultGreen.Mint.copy(alpha = 0.75f))
+                        }
+                    }
+                    if (peerMuted) {
+                        Spacer(Modifier.height(8.dp))
+                        MutedPill(stringResource(R.string.call_peer_muted, state.peerUsername))
+                    }
+
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        if (!showVideo) {
+                            // A soft ring breathes around the avatar while the call is ringing or connecting.
+                            val waiting = state.phase in setOf(CallPhase.STARTING, CallPhase.RINGING_OUT, CallPhase.RINGING_IN, CallPhase.CONNECTING, CallPhase.RECONNECTING)
+                            CallAvatar(state.peerUsername.ifEmpty { "?" }, pulsing = waiting)
+                        }
+                    }
+
+                    when {
+                        !incoming && !permissionsReady && state.phase == CallPhase.STARTING -> PermissionPrompt(
+                            micStatus = mic.status,
+                            cameraStatus = if (needsCamera) camera.status else PermissionStatus.Granted,
+                            onRequestMic = mic::request,
+                            onRequestCamera = camera::request,
+                            onOpenSettings = { openAppSettings(context) },
+                            onCancel = onClose,
+                        )
+                        state.phase == CallPhase.RINGING_IN -> Row(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+                            horizontalArrangement = Arrangement.SpaceAround,
+                        ) {
+                            RoundAction(
+                                label = stringResource(R.string.call_decline),
+                                icon = AppIcons.CallEnd,
+                                container = EndRed,
+                                onClick = viewModel.controller::decline,
+                            )
+                            RoundAction(
+                                label = stringResource(if (permissionsReady) R.string.call_accept else R.string.call_allow_and_accept),
+                                icon = Icons.Filled.Call,
+                                container = AcceptGreen,
+                                breathing = true,
+                                onClick = {
+                                    if (permissionsReady) viewModel.controller.accept()
+                                    else if (mic.status != PermissionStatus.Granted) mic.request() else camera.request()
+                                },
+                            )
+                        }
+                        state.phase == CallPhase.ENDED -> Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            if (onCallAgain != null) {
+                                Button(
+                                    onClick = onCallAgain,
+                                    colors = ButtonDefaults.buttonColors(containerColor = Tonal, contentColor = VaultGreen.Mint),
+                                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                                ) { Text(stringResource(R.string.call_again), style = MaterialTheme.typography.labelLarge) }
+                            }
+                            Button(
+                                onClick = onClose,
+                                colors = ButtonDefaults.buttonColors(containerColor = VaultGreen.Mint, contentColor = VaultGreen.Deepest),
+                                modifier = Modifier.fillMaxWidth().height(52.dp),
+                            ) { Text(stringResource(R.string.call_close), style = MaterialTheme.typography.labelLarge) }
+                        }
+                        else -> Controls(
+                            kind = kind,
+                            peerVideoPresent = showVideo,
+                            onSwitchPeerCamera = { viewModel.controller.switchPeerCamera(); sentFlips++ },
+                            onSwitchMenuOpen = { switchMenuOpen = it },
+                            myZoom = state.cameraZoom,
+                            peerZoom = state.peerCameraZoom,
+                            onMyZoom = viewModel.controller::setMyCameraZoom,
+                            onPeerZoom = { viewModel.controller.setPeerCameraZoom(it); sentZooms++ },
+                            onZoomMenuOpen = { zoomMenuOpen = it },
                             micOn = state.micOn,
                             cameraOn = state.cameraOn,
                             speakerOn = state.speakerOn,
                             onMic = viewModel.controller::toggleMicrophone,
                             onCamera = viewModel.controller::toggleCamera,
+                            onSwitch = viewModel.controller::switchCamera,
                             onSpeaker = viewModel.controller::toggleSpeaker,
-                            light = light,
-                            onLight = { light = !light },
-                            night = nightVideo,
-                            onNight = { nightVideo = !nightVideo },
+                            noiseFilter = if (viewModel.controller.noiseReductionAvailable) state.noiseReduction else null,
+                            onNoiseFilter = viewModel.controller::toggleNoiseReduction,
+                            endLabel = stringResource(
+                                if (state.phase == CallPhase.STARTING || state.phase == CallPhase.RINGING_OUT) R.string.action_cancel else R.string.call_end,
+                            ),
                             onEnd = viewModel.controller::hangup,
-                            menu = { dismiss ->
-                                // Everything the old controls had stays one tap away under the switch button.
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.call_switch_my_camera)) },
-                                    enabled = state.cameraOn,
-                                    onClick = { dismiss(); viewModel.controller.switchCamera() },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.call_switch_their_camera)) },
-                                    enabled = showVideo,
-                                    onClick = { dismiss(); viewModel.controller.switchPeerCamera(); sentFlips++ },
-                                )
-                                HorizontalDivider()
-                                ZoomRow(stringResource(R.string.call_zoom_my_camera), state.cameraZoom, enabled = state.cameraOn) {
-                                    dismiss(); viewModel.controller.setMyCameraZoom(it)
-                                }
-                                ZoomRow(stringResource(R.string.call_zoom_their_camera), state.peerCameraZoom, enabled = showVideo) {
-                                    dismiss(); viewModel.controller.setPeerCameraZoom(it); sentZooms++
-                                }
-                                if (viewModel.controller.noiseReductionAvailable) {
-                                    HorizontalDivider()
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(if (state.noiseReduction) R.string.call_noise_filter_on else R.string.call_noise_filter_off)) },
-                                        onClick = { dismiss(); viewModel.controller.toggleNoiseReduction() },
-                                    )
-                                }
-                            },
-                            onMenuOpen = { switchMenuOpen = it },
                         )
                     }
                 }
-            } else AnimatedVisibility(visible = controlsVisible, enter = fadeIn(), exit = fadeOut()) {
-            Column(
-                modifier = Modifier.fillMaxSize().safeDrawingPadding().padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Spacer(Modifier.height(40.dp))
-                Text(state.peerUsername.ifEmpty { "…" }, style = MaterialTheme.typography.headlineMedium)
-                val phase = phaseText(state.phase, state.endReason, incoming)
-                Text(
-                    when {
-                        elapsed == null -> phase
-                        state.phase == CallPhase.ACTIVE || state.phase == CallPhase.ENDED -> "$phase · $elapsed"
-                        else -> phase
-                    },
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = VaultGreen.Mint.copy(alpha = 0.8f),
-                    textAlign = TextAlign.Center,
-                    // Announces phase changes only, not every tick of the timer.
-                    modifier = Modifier.clearAndSetSemantics {
-                        contentDescription = phase
-                        liveRegion = LiveRegionMode.Polite
-                    },
-                )
-                // Connection quality from the call's real statistics (round-trip time and packet loss);
-                // nothing is shown until the first sample, and nothing is estimated.
-                val quality = if (state.phase == CallPhase.ACTIVE || state.phase == CallPhase.RECONNECTING) qualityLevel(liveStats) else null
-                if (quality != null) {
-                    Spacer(Modifier.height(6.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        SignalBars(quality, label = stringResource(qualityLabel(quality)), color = VaultGreen.Mint)
-                        Text(stringResource(qualityLabel(quality)), style = MaterialTheme.typography.labelMedium, color = VaultGreen.Mint.copy(alpha = 0.75f))
-                    }
                 }
-                if (peerMuted) {
-                    Spacer(Modifier.height(8.dp))
-                    MutedPill(stringResource(R.string.call_peer_muted, state.peerUsername))
-                }
-
-                Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    if (!showVideo) {
-                        // A soft ring breathes around the avatar while the call is ringing or connecting.
-                        val waiting = state.phase in setOf(CallPhase.STARTING, CallPhase.RINGING_OUT, CallPhase.RINGING_IN, CallPhase.CONNECTING, CallPhase.RECONNECTING)
-                        CallAvatar(state.peerUsername.ifEmpty { "?" }, pulsing = waiting)
-                    }
-                }
-
-                when {
-                    !incoming && !permissionsReady && state.phase == CallPhase.STARTING -> PermissionPrompt(
-                        micStatus = mic.status,
-                        cameraStatus = if (needsCamera) camera.status else PermissionStatus.Granted,
-                        onRequestMic = mic::request,
-                        onRequestCamera = camera::request,
-                        onOpenSettings = { openAppSettings(context) },
-                        onCancel = onClose,
-                    )
-                    state.phase == CallPhase.RINGING_IN -> Row(
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
-                        horizontalArrangement = Arrangement.SpaceAround,
-                    ) {
-                        RoundAction(
-                            label = stringResource(R.string.call_decline),
-                            icon = AppIcons.CallEnd,
-                            container = EndRed,
-                            onClick = viewModel.controller::decline,
-                        )
-                        RoundAction(
-                            label = stringResource(if (permissionsReady) R.string.call_accept else R.string.call_allow_and_accept),
-                            icon = Icons.Filled.Call,
-                            container = AcceptGreen,
-                            breathing = true,
-                            onClick = {
-                                if (permissionsReady) viewModel.controller.accept()
-                                else if (mic.status != PermissionStatus.Granted) mic.request() else camera.request()
-                            },
-                        )
-                    }
-                    state.phase == CallPhase.ENDED -> Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        if (onCallAgain != null) {
-                            Button(
-                                onClick = onCallAgain,
-                                colors = ButtonDefaults.buttonColors(containerColor = Tonal, contentColor = VaultGreen.Mint),
-                                modifier = Modifier.fillMaxWidth().height(52.dp),
-                            ) { Text(stringResource(R.string.call_again), style = MaterialTheme.typography.labelLarge) }
-                        }
-                        Button(
-                            onClick = onClose,
-                            colors = ButtonDefaults.buttonColors(containerColor = VaultGreen.Mint, contentColor = VaultGreen.Deepest),
-                            modifier = Modifier.fillMaxWidth().height(52.dp),
-                        ) { Text(stringResource(R.string.call_close), style = MaterialTheme.typography.labelLarge) }
-                    }
-                    else -> Controls(
-                        kind = kind,
-                        peerVideoPresent = showVideo,
-                        onSwitchPeerCamera = { viewModel.controller.switchPeerCamera(); sentFlips++ },
-                        onSwitchMenuOpen = { switchMenuOpen = it },
-                        myZoom = state.cameraZoom,
-                        peerZoom = state.peerCameraZoom,
-                        onMyZoom = viewModel.controller::setMyCameraZoom,
-                        onPeerZoom = { viewModel.controller.setPeerCameraZoom(it); sentZooms++ },
-                        onZoomMenuOpen = { zoomMenuOpen = it },
-                        micOn = state.micOn,
-                        cameraOn = state.cameraOn,
-                        speakerOn = state.speakerOn,
-                        onMic = viewModel.controller::toggleMicrophone,
-                        onCamera = viewModel.controller::toggleCamera,
-                        onSwitch = viewModel.controller::switchCamera,
-                        onSpeaker = viewModel.controller::toggleSpeaker,
-                        noiseFilter = if (viewModel.controller.noiseReductionAvailable) state.noiseReduction else null,
-                        onNoiseFilter = viewModel.controller::toggleNoiseReduction,
-                        endLabel = stringResource(
-                            if (state.phase == CallPhase.STARTING || state.phase == CallPhase.RINGING_OUT) R.string.action_cancel else R.string.call_end,
-                        ),
-                        onEnd = viewModel.controller::hangup,
-                    )
-                }
-            }
             }
         }
     }
@@ -752,7 +756,6 @@ private fun RefHeader(
                         .size(44.dp)
                         .clip(CircleShape)
                         .background(RefContainer.copy(alpha = 0.9f))
-                        .glossy(CircleShape, strength = 0.6f)
                         .clickable(role = Role.Button, onClickLabel = stringResource(R.string.call_minimize), onClick = onMinimize),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -875,7 +878,7 @@ private fun RefControls(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .glassTrack(RoundedCornerShape(30.dp))
+                .panelTrack(RoundedCornerShape(30.dp))
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -937,10 +940,8 @@ private fun RefControls(
                 modifier = Modifier
                     .size(width = 56.dp, height = 48.dp)
                     .pressScale(endPress, 0.88f)
-                    .glow(RefError, spread = 8.dp, strength = 0.3f)
                     .clip(RoundedCornerShape(50))
                     .background(RefError)
-                    .glossy(RoundedCornerShape(50), strength = 0.6f)
                     .clickable(interactionSource = endPress, indication = ripple(), role = Role.Button, onClick = onEnd),
                 contentAlignment = Alignment.Center,
             ) {
@@ -957,7 +958,7 @@ private fun RefRound(icon: ImageVector, label: String, highlighted: Boolean, onC
         modifier = Modifier
             .size(48.dp)
             .pressScale(interaction, 0.86f)
-            .then(if (highlighted) Modifier.clip(CircleShape).background(RefOnSurface).glossy(CircleShape, strength = 0.6f) else Modifier.glass(CircleShape))
+            .then(if (highlighted) Modifier.clip(CircleShape).background(RefOnSurface) else Modifier.panel(CircleShape))
             .clickable(interactionSource = interaction, indication = ripple(), role = Role.Button, onClick = onClick)
             .semantics(mergeDescendants = true) { if (state != null) stateDescription = state },
         contentAlignment = Alignment.Center,
@@ -1125,7 +1126,7 @@ private fun RoundToggle(
         Box(
             modifier = Modifier
                 .size(64.dp)
-                .then(if (on) Modifier.background(VaultGreen.Mint, CircleShape).glossy(CircleShape, strength = 0.6f) else Modifier.glass(CircleShape)),
+                .then(if (on) Modifier.background(VaultGreen.Mint, CircleShape) else Modifier.panel(CircleShape)),
             contentAlignment = Alignment.Center,
         ) {
             Icon(icon, contentDescription = null, tint = if (on) VaultGreen.Deepest else VaultGreen.Mint, modifier = Modifier.size(26.dp))
@@ -1194,10 +1195,8 @@ private fun RoundAction(label: String, icon: ImageVector, container: Color, onCl
                     scaleX = swell
                     scaleY = swell
                 }
-                .glow(container, spread = 16.dp, strength = 0.35f)
                 .size(72.dp)
-                .background(container, CircleShape)
-                .glossy(CircleShape),
+                .background(container, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             Icon(icon, contentDescription = null, tint = VaultGreen.Mint, modifier = Modifier.size(30.dp))

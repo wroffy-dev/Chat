@@ -1,11 +1,9 @@
 package app.vaultchat.ui.chat
 
+import androidx.compose.material.icons.filled.MoreVert
 import app.vaultchat.ui.components.popOnChange
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.AnimatedContent
-import app.vaultchat.ui.theme.MintGradient
-import app.vaultchat.ui.theme.glow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.offset
@@ -114,9 +112,8 @@ import app.vaultchat.ui.theme.Motion
 import app.vaultchat.ui.theme.Radii
 import app.vaultchat.ui.theme.Sizes
 import app.vaultchat.ui.theme.Spacing
-import app.vaultchat.ui.theme.glass
-import app.vaultchat.ui.theme.glassBackdrop
-import app.vaultchat.ui.theme.glossy
+import app.vaultchat.ui.theme.panel
+import app.vaultchat.ui.theme.screenBackground
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -278,7 +275,7 @@ fun ChatScreen(
     }
 
     Surface(modifier = Modifier.fillMaxSize(), color = Ref.Surface, contentColor = Ref.OnSurface) {
-        Column(modifier = Modifier.fillMaxSize().glassBackdrop().safeDrawingPadding().imePadding()) {
+        Column(modifier = Modifier.fillMaxSize().screenBackground().safeDrawingPadding().imePadding()) {
             ChatHeader(
                 peerUsername = peerUsername,
                 typing = state.peerTyping,
@@ -296,7 +293,7 @@ fun ChatScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp)
-                        .glass(RoundedCornerShape(18.dp))
+                        .panel(RoundedCornerShape(18.dp))
                         .background(Ref.PrimaryContainer.copy(alpha = 0.55f))
                         .clickable(onClick = onOpenSnaps)
                         .padding(horizontal = 16.dp, vertical = 12.dp),
@@ -419,7 +416,7 @@ private fun ChatComposer(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 4.dp)
-                .glass(RoundedCornerShape(18.dp))
+                .panel(RoundedCornerShape(18.dp))
                 .padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -437,7 +434,7 @@ private fun ChatComposer(
         }
     }
     // Composer: text only. The round button on the left takes a snap (the reference's place for it).
-    // Liquid Glass (owner 2026-11-22): no bar behind the composer, only floating glass pieces.
+    // Material 3 composer (owner 2026-11-22): a camera button, a tonal pill to type in, and a filled send button.
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
@@ -447,7 +444,7 @@ private fun ChatComposer(
             RoundAction(
                 icon = AppIcons.PhotoCamera,
                 description = stringResource(R.string.snap_button),
-                container = GLASS,
+                container = PLAIN,
                 tint = Ref.OnSurface,
                 onClick = onSnap,
             )
@@ -471,9 +468,8 @@ private fun ChatComposer(
                 container = if (canSend) Ref.Primary else Ref.Primary.copy(alpha = 0.4f),
                 tint = Ref.OnPrimary,
                 enabled = canSend,
-                fill = MintGradient,
                 // A soft mint light around it once it can send.
-                modifier = Modifier.glow(Ref.Primary, spread = 14.dp, strength = 0.38f * ready.coerceIn(0f, 1f)).graphicsLayer {
+                modifier = Modifier.graphicsLayer {
                     val scale = 0.82f + 0.18f * ready
                     scaleX = scale
                     scaleY = scale
@@ -494,7 +490,7 @@ private fun ChatComposer(
 /**
  * Message input as a platform EditText, because Compose text fields cannot ask the keyboard not to
  * learn from what is typed (docs/07 §4 rule 6). The keyboard may still ignore the request. The text
- * is never put in saved instance state. A glass pill with a green outline while typing.
+ * is never put in saved instance state. A tonal pill with a primary outline while typing.
  */
 @Composable
 private fun PrivateTextInput(
@@ -512,7 +508,7 @@ private fun PrivateTextInput(
     AndroidView(
         modifier = modifier
             .heightIn(min = 44.dp)
-            .glass(RoundedCornerShape(22.dp))
+            .panel(RoundedCornerShape(22.dp))
             .border(1.dp, fieldOutline, RoundedCornerShape(22.dp))
             .padding(horizontal = 16.dp, vertical = 2.dp),
         factory = { context ->
@@ -550,13 +546,10 @@ private fun PrivateTextInput(
     )
 }
 
-/** [RoundAction]'s container for a glass button. */
-private val GLASS = Color.Unspecified
+/** [RoundAction]'s container for a plain icon button with no fill, as in a Material top app bar. */
+private val PLAIN = Color.Unspecified
 
-/**
- * Round 44 dp button (composer and header): glass for [GLASS], a glossy solid colour otherwise, nothing for a
- * transparent [container].
- */
+/** Round button (composer and header): a plain icon button for [PLAIN], a filled circle otherwise. */
 @Composable
 private fun RoundAction(
     icon: ImageVector,
@@ -566,29 +559,26 @@ private fun RoundAction(
     onClick: () -> Unit,
     enabled: Boolean = true,
     modifier: Modifier = Modifier,
-    fill: Brush? = null,
 ) {
-    val look = when {
-        container == GLASS -> Modifier.glass(CircleShape)
-        fill != null -> Modifier.clip(CircleShape).background(fill, alpha = container.alpha).glossy(CircleShape, strength = 0.8f)
-        container.alpha == 0f -> Modifier.clip(CircleShape)
-        else -> Modifier.clip(CircleShape).background(container).glossy(CircleShape, strength = 0.8f)
-    }
-    // Shrinks under the finger and springs back with a small bounce (owner 2026-11-22: iOS-like motion).
+    val plain = container == PLAIN
     val interaction = remember { MutableInteractionSource() }
     Box(
         modifier = modifier
-            .size(44.dp)
-            .pressScale(interaction, 0.86f)
-            .then(look)
+            .size(if (plain) 48.dp else 44.dp)
+            .pressScale(interaction, 0.9f)
+            .clip(CircleShape)
+            .then(if (plain) Modifier else Modifier.background(container))
             .clickable(interactionSource = interaction, indication = ripple(), enabled = enabled, role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, contentDescription = description, tint = tint, modifier = Modifier.size(20.dp))
+        Icon(icon, contentDescription = description, tint = tint, modifier = Modifier.size(if (plain) 24.dp else 20.dp))
     }
 }
 
-/** The chat's header: back, the person in a glass capsule (opens the options), then voice and video. */
+/**
+ * The chat's top bar (Material 3, in the spirit of Google Messages, owner 2026-11-22): back, the person's avatar and
+ * name, then voice call, video call and the ⋮ menu (disappearing messages, walkie-talkie).
+ */
 @Composable
 private fun ChatHeader(
     peerUsername: String,
@@ -599,55 +589,42 @@ private fun ChatHeader(
     onTalk: () -> Unit,
     onDisappearing: () -> Unit,
 ) {
-    // As in the dark glass mockup (owner 2026-11-22, "must be same"): back, the person in a glass capsule,
-    // then voice and video. Tapping the capsule opens the chat's options (disappearing messages, walkie-talkie).
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        RoundAction(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back), GLASS, Ref.OnSurface, onBack)
-        var menu by remember { mutableStateOf(false) }
-        val capsulePress = remember { MutableInteractionSource() }
-        Box(modifier = Modifier.weight(1f)) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .pressScale(capsulePress, 0.96f)
-                    .glass(RoundedCornerShape(50))
-                    .clickable(interactionSource = capsulePress, indication = ripple(), onClickLabel = stringResource(R.string.chat_options), role = Role.Button) { menu = true }
-                    .padding(start = 4.dp, end = 14.dp, top = 4.dp, bottom = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                InitialsAvatar(peerUsername, size = 36.dp)
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        peerUsername,
-                        color = Ref.OnSurface,
-                        fontSize = 15.sp,
-                        lineHeight = 20.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.semantics { heading() },
-                    )
-                    // Vault only knows when the other person is typing (no presence). The line slides open softly.
-                    AnimatedVisibility(
-                        visible = typing,
-                        enter = expandVertically(spring(dampingRatio = 0.8f, stiffness = 500f)) + fadeIn(),
-                        exit = shrinkVertically(spring(dampingRatio = 1f, stiffness = 500f)) + fadeOut(),
-                    ) {
-                        Text(stringResource(R.string.chat_typing), color = Ref.OnSurfaceVariant, fontSize = 11.5.sp, lineHeight = 15.sp)
-                    }
+        RoundAction(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back), PLAIN, Ref.OnSurface, onBack)
+        Row(
+            modifier = Modifier.weight(1f).padding(start = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            InitialsAvatar(peerUsername, size = 40.dp)
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    peerUsername,
+                    color = Ref.OnSurface,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.semantics { heading() },
+                )
+                // Vault only knows when the other person is typing (no presence). The line slides open softly.
+                AnimatedVisibility(
+                    visible = typing,
+                    enter = expandVertically(spring(dampingRatio = 0.8f, stiffness = 500f)) + fadeIn(),
+                    exit = shrinkVertically(spring(dampingRatio = 1f, stiffness = 500f)) + fadeOut(),
+                ) {
+                    Text(stringResource(R.string.chat_typing), color = Ref.Primary, style = MaterialTheme.typography.bodySmall)
                 }
             }
-            DropdownMenu(
-                expanded = menu,
-                onDismissRequest = { menu = false },
-                shape = RoundedCornerShape(20.dp),
-                containerColor = Ref.ContainerHigh,
-            ) {
+        }
+        RoundAction(Icons.Filled.Call, stringResource(R.string.home_voice_call), PLAIN, Ref.OnSurfaceVariant, onVoice)
+        RoundAction(AppIcons.Videocam, stringResource(R.string.home_video_call), PLAIN, Ref.OnSurfaceVariant, onVideo)
+        var menu by remember { mutableStateOf(false) }
+        Box {
+            RoundAction(Icons.Filled.MoreVert, stringResource(R.string.chat_options), PLAIN, Ref.OnSurfaceVariant, { menu = true })
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }, shape = RoundedCornerShape(16.dp)) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.expiry_title)) },
                     leadingIcon = { Icon(AppIcons.Timer, contentDescription = null) },
@@ -660,8 +637,6 @@ private fun ChatHeader(
                 )
             }
         }
-        RoundAction(Icons.Filled.Call, stringResource(R.string.home_voice_call), GLASS, Ref.OnSurface, onVoice)
-        RoundAction(AppIcons.Videocam, stringResource(R.string.home_video_call), GLASS, Ref.OnSurface, onVideo)
     }
 }
 
@@ -686,7 +661,7 @@ private fun StatusStrip(disappearSeconds: Int?, onExpiry: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             modifier = Modifier
                 .pressScale(pillPress, 0.92f)
-                .glass(RoundedCornerShape(50))
+                .panel(RoundedCornerShape(50))
                 .clickable(interactionSource = pillPress, indication = ripple(), role = Role.Button, onClick = onExpiry)
                 .padding(horizontal = 12.dp, vertical = 6.dp),
         ) {
@@ -713,7 +688,7 @@ private fun DayChip(epochMs: Long) {
             lineHeight = 14.sp,
             letterSpacing = 0.3.sp,
             fontWeight = FontWeight.Medium,
-            modifier = Modifier.glass(RoundedCornerShape(50)).padding(horizontal = 12.dp, vertical = 4.dp),
+            modifier = Modifier.panel(RoundedCornerShape(50)).padding(horizontal = 12.dp, vertical = 4.dp),
         )
     }
 }
@@ -739,7 +714,7 @@ private fun DisappearLine(m: ChatMessage, mine: Boolean, peerUsername: String) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.glass(RoundedCornerShape(50)).padding(horizontal = 12.dp, vertical = 6.dp),
+            modifier = Modifier.panel(RoundedCornerShape(50)).padding(horizontal = 12.dp, vertical = 6.dp),
         ) {
             Icon(AppIcons.Timer, contentDescription = null, tint = Ref.OnSurfaceVariant, modifier = Modifier.size(14.dp))
             Text(text, color = Ref.OnSurfaceVariant, fontSize = 12.sp, lineHeight = 16.sp)
@@ -829,7 +804,7 @@ private fun MessageList(
     Box(modifier = modifier.fillMaxWidth()) {
     LazyColumn(
         state = listState,
-        // No doodles: the plain dark glass screen of the mockup (owner 2026-11-22, "must be same").
+        // A plain light background, as in Google Messages (owner 2026-11-22).
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
     ) {
@@ -995,7 +970,7 @@ private fun MessageList(
                 Box(Modifier.fillMaxWidth().padding(top = MESSAGE_GAP).animateItem(), contentAlignment = Alignment.CenterStart) {
                     Box(
                         modifier = Modifier
-                            .glass(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 6.dp, bottomEnd = 18.dp))
+                            .panel(RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 6.dp, bottomEnd = 18.dp))
                             .padding(horizontal = 16.dp, vertical = 14.dp),
                     ) { TypingDots(color = Ref.OnSurfaceVariant) }
                 }
@@ -1013,7 +988,7 @@ private fun MessageList(
             Box(
                 modifier = Modifier
                     .size(40.dp)
-                    .glass(CircleShape, strong = true, elevation = 6.dp)
+                    .panel(CircleShape, strong = true, elevation = 6.dp)
                     .clickable(role = Role.Button, onClickLabel = stringResource(R.string.chat_to_newest)) {
                         unseen = 0
                         scope.launch { listState.animateScrollToItem(lastIndex) }
@@ -1025,7 +1000,7 @@ private fun MessageList(
             if (unseen > 0) {
                 Box(
                     modifier = Modifier.align(Alignment.TopEnd).offset(x = 4.dp, y = (-4).dp)
-                        .size(18.dp).background(MintGradient, CircleShape).glossy(CircleShape, strength = 0.8f),
+                        .size(18.dp).background(Ref.Primary, CircleShape),
                     contentAlignment = Alignment.Center,
                 ) { Text(if (unseen > 9) "9+" else "$unseen", color = Ref.OnPrimary, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
             }
@@ -1062,7 +1037,7 @@ private fun QuotedMessage(who: String, text: String, onClick: () -> Unit) {
         modifier = Modifier
             .widthIn(max = 290.dp)
             .padding(bottom = 2.dp)
-            .glass(RoundedCornerShape(12.dp))
+            .panel(RoundedCornerShape(12.dp))
             .clickable(onClickLabel = stringResource(R.string.chat_go_to_message), onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 6.dp),
     ) {
@@ -1093,7 +1068,7 @@ private fun MissedCallLine(m: ChatMessage, mine: Boolean, onCallBack: (video: Bo
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier
-                .glass(RoundedCornerShape(50))
+                .panel(RoundedCornerShape(50))
                 .then(if (mine) Modifier else Modifier.clickable(onClickLabel = stringResource(R.string.chat_call_back)) { onCallBack(video) })
                 .padding(horizontal = 14.dp, vertical = 8.dp),
         ) {
@@ -1110,7 +1085,7 @@ private fun MissedCallLine(m: ChatMessage, mine: Boolean, onCallBack: (video: Bo
 }
 
 /**
- * Message bubbles: theirs on the left in glass, mine on the right in glossy green, 18 dp corners with a
+ * Message bubbles: theirs on the left in light grey, mine on the right in the primary container colour, with a
  * 6 dp corner next to the sender, at most 82 % of the width.
  */
 @Composable
@@ -1152,22 +1127,17 @@ private fun Bubble(
         )
         return
     }
+    // Material 3, in the spirit of Google Messages (owner 2026-11-22): mine in the primary container colour, theirs
+    // in a light grey tonal surface, a failed one in the error container colour.
     val container = when {
         failed -> Ref.ErrorContainer
-        mine -> Ref.Primary
-        else -> GLASS
+        mine -> Ref.PrimaryContainer
+        else -> MaterialTheme.colorScheme.surfaceContainerHigh
     }
-    // Liquid Glass (owner 2026-11-22): theirs is glass, mine a glossy green.
-    val look = if (container == GLASS) {
-        Modifier.glass(shape)
-    } else {
-        // Mine: mint with depth (lighter at the top) and a glossy shine; a failed one stays in the error colour.
-        val base = if (mine && !failed) Modifier.background(MintGradient, alpha = if (faded) 0.8f else 1f) else Modifier.background(container.copy(alpha = if (faded) 0.8f else 1f))
-        Modifier.clip(shape).then(base).glossy(shape, strength = 0.7f)
-    }
+    val look = Modifier.clip(shape).background(container.copy(alpha = if (faded) 0.8f else 1f))
     val content = when {
         failed -> Ref.OnErrorContainer
-        mine -> Ref.OnPrimary
+        mine -> Ref.OnPrimaryContainer
         else -> Ref.OnSurface
     }
     // A plain Box with a layout limit instead of BoxWithConstraints: that one composes each bubble a second
@@ -1206,7 +1176,7 @@ private fun ReactionPicker(chosen: String?, alignEnd: Boolean, onPick: (String) 
         properties = PopupProperties(focusable = true),
     ) {
         // The picker rises in, and its emoji follow one after another (owner 2026-11-22: iOS-like motion).
-        Box(modifier = Modifier.staggeredAppear(0).glass(RoundedCornerShape(28.dp), strong = true, elevation = 8.dp)) {
+        Box(modifier = Modifier.staggeredAppear(0).panel(RoundedCornerShape(28.dp), strong = true, elevation = 8.dp)) {
             Row(modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                 QUICK_REACTIONS.forEachIndexed { i, emoji ->
                     Box(
@@ -1236,7 +1206,7 @@ private fun ReactionPill(reactions: List<Reaction>, onClick: () -> Unit) {
             .offset(y = (-6).dp)
             .staggeredAppear(0)
             .popOnChange(reactions.map { it.emoji })
-            .glass(RoundedCornerShape(12.dp), strong = true)
+            .panel(RoundedCornerShape(12.dp), strong = true)
             .clickable(onClick = onClick),
     ) {
         Row(modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -1257,13 +1227,13 @@ private fun DisappearingScreen(peerUsername: String, current: Int?, onBack: () -
     BackHandler(onBack = onBack)
     var chosen by remember(current) { mutableStateOf(current) }
     Surface(modifier = Modifier.fillMaxSize(), color = Ref.Surface, contentColor = Ref.OnSurface) {
-        Column(modifier = Modifier.fillMaxSize().glassBackdrop().safeDrawingPadding()) {
+        Column(modifier = Modifier.fillMaxSize().screenBackground().safeDrawingPadding()) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                RoundAction(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back), GLASS, Ref.OnSurface, onBack)
+                RoundAction(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back), PLAIN, Ref.OnSurface, onBack)
                 Text(
                     stringResource(R.string.expiry_title),
                     color = Ref.OnSurface,
@@ -1280,7 +1250,7 @@ private fun DisappearingScreen(peerUsername: String, current: Int?, onBack: () -
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .glass(RoundedCornerShape(Radii.card))
+                        .panel(RoundedCornerShape(Radii.card))
                         .padding(16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
@@ -1303,7 +1273,7 @@ private fun DisappearingScreen(peerUsername: String, current: Int?, onBack: () -
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .glass(RoundedCornerShape(Radii.card))
+                            .panel(RoundedCornerShape(Radii.card))
                             .selectableGroup(),
                     ) {
                         DISAPPEAR_CHOICES.forEachIndexed { i, seconds ->
@@ -1342,10 +1312,8 @@ private fun DisappearingScreen(peerUsername: String, current: Int?, onBack: () -
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 52.dp)
-                        .glow(Ref.Primary, spread = 10.dp, strength = 0.22f)
                         .clip(RoundedCornerShape(50))
-                        .background(MintGradient)
-                        .glossy(RoundedCornerShape(50))
+                        .background(Ref.Primary)
                         .clickable(role = Role.Button, onClick = { onSet(chosen) })
                         .padding(horizontal = 24.dp, vertical = 12.dp),
                     contentAlignment = Alignment.Center,

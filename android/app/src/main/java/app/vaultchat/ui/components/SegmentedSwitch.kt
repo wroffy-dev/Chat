@@ -30,20 +30,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.vaultchat.ui.theme.Motion
-import app.vaultchat.ui.theme.glassTrack
+import app.vaultchat.ui.theme.panelTrack
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /**
- * A glass switch such as All / Unread (owner 2026-11-22: "read or unread mein switch krte hai toh apple type
- * slide ho glass effect ke sath"). The pressed-in glass slides to the chosen option with a spring, stretching
+ * A segmented switch such as All / Unread (owner 2026-11-22: "read or unread mein switch krte hai toh apple type
+ * slide ho glass effect ke sath"). The selected pill slides to the chosen option with a spring, stretching
  * like liquid on its way; it can also be dragged with a finger and snaps to the nearest option, with a light
  * tick each time it crosses one.
  */
 @Composable
-fun GlassSegmented(labels: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
+fun SegmentedSwitch(labels: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(50)
-    val slider = rememberGlassSlider(selected, labels.size)
+    val slider = rememberSlideState(selected, labels.size)
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
     val select by rememberUpdatedState(onSelect)
@@ -52,7 +52,7 @@ fun GlassSegmented(labels: List<String>, selected: Int, onSelect: (Int) -> Unit,
     val rowLeft = remember { floatArrayOf(0f) }
     Box(
         modifier = modifier
-            .glassTrack(shape)
+            .panelTrack(shape)
             .padding(5.dp)
             .onPlaced { rowLeft[0] = it.positionInRoot().x }
             .pointerInput(labels.size) {
@@ -67,10 +67,10 @@ fun GlassSegmented(labels: List<String>, selected: Int, onSelect: (Int) -> Unit,
                         if (target != current) {
                             select(target)
                         } else {
-                            scope.launch { slider.position.animateTo(target.toFloat(), GlassMotion.slide) }
+                            scope.launch { slider.position.animateTo(target.toFloat(), Springs.slide) }
                         }
                     },
-                    onDragCancel = { scope.launch { slider.position.animateTo(current.toFloat(), GlassMotion.slide) } },
+                    onDragCancel = { scope.launch { slider.position.animateTo(current.toFloat(), Springs.slide) } },
                 ) { change, _ ->
                     change.consume()
                     val p = slider.indexAt(rowLeft[0] + change.position.x)
@@ -83,7 +83,7 @@ fun GlassSegmented(labels: List<String>, selected: Int, onSelect: (Int) -> Unit,
                 }
             },
     ) {
-        GlassSliderIndicator(slider, shape)
+        SlidingIndicator(slider, shape)
         Row {
             labels.forEachIndexed { i, label ->
                 val chosen = i == selected
@@ -94,7 +94,7 @@ fun GlassSegmented(labels: List<String>, selected: Int, onSelect: (Int) -> Unit,
                     style = MaterialTheme.typography.labelLarge.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
                     color = tint,
                     modifier = Modifier
-                        .glassSegment(slider, i)
+                        .slideSegment(slider, i)
                         .semantics { this.selected = chosen }
                         .pressScale(interaction, 0.92f)
                         .clip(shape)
