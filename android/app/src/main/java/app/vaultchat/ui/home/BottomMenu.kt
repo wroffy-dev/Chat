@@ -14,9 +14,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import app.vaultchat.ui.theme.glass
+import app.vaultchat.ui.theme.glossy
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -35,43 +41,44 @@ enum class BottomTab { CHAT, CAMERA, MAP }
 
 /**
  * The bottom menu: Chat, the round Camera button in the middle (also reached by swiping right on the
- * chat list), and Map. Chat is what the app opens on.
+ * chat list), and Map. Chat is what the app opens on. A floating glass capsule with a glossy camera
+ * button (Liquid Glass, owner 2026-11-22).
  */
 @Composable
 fun VaultBottomBar(selected: BottomTab, onChat: () -> Unit, onCamera: () -> Unit, onMap: () -> Unit) {
     val colors = MaterialTheme.colorScheme
-    // Same light green as the screen, no white strip or shadow (owner, 2026-11-19).
-    Surface(color = colors.background) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 18.dp, vertical = 10.dp)
+            .glass(RoundedCornerShape(36.dp), strong = true, elevation = 10.dp)
+            .height(72.dp)
+            .padding(horizontal = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Tab(AppIcons.Chat, stringResource(R.string.tab_chat), selected == BottomTab.CHAT, onChat)
+        // The round camera shrinks a little under the finger (UI upgrade): quiet, tactile feedback.
+        val interaction = remember { MutableInteractionSource() }
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(60.dp)
+                .pressScale(interaction)
+                .clip(CircleShape)
+                .background(colors.primary)
+                .glossy(CircleShape)
+                .clickable(
+                    interactionSource = interaction,
+                    indication = ripple(bounded = true),
+                    onClickLabel = stringResource(R.string.tab_camera),
+                    role = Role.Button,
+                    onClick = onCamera,
+                ),
         ) {
-            Tab(AppIcons.Chat, stringResource(R.string.tab_chat), selected == BottomTab.CHAT, onChat)
-            // The round camera shrinks a little under the finger (UI upgrade): quiet, tactile feedback.
-            val interaction = remember { MutableInteractionSource() }
-            Surface(
-                shape = CircleShape,
-                color = colors.primary,
-                contentColor = colors.onPrimary,
-                shadowElevation = 2.dp,
-                modifier = Modifier
-                    .size(60.dp)
-                    .pressScale(interaction)
-                    .clickable(
-                        interactionSource = interaction,
-                        indication = ripple(bounded = true),
-                        onClickLabel = stringResource(R.string.tab_camera),
-                        role = Role.Button,
-                        onClick = onCamera,
-                    ),
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(AppIcons.PhotoCamera, contentDescription = stringResource(R.string.tab_camera), modifier = Modifier.size(28.dp))
-                }
-            }
-            Tab(AppIcons.Map, stringResource(R.string.tab_map), selected == BottomTab.MAP, onMap)
+            Icon(AppIcons.PhotoCamera, contentDescription = stringResource(R.string.tab_camera), tint = colors.onPrimary, modifier = Modifier.size(28.dp))
         }
+        Tab(AppIcons.Map, stringResource(R.string.tab_map), selected == BottomTab.MAP, onMap)
     }
 }
 
@@ -81,13 +88,16 @@ private fun Tab(icon: ImageVector, label: String, isSelected: Boolean, onClick: 
     val tint = if (isSelected) colors.primary else colors.onSurfaceVariant
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
         modifier = Modifier
-            .width(72.dp)
+            .width(96.dp)
+            .height(56.dp)
+            .clip(RoundedCornerShape(28.dp))
+            .background(if (isSelected) colors.primary.copy(alpha = 0.13f) else Color.Transparent)
             .semantics { selected = isSelected }
-            .clickable(role = Role.Tab, onClick = onClick)
-            .padding(vertical = 4.dp),
+            .clickable(role = Role.Tab, onClick = onClick),
     ) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(26.dp))
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
         Text(label, style = MaterialTheme.typography.labelSmall, color = tint)
     }
 }

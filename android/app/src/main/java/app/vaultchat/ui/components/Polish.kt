@@ -26,7 +26,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -34,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -47,6 +47,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.vaultchat.ui.theme.Motion
+import app.vaultchat.ui.theme.Radii
+import app.vaultchat.ui.theme.glass
+import app.vaultchat.ui.theme.glossy
 import app.vaultchat.ui.theme.Sizes
 import app.vaultchat.ui.theme.Spacing
 
@@ -66,14 +69,17 @@ fun Modifier.pressScale(interaction: MutableInteractionSource, pressed: Float = 
     }
 }
 
-/** A round icon button on a soft surface, 44 dp with a 48 dp touch area, used in headers. */
+/**
+ * A round glass icon button, 44 dp with a 48 dp touch area, used in headers. With a [container] colour it
+ * is a solid glossy button instead (Liquid Glass, owner 2026-11-22).
+ */
 @Composable
 fun VaultIconButton(
     icon: ImageVector,
     contentDescription: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    container: Color = MaterialTheme.colorScheme.surface,
+    container: Color = Color.Unspecified,
     tint: Color = MaterialTheme.colorScheme.onSurface,
     size: androidx.compose.ui.unit.Dp = Sizes.headerAction,
 ) {
@@ -82,17 +88,21 @@ fun VaultIconButton(
         modifier = modifier.size(Sizes.touch),
         contentAlignment = Alignment.Center,
     ) {
-        Surface(
-            shape = CircleShape,
-            color = container,
-            contentColor = tint,
+        val look = if (container == Color.Unspecified) {
+            Modifier.glass(CircleShape)
+        } else {
+            Modifier.clip(CircleShape).background(container).glossy(CircleShape)
+        }
+        Box(
             modifier = Modifier
                 .size(size)
                 .pressScale(interaction)
+                .then(look)
                 .clickable(interactionSource = interaction, indication = androidx.compose.material3.ripple(bounded = true), role = Role.Button, onClick = onClick)
                 .semantics { this.contentDescription = contentDescription },
+            contentAlignment = Alignment.Center,
         ) {
-            Box(contentAlignment = Alignment.Center) { Icon(icon, contentDescription = null, modifier = Modifier.size(Sizes.iconSm + 2.dp)) }
+            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(Sizes.iconSm + 2.dp))
         }
     }
 }
@@ -107,6 +117,7 @@ fun UnreadBadge(count: Int, modifier: Modifier = Modifier) {
             .heightIn(min = 22.dp)
             .widthIn(min = 22.dp)
             .background(MaterialTheme.colorScheme.primary, CircleShape)
+            .glossy(CircleShape, strength = 0.8f)
             .padding(horizontal = 7.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -150,14 +161,12 @@ fun SectionHeader(text: String, modifier: Modifier = Modifier) {
     )
 }
 
-/** A rounded group of settings rows, as one card. */
+/** A rounded group of settings rows, as one glass card. */
 @Composable
 fun SettingsGroup(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Surface(
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surface,
-        modifier = modifier.fillMaxWidth().padding(horizontal = Spacing.screen),
-    ) { Column { content() } }
+    Column(
+        modifier = modifier.fillMaxWidth().padding(horizontal = Spacing.screen).glass(RoundedCornerShape(Radii.card)),
+    ) { content() }
 }
 
 /**

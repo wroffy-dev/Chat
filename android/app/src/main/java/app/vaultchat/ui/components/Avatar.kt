@@ -18,16 +18,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import app.vaultchat.ui.theme.VaultGreen
+import app.vaultchat.ui.theme.glossy
 
-// Shades of the app's green palette (owner, 2026-11-19), light enough for the dark initial.
+// Glossy colours of the Liquid Glass look (owner 2026-11-22), each dark enough for a white initial.
 private val AvatarColors = listOf(
-    VaultGreen.Mint, VaultGreen.Sage, Color(0xFFC3DCC9), Color(0xFFA9CBB3),
-    Color(0xFFB8D8C0), Color(0xFFE8F5EA), Color(0xFF9FC2AA), Color(0xFFCFE6D4),
+    Color(0xFF0C7F57), Color(0xFF2F64D0), Color(0xFF8A4FD8), Color(0xFFC2410C),
+    Color(0xFFBE185D), Color(0xFF0E7490), Color(0xFF4D7C0F), Color(0xFF5B5BD6),
 )
 
 /**
- * A person's initial in a soft coloured circle. The app has no profile photos (docs/01): the colour
+ * A person's initial in a glossy coloured circle. The app has no profile photos (docs/01): the colour
  * comes from the username, so it stays the same everywhere. Decorative for screen readers.
  */
 @Composable
@@ -41,10 +41,10 @@ fun InitialsAvatar(name: String, modifier: Modifier = Modifier, size: Dp = 44.dp
         contentAlignment = Alignment.Center,
     ) {
         Box(
-            modifier = Modifier.fillMaxSize().background(color, CircleShape),
+            modifier = Modifier.fillMaxSize().background(color, CircleShape).glossy(CircleShape),
             contentAlignment = Alignment.Center,
         ) {
-            Text(initial, color = VaultGreen.Deepest, fontWeight = FontWeight.SemiBold, fontSize = (size.value * 0.38f).sp)
+            Text(initial, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = (size.value * 0.38f).sp)
         }
     }
 }

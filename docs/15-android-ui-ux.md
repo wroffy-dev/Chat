@@ -6,7 +6,13 @@ where this document and the built screens differ, the plan records what exists.
 
 ## 1. Design principles
 
-**Colours (owner decision 2026-11-19, Implemented):** the app uses the owner's six-shade green palette,
+**Liquid Glass (owner 2026-11-22, Implemented, replaces the colours below):** after approving a mockup, the owner
+asked for the Liquid Glass look across the app. Screens are plain light grey `#F2F2F5` (dark: `#0C0C0F`) with one
+soft warm glow, panels are glass (see-through white with a shine on top and a bright rim, `ui/theme/Glass.kt`),
+solid buttons, my bubbles and avatars are glossy, and the accent is green `#0C7F57` (dark: `#3DDC97`). There is no
+real background blur (no lag); the launcher icon keeps the old greens. The paragraph below is the earlier palette.
+
+**Colours (owner decision 2026-11-19, superseded 2026-11-22):** the app uses the owner's six-shade green palette,
 `#051F20`, `#0B2B26`, `#163832`, `#235347`, `#8EB69B`, `#DAF1DE` (`VaultGreen` in `ui/theme/Theme.kt`). Light
 mode: mint `#DAF1DE` background, near-white cards and incoming bubbles, dark green `#163832` accents, sent
 bubbles in sage `#8EB69B`. Dark mode: `#051F20` background, `#0B2B26` cards, sage accents. The call screen is

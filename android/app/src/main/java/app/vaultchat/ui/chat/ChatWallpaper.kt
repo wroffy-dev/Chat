@@ -33,12 +33,11 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 /**
- * The chat's background (owner 2026-11-22, in the spirit of a doodle wallpaper): the screen colour with a very
- * light pattern of small line drawings about chatting and love — hearts, chat bubbles, stars, a moon,
- * flowers, smileys, sparkles, a letter, music notes, a cup, a camera, a paper plane, a balloon — with mini
+ * The chat's background (owner 2026-11-22, in the spirit of a doodle wallpaper): a very light pattern of small
+ * line drawings about chatting and love — hearts, chat bubbles, stars, a moon, flowers, smileys, sparkles, a letter, music notes, a cup, a camera, a paper plane, a balloon — with mini
  * doodles in between (owner 2026-11-22: denser, smaller gaps), in the app's green. The pattern is drawn once into
  * one tile and repeated, so it costs nothing while scrolling. It is the app's own drawing, not a copy of
- * another app's wallpaper.
+ * another app's wallpaper. It is drawn over the screen's [app.vaultchat.ui.theme.glassBackdrop].
  */
 @Composable
 fun Modifier.chatWallpaper(): Modifier {
@@ -49,10 +48,8 @@ fun Modifier.chatWallpaper(): Modifier {
     val brush = remember(ink, density) {
         ShaderBrush(ImageShader(doodleTile(ink, density), TileMode.Repeated, TileMode.Repeated))
     }
-    return drawBehind {
-        drawRect(base)
-        drawRect(brush)
-    }
+    // No fill of its own: the screen's glass backdrop (plain colour and warm glow) shows through.
+    return drawBehind { drawRect(brush) }
 }
 
 private enum class Doodle {
