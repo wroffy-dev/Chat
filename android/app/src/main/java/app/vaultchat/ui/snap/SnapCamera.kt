@@ -762,22 +762,24 @@ private fun CaptureView(
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 // Gallery: a photo or a video (up to 30 s) (owner, 2026-11-21), level with the shutter, as in Snapchat.
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    AnimatedVisibility(visible = recording == null, enter = fadeIn(), exit = fadeOut()) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable(role = Role.Button, onClickLabel = stringResource(R.string.snap_gallery), onClick = onGallery)
-                                .padding(6.dp),
+                    // Fades out (and stops taking taps) while a video records.
+                    val idle = recording == null
+                    val shown by animateFloatAsState(if (idle) 1f else 0f, label = "galleryShown")
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .graphicsLayer { alpha = shown }
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable(enabled = idle, role = Role.Button, onClickLabel = stringResource(R.string.snap_gallery), onClick = onGallery)
+                            .padding(6.dp),
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.size(48.dp).cameraGlass(RoundedCornerShape(14.dp), on = false),
                         ) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier.size(48.dp).cameraGlass(RoundedCornerShape(14.dp), on = false),
-                            ) {
-                                Icon(AppIcons.Gallery, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
-                            }
-                            Text(stringResource(R.string.snap_gallery), color = Color.White, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 4.dp))
+                            Icon(AppIcons.Gallery, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
                         }
+                        Text(stringResource(R.string.snap_gallery), color = Color.White, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 4.dp))
                     }
                 }
                 // The shutter: a white ring around a white disc. The disc dips under the finger; while a video records it
