@@ -790,7 +790,7 @@ private fun MessageList(
     }
     if (total == 0) {
         Column(
-            modifier = modifier.fillMaxWidth().background(Ref.Surface).padding(32.dp),
+            modifier = modifier.fillMaxWidth().chatWallpaper().padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
         ) {
@@ -805,7 +805,8 @@ private fun MessageList(
     Box(modifier = modifier.fillMaxWidth()) {
     LazyColumn(
         state = listState,
-        modifier = Modifier.fillMaxSize().background(Ref.Surface),
+        // The doodle background (owner 2026-11-22), drawn once and repeated behind the messages.
+        modifier = Modifier.fillMaxSize().chatWallpaper(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
     ) {
         // Indexed items: each row knows its place without searching the whole list (audit 2026-11-21, Q-2).
