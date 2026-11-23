@@ -10,6 +10,7 @@ Versions of the Android app (`versionName`) and the backend (`package.json`). Th
   360p at 30 fps and comes back up when the network is good again.
 
 ### Just Notes
+- **New app icon:** a blue notes page with a white pencil and a curling corner, in Deskzo's blue.
 - **Avatars:** pick one of 24 built-in avatars (tap your circle at the top of the chats).
 - **Nicknames:** give a person a nickname from the chat's ⋮ menu; the chat shows that the name was changed.
 - **Lovelier notes:** search, pull to refresh, softer cards with motion, a clearer red delete button that names the
