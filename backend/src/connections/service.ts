@@ -32,7 +32,10 @@ export interface RequestView {
 
 export interface ConnectionView {
   id: string;
-  peer: { id: string; username: string };
+  /** [avatar]: the peer's built-in avatar (D-32), or null. */
+  peer: { id: string; username: string; avatar: string | null };
+  /** The user's own name for the peer (D-32), or null. */
+  nickname: string | null;
   conversationId: string;
   createdAt: Date;
 }
@@ -98,13 +101,19 @@ export class ConnectionService {
   async connectionsFor(userId: string): Promise<ConnectionView[]> {
     const rows = await this.prisma.connection.findMany({
       where: { OR: [{ userAId: userId }, { userBId: userId }] },
-      include: { userA: true, userB: true, conversation: { select: { id: true } } },
+      include: { userA: true, userB: true, conversation: { select: { id: true } }, nicknames: { where: { userId }, select: { nickname: true } } },
       orderBy: { createdAt: "asc" },
     });
     return rows.flatMap((c) => {
       if (!c.conversation) return [];
       const peer = c.userAId === userId ? c.userB : c.userA;
-      return [{ id: c.id, peer: { id: peer.id, username: peer.username }, conversationId: c.conversation.id, createdAt: c.createdAt }];
+      return [{
+        id: c.id,
+        peer: { id: peer.id, username: peer.username, avatar: peer.avatar },
+        nickname: c.nicknames[0]?.nickname ?? null,
+        conversationId: c.conversation.id,
+        createdAt: c.createdAt,
+      }];
     });
   }
 

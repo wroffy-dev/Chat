@@ -364,10 +364,26 @@
     <string name="note_delete">Delete note</string>
     <string name="note_delete_title">Delete this note?</string>
     <string name="note_delete_body">It is removed from the server, also for the people you are connected with, with all lines added to it.</string>
-    <string name="note_delete_confirm">Delete</string>
-    <string name="note_cancel">Cancel</string>
+    <string name="note_delete_confirm">Delete note</string>
+    <string name="note_cancel">Keep note</string>
     <string name="note_saving">Saving…</string>
     <string name="note_saved">Saved</string>
+    <string name="notes_search_hint">Search your notes</string>
+    <string name="notes_search_clear">Clear search</string>
+    <string name="notes_no_match_title">No matching notes</string>
+    <string name="notes_no_match_body">Nothing matches “%1$s”.</string>
+    <string name="note_delete_title_named">Delete “%1$s”?</string>
+    <string name="note_edited">Edited %1$s</string>
+    <string name="note_lines_header">Added lines</string>
+    <string name="note_save_failed_short">Not saved</string>
+    <plurals name="notes_count">
+        <item quantity="one">%d note</item>
+        <item quantity="other">%d notes</item>
+    </plurals>
+    <plurals name="notes_lines_count">
+        <item quantity="one">%d line</item>
+        <item quantity="other">%d lines</item>
+    </plurals>
     <string name="notes_from">From %1$s</string>
     <string name="note_shared_by">%1$s\'s note · you can add lines</string>
     <string name="note_line_you">You</string>
@@ -376,5 +392,17 @@
     <string name="note_line_failed">Couldn\'t update the lines. Check the connection and try again.</string>
     <string name="note_add_line_hint">Add a line</string>
     <string name="note_add_line">Add line</string>
-    <string name="note_save_failed">Not saved. It will try again when you type.</string>
+    <string name="avatar_change">Change your avatar</string>
+    <string name="avatar_title">Choose your avatar</string>
+    <string name="avatar_body">The people you are connected with see it next to your name.</string>
+    <string name="avatar_initial">Your initial</string>
+    <string name="nickname_menu">Nickname</string>
+    <string name="nickname_title">Nickname</string>
+    <string name="nickname_body">Only you see this name for %1$s. The chat shows both of you that the name changed.</string>
+    <string name="nickname_label">Nickname</string>
+    <string name="nickname_save">Save</string>
+    <string name="nickname_remove">Remove nickname</string>
+    <string name="nickname_cancel">Cancel</string>
+    <string name="chat_nickname_line_mine">You changed their name from “%1$s” to “%2$s”</string>
+    <string name="chat_nickname_line_theirs">%1$s changed your name from “%2$s” to “%3$s”</string>
 </resources>

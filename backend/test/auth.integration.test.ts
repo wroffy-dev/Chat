@@ -115,7 +115,7 @@ describe.skipIf(!TEST_DB_URL)("app-user authentication (PostgreSQL)", () => {
     expect((await me(body.accessToken)).statusCode).toBe(401); // old token rotated away
     const ok = await me(fresh.accessToken);
     expect(ok.statusCode).toBe(200);
-    expect(ok.json()).toEqual({ id: fresh.user.id, username: "alice", mustChangePassword: false, connection: null });
+    expect(ok.json()).toEqual({ id: fresh.user.id, username: "alice", avatar: null, mustChangePassword: false, connection: null });
   });
 
   it("rejects missing, malformed and unknown tokens", async () => {

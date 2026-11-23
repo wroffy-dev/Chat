@@ -6,6 +6,11 @@ Versions of the Android app (`versionName`) and the backend (`package.json`). Th
 ## Unreleased
 
 ### Just Notes
+- **Avatars:** pick one of 24 built-in avatars (tap your circle at the top of the chats).
+- **Nicknames:** give a person a nickname from the chat's ⋮ menu; the chat shows that the name was changed.
+- **Lovelier notes:** search, pull to refresh, softer cards with motion, a clearer red delete button that names the
+  note before deleting.
+- **"New notes added":** a new message or snap is announced as "New notes added", also while the notes are open.
 - **Shared notes:** your notes are also shown to the people you are connected with, in green on their phone. They
   can add lines under a note (with their name), but only you can change or delete it.
 - **The app is now called Just Notes** and opens on your notes: write notes with a title and text; they are

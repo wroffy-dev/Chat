@@ -1138,7 +1138,7 @@ private fun RecipientPicker(people: List<Connection>, preselect: String?, onSend
                                 .toggleable(value = picked, role = Role.Checkbox) { chosen = if (picked) chosen - p.id else chosen + p.id }
                                 .padding(horizontal = 8.dp, vertical = 8.dp),
                         ) {
-                            InitialsAvatar(p.peerUsername, size = 36.dp)
+                            InitialsAvatar(p.peerUsername, size = 36.dp, avatar = p.peerAvatar)
                             Text(p.peerUsername, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 12.dp).weight(1f))
                             if (p.streak > 0) Text("\uD83D\uDD25 ${p.streak}", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(end = 4.dp))
                             Checkbox(checked = picked, onCheckedChange = null)

@@ -7,7 +7,18 @@ import kotlinx.serialization.Serializable
 
 /** A line added under a note, by its writer or a connected person (D-31 as changed 2026-11-23). */
 @Serializable
-data class NoteLineDto(val id: String, val body: String, val authorUsername: String, val mine: Boolean, val createdAt: String)
+data class NoteLineDto(
+    val id: String,
+    val body: String,
+    val authorUsername: String,
+    val mine: Boolean,
+    val createdAt: String,
+    /** The user's own name for the author (D-32), or null. */
+    val authorNickname: String? = null,
+) {
+    /** The name shown for who added the line. */
+    val authorName: String get() = authorNickname?.takeIf { it.isNotBlank() } ?: authorUsername
+}
 
 /**
  * A note as the server returns it (docs/14 §notes, D-31): the user's own ([mine]) or a connected person's, which
@@ -23,7 +34,13 @@ data class NoteDto(
     val mine: Boolean = true,
     val authorUsername: String = "",
     val lines: List<NoteLineDto> = emptyList(),
-)
+    /** The user's own name for the writer and the writer's built-in avatar (D-32). */
+    val authorNickname: String? = null,
+    val authorAvatar: String? = null,
+) {
+    /** The name shown for the writer. */
+    val authorName: String get() = authorNickname?.takeIf { it.isNotBlank() } ?: authorUsername
+}
 
 @Serializable
 data class NotesDto(val items: List<NoteDto>)

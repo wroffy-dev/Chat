@@ -373,3 +373,14 @@ is `{ id, body, authorUsername, mine, createdAt }`, oldest first.
 - `DELETE /notes/{id}/lines/{lineId}` → `204`. The line's author, or the note's writer, may remove it; otherwise `404`.
 
 Unknown fields, longer text or a non-uuid id → `400 VALIDATION_FAILED`.
+
+## Profile: avatars and nicknames (D-32, 2026-11-23)
+
+- `GET /me` also returns `avatar` (string or null).
+- `PUT /me/avatar` — `{ "avatar": null | one of fox, panda, koala, lion, tiger, bear, bunny, cat, dog, frog, monkey,
+  penguin, owl, unicorn, octopus, whale, turtle, bee, butterfly, flower, sun, moon, star, heart }` → `{ avatar }`. 30/min.
+- `PUT /connections/{id}/nickname` — `{ "nickname": string ≤ 40 after trimming | null }` (blank or null removes it) →
+  `{ nickname }`. Only for the caller's own connection, else `404`. Each real change writes a chat message of kind
+  `nickname` (body `{"from","to"}`, sender the caller); a repeat changes nothing. 20/min.
+- Connections (`GET /connections`, `GET /me`'s `connection`) carry `peer.avatar` and `nickname` (the caller's own name
+  for the peer, or null). Notes carry `authorAvatar` and `authorNickname`; lines carry `authorNickname`.

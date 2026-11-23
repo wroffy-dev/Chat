@@ -52,6 +52,13 @@ object Push {
     @Volatile
     var appInFront = false
 
+    /**
+     * The notes screens are shown (Just Notes, D-31). Nothing there shows new messages, so a new message is still
+     * announced ("New notes added") while the app is open on the notes (owner 2026-11-23).
+     */
+    @Volatile
+    var onNotesScreen = false
+
     const val CHANNEL_CALLS = "calls"
     /** Android requires a notification for the call's foreground service; this channel keeps it minimised. */
     const val CHANNEL_ONGOING = "ongoing_call_quiet"
@@ -129,10 +136,11 @@ object Push {
         )
     }
 
-    /** "New message" only: no sender, no text, no preview (docs/07 §4, docs/10 §2). */
+    /** "New notes added" only (owner 2026-11-23): no sender, no text, no preview (docs/07 §4, docs/10 §2). */
     fun showNewMessage(context: Context, textRes: Int = R.string.chat_new_message) {
-        // Nothing while Vault is on screen: the chat list already shows the unread message.
-        if (!MESSAGE_NOTIFICATIONS || appInFront) return
+        // Nothing while the chats are on screen: the chat list already shows the unread message. On the notes
+        // screens nothing does, so it is announced there too.
+        if (!MESSAGE_NOTIFICATIONS || (appInFront && !onNotesScreen)) return
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {

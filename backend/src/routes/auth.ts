@@ -133,6 +133,7 @@ export async function authRoutes(app: FastifyInstance, opts: { auth: AuthService
             properties: {
               id: { type: "string" },
               username: { type: "string" },
+              avatar: { type: ["string", "null"] },
               mustChangePassword: { type: "boolean" },
               connection: { anyOf: [{ type: "null" }, connectionSchema] },
             },
@@ -146,6 +147,7 @@ export async function authRoutes(app: FastifyInstance, opts: { auth: AuthService
       return {
         id: user.id,
         username: user.username,
+        avatar: user.avatar ?? null,
         mustChangePassword: user.mustChangePassword,
         connection: c ? { ...c, createdAt: c.createdAt.toISOString() } : null,
       };

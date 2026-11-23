@@ -364,3 +364,11 @@ swept and are in backups. At most 2 000 per user, enforced by the service.
 add lines): `id` uuid, `note_id` → notes (cascade), `user_id` → users (cascade; who added it), `body` text (CHECK 1–2 000
 characters), `created_at`. Indexes `(note_id, created_at)` and `(user_id)`. At most 500 per note, enforced by the
 service. Adding a line sets the note's `updated_at`.
+
+## Avatars and nicknames (D-32, 2026-11-23, migration `20261123120000_avatars_nicknames`)
+
+- `users.avatar TEXT NULL` — the short name of a built-in avatar (CHECK `^[a-z]{2,16}$`; the service accepts only its
+  list); null shows the initial. No pictures are stored.
+- `nicknames`: `user_id` → users (cascade; who set it), `connection_id` → connections (cascade), `nickname` text (CHECK
+  1–40 characters), `updated_at`; primary key `(user_id, connection_id)`. Seen only by `user_id`.
+- `messages.kind` CHECK now allows `nickname` (body JSON `{"from","to"}`, sender = who set the name).

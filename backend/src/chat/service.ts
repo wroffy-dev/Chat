@@ -372,6 +372,26 @@ export class ChatService {
   }
 
   /**
+   * Writes the line "… changed your name from A to B" into the chat (owner, 2026-11-23; D-32): a message of kind
+   * `nickname` from the person who set the name, body JSON {"from", "to"}. It is deleted like any other message.
+   */
+  async recordNicknameChange(conversationId: string, userId: string, from: string, to: string): Promise<void> {
+    const now = this.now();
+    await this.prisma.$transaction(async (tx) => {
+      const conv = await this.lockConversation(tx, conversationId);
+      const seq = conv.last_seq + 1n;
+      await tx.message.create({
+        data: {
+          conversationId, seq, epoch: conv.clear_epoch, senderUserId: userId, clientMessageId: randomUUID(),
+          body: JSON.stringify({ from, to }), kind: "nickname", createdAt: now,
+        },
+      });
+      await tx.conversation.update({ where: { id: conversationId }, data: { lastSeq: seq } });
+    });
+    this.changed(conversationId);
+  }
+
+  /**
    * Server-side exits and the backstop (D-02): lapsed leases count as exits; messages older than
    * 24 h are deleted, seen or not. Runs every few seconds; also catches up after downtime.
    */

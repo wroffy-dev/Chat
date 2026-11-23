@@ -79,6 +79,7 @@ fun MessageDto.toDomain() = ChatMessage(
     kind = when (kind) {
         "missed_call" -> MessageKind.MISSED_CALL
         "disappear" -> MessageKind.DISAPPEAR
+        "nickname" -> MessageKind.NICKNAME
         else -> MessageKind.TEXT
     },
     replyToId = replyToId,
