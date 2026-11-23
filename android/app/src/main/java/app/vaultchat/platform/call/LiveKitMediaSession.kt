@@ -51,6 +51,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.sync.Mutex
 import android.os.Handler
 import android.os.Looper
@@ -85,6 +86,12 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
     // nobody watches. Both are off by default in the SDK (docs/08-calling.md §8).
     /** What this phone can send; [capQuality] then limits it to the admin's setting. */
     private val capable: CaptureQuality = chooseQuality(appContext)
+
+    /**
+     * 60 fps when the camera can deliver it at 720p and the phone is not hot or saving power (owner 2026-11-23: a
+     * higher frame rate in video calls), else 30. Used for sizes up to 720p; 1080p stays at 30.
+     */
+    private val smoothFps: Int = chooseFrameRate(appContext)
     var quality: CaptureQuality = capable
         private set
 
@@ -176,6 +183,8 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
                         // Its own coroutine: the event stream keeps flowing while the camera reopens.
                         launch { if (flipFrontBack()) _events.emit(MediaEvent.CameraSwitchedByPeer) }
                     }
+                    is RoomEvent.ConnectionQualityChanged ->
+                        if (e.participant == room.localParticipant) onLocalConnectionQuality(e.quality.name)
                     is RoomEvent.Reconnecting -> _events.emit(MediaEvent.Reconnecting)
                     is RoomEvent.Reconnected -> _events.emit(MediaEvent.Reconnected)
                     is RoomEvent.Disconnected -> if (!released) _events.emit(MediaEvent.Disconnected)
@@ -406,11 +415,26 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
         }
     }
 
-    private fun preset(q: CaptureQuality): VideoPreset = when (q) {
-        CaptureQuality.P1080 -> Sharp.P1080
-        CaptureQuality.P720 -> Sharp.P720
-        CaptureQuality.P540 -> Sharp.P540
-        CaptureQuality.P360 -> Sharp.P360
+    private fun preset(q: CaptureQuality): VideoPreset {
+        // A slow network (see onLocalConnectionQuality): 360p at 30 fps, whatever the size would be otherwise.
+        if (slowNetwork) return Sharp.P360
+        val sharp = when (q) {
+            CaptureQuality.P1080 -> return Sharp.P1080
+            CaptureQuality.P720 -> Sharp.P720
+            CaptureQuality.P540 -> Sharp.P540
+            CaptureQuality.P360 -> Sharp.P360
+        }
+        return if (smoothFps > 30) Smooth(sharp, smoothFps) else sharp
+    }
+
+    /**
+     * A [Sharp] size at a higher frame rate (owner 2026-11-23). Twice the frames need more bits for the same
+     * sharpness; 1.4× is the usual rule of thumb for 30 → 60 fps, as motion between frames is smaller. These are
+     * ceilings: on a weak network WebRTC sends less and, with [AUTO_DEGRADATION], keeps the frame rate first.
+     */
+    private class Smooth(base: Sharp, fps: Int) : VideoPreset {
+        override val capture = VideoCaptureParameter(base.capture.width, base.capture.height, fps)
+        override val encoding = VideoEncoding((base.encoding.maxBitrate * 1.4).toInt(), fps)
     }
 
     /**
@@ -464,6 +488,53 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
         override val encoding = VideoEncoding(200_000, 30)
     }
 
+    /** The user picked a fixed size in the call; then the network fallback stays out of the way. */
+    @Volatile private var userPicked = false
+
+    /** Sending 360p at 30 fps because this phone's connection is poor (owner 2026-11-23). */
+    @Volatile private var slowNetwork = false
+    private var slowJob: Job? = null
+    private val adaptLock = Mutex()
+
+    /**
+     * Follows the network (owner 2026-11-23: "agar network slow hai toh 360p and 30 pr dedo … network ke according
+     * quality better ho jaye"). LiveKit rates this phone's connection every few seconds. Poor (or lost) for about
+     * 4 s: the camera is republished at 360p, 30 fps. Good or excellent for about 12 s: back to the size and frame
+     * rate the phone chose (up to 60 fps). Only in Auto; a size the user picked is kept. The waits stop one bad or
+     * good moment from flipping the picture back and forth.
+     */
+    private fun onLocalConnectionQuality(quality: String) {
+        if (userPicked) return
+        val poor = quality == "POOR" || quality == "LOST"
+        val good = quality == "GOOD" || quality == "EXCELLENT"
+        when {
+            poor && !slowNetwork -> retarget(slow = true, afterMs = 4_000)
+            good && slowNetwork -> retarget(slow = false, afterMs = 12_000)
+            // A rating that does not confirm the pending change cancels it.
+            else -> slowJob?.cancel()
+        }
+    }
+
+    private fun retarget(slow: Boolean, afterMs: Long) {
+        if (slowJob?.isActive == true) return
+        slowJob = scope.launch {
+            delay(afterMs)
+            adaptLock.withLock {
+                if (userPicked || slowNetwork == slow) return@withLock
+                val publication = room.localParticipant.getTrackPublication(Track.Source.CAMERA)
+                val old = publication?.track as? LocalVideoTrack
+                slowNetwork = slow
+                // A turned-off camera picks the size up when it is turned on (preset reads slowNetwork).
+                if (!joined || old == null || publication?.muted == true) return@withLock
+                try {
+                    republishCamera(old, if (slow) CaptureQuality.P360 else quality, forced = false)
+                } catch (_: Exception) {
+                    // The camera could not restart; the call goes on as it was.
+                }
+            }
+        }
+    }
+
     /** A size picked while the camera was off; applied when it is turned back on. */
     private var pending: Pair<CaptureQuality, Boolean>? = null
 
@@ -476,6 +547,12 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
      * stopped default track. The facing camera is kept.
      */
     override suspend fun setVideoQuality(quality: CaptureQuality, forced: Boolean) {
+        userPicked = forced
+        // A size the user picked wins over the slow-network fallback; Auto lets it work again.
+        if (forced) {
+            slowJob?.cancel()
+            slowNetwork = false
+        }
         val publication = room.localParticipant.getTrackPublication(Track.Source.CAMERA)
         val old = publication?.track as? LocalVideoTrack
         if (!joined || old == null) return
@@ -578,6 +655,32 @@ private val AUTO_DEGRADATION = RtpParameters.DegradationPreference.MAINTAIN_FRAM
 private const val MAX_ZOOM = 3f
 
 /** Device capability check for 1080p capture (docs/08-calling.md §8). */
+/**
+ * 60 when a camera of this phone reports a 60 fps auto-exposure range and can deliver 1280×720 at 60 fps, and the
+ * phone is neither in power-saving mode nor warm; else 30. Phones that cannot keep it up fall back to 30 on their own
+ * (the capturer picks the closest range the camera supports).
+ */
+private fun chooseFrameRate(context: Context): Int {
+    val power = context.getSystemService(PowerManager::class.java)
+    if (power?.isPowerSaveMode == true || (power?.currentThermalStatus ?: 0) >= PowerManager.THERMAL_STATUS_MODERATE) return 30
+    val hd = Size(1280, 720)
+    val sixty = try {
+        val cameras = context.getSystemService(CameraManager::class.java)
+        cameras.cameraIdList.any { id ->
+            val chars = cameras.getCameraCharacteristics(id)
+            val ranges = chars.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES).orEmpty()
+            val map = chars.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP) ?: return@any false
+            val sizes = map.getOutputSizes(android.graphics.SurfaceTexture::class.java)?.toList().orEmpty()
+            // A frame every ≤ 16.7 ms at 720p is 60 fps.
+            ranges.any { it.upper >= 60 } && hd in sizes &&
+                map.getOutputMinFrameDuration(android.graphics.SurfaceTexture::class.java, hd) <= 16_700_000L
+        }
+    } catch (_: Exception) {
+        false
+    }
+    return if (sixty) 60 else 30
+}
+
 private fun chooseQuality(context: Context): CaptureQuality {
     val power = context.getSystemService(PowerManager::class.java)
     val supports1080p30 = try {
