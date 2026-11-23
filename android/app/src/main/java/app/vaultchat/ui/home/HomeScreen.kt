@@ -1,6 +1,5 @@
 package app.vaultchat.ui.home
 
-import app.vaultchat.ui.theme.SilverText
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.Offset
@@ -32,9 +31,9 @@ import app.vaultchat.ui.theme.Motion
 import app.vaultchat.ui.theme.Radii
 import app.vaultchat.ui.theme.Sizes
 import app.vaultchat.ui.theme.Spacing
-import app.vaultchat.ui.theme.glass
-import app.vaultchat.ui.theme.glassBackdrop
-import app.vaultchat.ui.components.GlassSegmented
+import app.vaultchat.ui.theme.panel
+import app.vaultchat.ui.theme.screenBackground
+import app.vaultchat.ui.components.SegmentedSwitch
 import app.vaultchat.ui.components.pressScale
 import app.vaultchat.ui.components.staggeredAppear
 import androidx.compose.animation.core.VisibilityThreshold
@@ -71,6 +70,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -168,7 +168,7 @@ fun HomeScreen(
         },
         color = MaterialTheme.colorScheme.background,
     ) {
-        Column(modifier = Modifier.fillMaxSize().glassBackdrop().safeDrawingPadding()) {
+        Column(modifier = Modifier.fillMaxSize().screenBackground().safeDrawingPadding()) {
             var searching by rememberSaveable { mutableStateOf(false) }
             val listState = rememberLazyListState()
             Header(
@@ -182,7 +182,6 @@ fun HomeScreen(
                         searching = true
                     }
                 },
-                onConnect = onOpenInbox,
             )
             UpdateBanner(updater, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             LastCrashCard(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
@@ -220,7 +219,16 @@ fun HomeScreen(
                     SearchField(state.query, viewModel::setQuery)
                 }
                 FilterRow(state.filter, unread = state.chats.count { it.unreadCount > 0 }, onSelect = viewModel::setFilter)
-                ChatList(state.visibleChats, onChat, onSnap = onSnapTo, listState = listState, modifier = Modifier.weight(1f))
+                Box(modifier = Modifier.weight(1f)) {
+                    ChatList(state.visibleChats, onChat, onSnap = onSnapTo, listState = listState, modifier = Modifier.fillMaxSize())
+                    // Connect with someone new: a Material extended button over the list, like "Start chat".
+                    ExtendedFloatingActionButton(
+                        onClick = onOpenInbox,
+                        icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                        text = { Text(stringResource(R.string.home_connect)) },
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+                    )
+                }
             }
             VaultBottomBar(selected = BottomTab.CHAT, onChat = {}, onCamera = onOpenCamera, onMap = onOpenMap)
         }
@@ -228,19 +236,18 @@ fun HomeScreen(
 }
 
 /**
- * The app's title with two quiet actions: search (expands the search field) and "+" to connect with someone.
- * No Settings button (removed by the owner, 2026-11-20) and no sign-out (owner request 2026-11-02).
+ * The app's title with search (expands the search field), as a Material top app bar; connecting with someone
+ * is the floating "Connect" button over the list (owner 2026-11-22: Google Messages-like look). No Settings button (removed by the owner, 2026-11-20) and no sign-out (owner request 2026-11-02).
  */
 @Composable
-private fun Header(listState: LazyListState, searching: Boolean, onSearch: () -> Unit, onConnect: () -> Unit) {
+private fun Header(listState: LazyListState, searching: Boolean, onSearch: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(start = Spacing.xl, end = Spacing.sm, top = Spacing.lg, bottom = Spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             stringResource(R.string.app_name),
-            // Brushed silver, white at the top (owner 2026-11-22: premium).
-            style = MaterialTheme.typography.headlineMedium.copy(fontSize = 38.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-1.2).sp, brush = SilverText),
+            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.sp),
             maxLines = 1,
             modifier = Modifier
                 .weight(1f)
@@ -261,14 +268,13 @@ private fun Header(listState: LazyListState, searching: Boolean, onSearch: () ->
             contentDescription = stringResource(if (searching) R.string.home_search_close else R.string.home_search_hint),
             onClick = onSearch,
         )
-        VaultIconButton(Icons.Filled.Add, stringResource(R.string.home_connect_new), onConnect)
     }
 }
 
-/** A glass circle holding one icon, as in the header. */
+/** A tonal circle holding one icon. */
 @Composable
 fun RoundIconButton(onClick: () -> Unit, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    Box(modifier = modifier.padding(4.dp).size(44.dp).glass(CircleShape), contentAlignment = Alignment.Center) {
+    Box(modifier = modifier.padding(4.dp).size(44.dp).panel(CircleShape), contentAlignment = Alignment.Center) {
         IconButton(onClick = onClick) { content() }
     }
 }
@@ -412,14 +418,14 @@ private fun SearchField(query: String, onQuery: (String) -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = Spacing.screen, vertical = Spacing.xs)
-            .glass(RoundedCornerShape(Radii.input)),
+            .panel(RoundedCornerShape(Radii.input)),
     )
 }
 
 @Composable
 private fun FilterRow(selected: ChatFilter, unread: Int, onSelect: (ChatFilter) -> Unit) {
-    // One glass switch whose pressed-in glass slides between All and Unread (owner 2026-11-22).
-    GlassSegmented(
+    // One segmented switch whose selected pill slides between All and Unread (owner 2026-11-22).
+    SegmentedSwitch(
         labels = listOf(
             stringResource(R.string.home_filter_all),
             if (unread > 0) stringResource(R.string.home_filter_unread_count, unread) else stringResource(R.string.home_filter_unread),
@@ -444,12 +450,11 @@ private fun ChatList(
         }
         return
     }
-    // Each chat is its own glass card (Liquid Glass, owner 2026-11-22).
     LazyColumn(
         state = listState,
         modifier = modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(horizontal = Spacing.screen, vertical = Spacing.xs),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        // Room at the bottom so the last chat can scroll above the "Connect" button.
+        contentPadding = PaddingValues(top = Spacing.xs, bottom = 88.dp),
     ) {
         itemsIndexed(chats, key = { _, it -> it.id }) { index, chat ->
             // Rows cascade in one after another, and spring to their new place when the order changes (a new
@@ -466,7 +471,7 @@ private fun ChatList(
 }
 
 /**
- * A chat-list row as a glass card, as in the dark glass mockup (owner 2026-11-22): avatar, name with the time
+ * A chat-list row, Material 3 in the spirit of Google Messages (owner 2026-11-22): avatar, name with the time
  * on the right, a status line ("New snap" in the accent colour, "N new messages" or "Tap to chat"), the
  * 🔥 streak, the unread badge and a camera button for a snap. The list has no message text to preview (the
  * chat list API carries counts and times only).
@@ -476,18 +481,14 @@ private fun ChatRow(chat: Connection, onClick: () -> Unit, onSnap: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val snap = chat.pendingSnaps > 0
     val unread = chat.unreadCount > 0
-    val mintLight = colors.primary.copy(alpha = 0.12f)
-    val interaction = remember { MutableInteractionSource() }
+    val fresh = snap || unread
+    // A plain list row, as in Google Messages (owner 2026-11-22): no card, a ripple on tap, bold when something is new.
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 76.dp)
-            .pressScale(interaction, 0.97f)
-            .glass(RoundedCornerShape(Radii.card))
-            // Something new: a faint mint light in the card's top-left corner.
-            .then(if (snap || unread) Modifier.drawBehind { drawRect(Brush.radialGradient(0f to mintLight, 1f to Color.Transparent, center = Offset.Zero, radius = size.width * 0.55f)) } else Modifier)
-            .clickable(interactionSource = interaction, indication = ripple(), onClick = onClick)
-            .padding(start = 14.dp, end = Spacing.sm, top = Spacing.md, bottom = Spacing.md),
+            .heightIn(min = 72.dp)
+            .clickable(onClick = onClick)
+            .padding(start = Spacing.lg, end = Spacing.xs, top = Spacing.sm, bottom = Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
@@ -496,8 +497,8 @@ private fun ChatRow(chat: Connection, onClick: () -> Unit, onSnap: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     chat.peerUsername,
-                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp),
-                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = if (fresh) FontWeight.Bold else FontWeight.Normal,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
@@ -514,8 +515,9 @@ private fun ChatRow(chat: Connection, onClick: () -> Unit, onSnap: () -> Unit) {
                 chat.lastMessageAtEpochMs?.let {
                     Text(
                         relativeTime(it),
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
-                        color = colors.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (fresh) colors.onSurface else colors.onSurfaceVariant,
+                        fontWeight = if (fresh) FontWeight.Bold else FontWeight.Normal,
                         maxLines = 1,
                         modifier = Modifier.padding(start = Spacing.sm),
                     )
@@ -529,8 +531,13 @@ private fun ChatRow(chat: Connection, onClick: () -> Unit, onSnap: () -> Unit) {
                 }
                 Text(
                     status,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp),
-                    color = if (snap) colors.primary else colors.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = when {
+                        snap -> colors.primary
+                        unread -> colors.onSurface
+                        else -> colors.onSurfaceVariant
+                    },
+                    fontWeight = if (fresh) FontWeight.SemiBold else FontWeight.Normal,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
@@ -538,7 +545,7 @@ private fun ChatRow(chat: Connection, onClick: () -> Unit, onSnap: () -> Unit) {
                 UnreadBadge(chat.unreadCount, modifier = Modifier.padding(start = Spacing.sm))
             }
         }
-        VaultIconButton(AppIcons.PhotoCamera, stringResource(R.string.snap_button), onSnap, tint = colors.onSurface, size = 42.dp)
+        VaultIconButton(AppIcons.PhotoCamera, stringResource(R.string.snap_button), onSnap, tint = colors.onSurfaceVariant)
     }
 }
 

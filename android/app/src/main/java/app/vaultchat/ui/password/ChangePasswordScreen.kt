@@ -1,6 +1,6 @@
 package app.vaultchat.ui.password
 
-import app.vaultchat.ui.theme.glassBackdrop
+import app.vaultchat.ui.theme.screenBackground
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -63,7 +63,7 @@ fun ChangePasswordScreen(
     BackHandler(enabled = forced) {}
 
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(modifier = Modifier.fillMaxSize().glassBackdrop().safeDrawingPadding().imePadding()) {
+        Column(modifier = Modifier.fillMaxSize().screenBackground().safeDrawingPadding().imePadding()) {
             TopBar(stringResource(R.string.password_title), onBack = if (forced) null else onBack)
             Box(
                 modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),

@@ -1,8 +1,7 @@
 package app.vaultchat.ui.connect
 
-import app.vaultchat.ui.theme.glass
-import app.vaultchat.ui.theme.glassBackdrop
-import app.vaultchat.ui.theme.glossy
+import app.vaultchat.ui.theme.panel
+import app.vaultchat.ui.theme.screenBackground
 import app.vaultchat.ui.theme.Radii
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.semantics.Role
@@ -93,7 +92,7 @@ private fun ScreenScaffold(
     content: @Composable () -> Unit,
 ) {
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Box(modifier = Modifier.fillMaxSize().glassBackdrop()) {
+        Box(modifier = Modifier.fillMaxSize().screenBackground()) {
             Column(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
                 TopBar(title, onBack)
                 Box(
@@ -204,9 +203,9 @@ private fun minutesLeft(epochMs: Long): Int =
 @Composable
 private fun ActionTile(label: String, icon: ImageVector, filled: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val colors = MaterialTheme.colorScheme
-    // Liquid Glass (owner 2026-11-22): the filled tile is glossy green, the other one glass.
+    // The filled tile in the primary colour, the other a tonal surface.
     val shape = RoundedCornerShape(Radii.card)
-    val look = if (filled) Modifier.clip(shape).background(colors.primary).glossy(shape) else Modifier.glass(shape)
+    val look = if (filled) Modifier.clip(shape).background(colors.primary) else Modifier.panel(shape)
     val content = if (filled) colors.onPrimary else colors.onSurface
     Column(
         modifier = modifier
@@ -223,7 +222,7 @@ private fun ActionTile(label: String, icon: ImageVector, filled: Boolean, onClic
 
 @Composable
 private fun RequestCard(peerUsername: String, title: String, meta: String, busy: Boolean, actions: @Composable () -> Unit) {
-    Box(modifier = Modifier.fillMaxWidth().glass(RoundedCornerShape(Radii.card))) {
+    Box(modifier = Modifier.fillMaxWidth().panel(RoundedCornerShape(Radii.card))) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 InitialsAvatar(peerUsername, size = 40.dp)
@@ -419,7 +418,7 @@ fun ScanQrScreen(
             }
             ScanStage.Submitting -> FullScreenLoading(Modifier.padding(32.dp))
             is ScanStage.Waiting -> {
-                Box(modifier = Modifier.fillMaxWidth().glass(RoundedCornerShape(Radii.card))) {
+                Box(modifier = Modifier.fillMaxWidth().panel(RoundedCornerShape(Radii.card))) {
                     Row(
                         modifier = Modifier.padding(16.dp).semantics { liveRegion = LiveRegionMode.Polite },
                         verticalAlignment = Alignment.CenterVertically,

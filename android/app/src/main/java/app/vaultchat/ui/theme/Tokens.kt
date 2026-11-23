@@ -30,7 +30,7 @@ object Radii {
     val bubbleTight = 6.dp
     val sheet = 24.dp
 
-    /** Glass cards and chat rows (Liquid Glass, owner 2026-11-22). */
+    /** Cards and dialogs. */
     val card = 24.dp
     val input = 22.dp
 }

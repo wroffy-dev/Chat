@@ -5,6 +5,12 @@ Versions of the Android app (`versionName`) and the backend (`package.json`). Th
 
 ## Unreleased
 
+### Look (latest)
+- **Light Material look:** the glass is gone. The app is always light and looks like Google's own messaging app:
+  wallpaper colours on Android 12+, plain chat rows, colourful avatars, a "Connect" button, a Material navigation
+  bar, grey and colour message bubbles and a Material chat top bar with a ⋮ menu. The camera, snaps and calls stay
+  dark. The entries below describe the earlier glass looks of the same day.
+
 ### Look
 - **Dark glass:** the app is always dark, as in the mockup the owner approved:
   - near-black screens with a faint teal and warm light;

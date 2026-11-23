@@ -1,8 +1,7 @@
 package app.vaultchat.ui.components
 
 import androidx.compose.foundation.shape.RoundedCornerShape
-import app.vaultchat.ui.theme.SilverText
-import app.vaultchat.ui.theme.glass
+import app.vaultchat.ui.theme.panel
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,7 +21,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.vaultchat.R
 
-/** Centred message in a glass card for screens with nothing to show yet. No illustrations, by design. */
+/** Centred message in a tonal card for screens with nothing to show yet. No illustrations, by design. */
 @Composable
 fun EmptyState(
     title: String,
@@ -31,17 +30,16 @@ fun EmptyState(
     action: (@Composable () -> Unit)? = null,
 ) {
     Box(modifier = modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-        // A floating glass card (owner 2026-11-22: premium).
         Column(
             modifier = Modifier
                 .widthIn(max = 480.dp)
                 .staggeredAppear(0)
-                .glass(RoundedCornerShape(28.dp))
+                .panel(RoundedCornerShape(28.dp))
                 .padding(horizontal = 24.dp, vertical = 28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(title, style = MaterialTheme.typography.titleLarge.copy(brush = SilverText), textAlign = TextAlign.Center)
+            Text(title, style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
             Text(
                 body,
                 style = MaterialTheme.typography.bodyMedium,

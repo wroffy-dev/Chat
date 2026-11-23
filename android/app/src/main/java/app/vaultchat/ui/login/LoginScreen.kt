@@ -1,9 +1,8 @@
 package app.vaultchat.ui.login
 
-import app.vaultchat.ui.theme.SilverText
-import app.vaultchat.ui.theme.glass
-import app.vaultchat.ui.theme.glassBackdrop
-import app.vaultchat.ui.theme.glossy
+import androidx.compose.ui.text.TextStyle
+import app.vaultchat.ui.theme.panel
+import app.vaultchat.ui.theme.screenBackground
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -29,7 +28,6 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -130,7 +128,7 @@ private fun LoginContent(
     }
 
     Surface(modifier = Modifier.fillMaxSize(), color = RefSurface, contentColor = RefOnSurface) {
-        BoxWithConstraints(modifier = Modifier.fillMaxSize().glassBackdrop().safeDrawingPadding().imePadding()) {
+        BoxWithConstraints(modifier = Modifier.fillMaxSize().screenBackground().safeDrawingPadding().imePadding()) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -148,7 +146,7 @@ private fun LoginContent(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Box(
-                            modifier = Modifier.size(36.dp).background(RefPrimary, RoundedCornerShape(12.dp)).glossy(RoundedCornerShape(12.dp)),
+                            modifier = Modifier.size(36.dp).background(RefPrimary, RoundedCornerShape(12.dp)),
                             contentAlignment = Alignment.Center,
                         ) { Icon(Icons.Filled.Lock, contentDescription = null, tint = RefOnPrimary, modifier = Modifier.size(20.dp)) }
                         Text(stringResource(R.string.login_brand), fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold, color = RefOnSurface)
@@ -156,7 +154,7 @@ private fun LoginContent(
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        modifier = Modifier.glass(RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 5.dp),
+                        modifier = Modifier.panel(RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 5.dp),
                     ) {
                         Icon(AppIcons.VerifiedUser, contentDescription = null, tint = RefTeal, modifier = Modifier.size(12.dp))
                         Text(stringResource(R.string.login_private_access), fontSize = 11.sp, lineHeight = 14.sp, letterSpacing = 0.3.sp, fontWeight = FontWeight.Medium, color = RefOnSurfaceVariant)
@@ -175,7 +173,7 @@ private fun LoginContent(
                             lineHeight = 34.sp,
                             letterSpacing = (-0.4).sp,
                             fontWeight = FontWeight.Bold,
-                            style = TextStyle(brush = SilverText),
+                            color = RefOnSurface,
                             modifier = Modifier.semantics { heading() },
                         )
                         Text(stringResource(R.string.login_intro), fontSize = 14.sp, lineHeight = 20.sp, color = RefOnSurfaceVariant)
@@ -246,7 +244,6 @@ private fun LoginContent(
                                     .heightIn(min = 48.dp)
                                     .clip(RoundedCornerShape(50))
                                     .background(if (state.submitting) RefPrimary.copy(alpha = 0.8f) else RefPrimary)
-                                    .glossy(RoundedCornerShape(50))
                                     .clickable(enabled = !state.submitting, role = Role.Button, onClick = { submit() })
                                     .padding(horizontal = 24.dp, vertical = 12.dp),
                                 contentAlignment = Alignment.Center,
@@ -344,7 +341,7 @@ private fun RefField(
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(min = 48.dp)
-                            .glass(RoundedCornerShape(16.dp))
+                            .panel(RoundedCornerShape(16.dp))
                             .border(1.dp, borderColor, RoundedCornerShape(16.dp))
                             .padding(start = 16.dp, end = if (trailing != null) 4.dp else 16.dp, top = 12.dp, bottom = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,

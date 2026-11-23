@@ -20,21 +20,16 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import app.vaultchat.ui.components.pressScale
 import app.vaultchat.ui.components.staggeredAppear
-import app.vaultchat.ui.theme.Glass
-import app.vaultchat.ui.theme.glassBackdrop
+import app.vaultchat.ui.theme.screenBackground
 import android.graphics.BitmapFactory
 import android.text.format.DateUtils
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.semantics.Role
-import app.vaultchat.ui.theme.LightGlass
-import app.vaultchat.ui.theme.LocalGlass
-import app.vaultchat.ui.theme.glass
-import app.vaultchat.ui.theme.glossy
+import app.vaultchat.ui.theme.panel
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -131,7 +126,6 @@ private sealed interface MapLoad {
 // The owner's reference (2026-11-20): round buttons and round markers; the map itself stays light (owner,
 // same day: "Map ko light hi rhne do"), as OpenStreetMap draws it.
 private val MapGround = Color(0xFFE5E3DF)
-private val DarkButton = Color(0xFF262D44)
 private val MeBlue = Color(0xFF1E88FF)
 
 /** Marker colours; each person keeps the same one (picked from their name). */
@@ -164,10 +158,9 @@ fun MapScreen(
             ApiResult.NetworkError -> MapLoad.Offline
         }
     }
-    // The app's dark glass screen around a rounded map card (owner 2026-11-22: premium). The dark ground keeps the
-    // status bar's light icons and the glass tab bar readable; the map itself stays light (owner 2026-11-02).
-    Surface(modifier = Modifier.fillMaxSize(), color = Glass.Ground) {
-        Column(modifier = Modifier.fillMaxSize().glassBackdrop().safeDrawingPadding()) {
+    // A rounded map card on the app's light background, above the navigation bar (owner 2026-11-22).
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Column(modifier = Modifier.fillMaxSize().screenBackground().safeDrawingPadding()) {
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -178,8 +171,8 @@ fun MapScreen(
             ) {
                 when (val l = load) {
                     MapLoad.Loading -> MapCard(Modifier.align(Alignment.Center)) {
-                        CircularProgressIndicator(color = Glass.Mint, strokeWidth = 3.dp, modifier = Modifier.size(28.dp))
-                        Text(stringResource(R.string.loading), color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                        CircularProgressIndicator(strokeWidth = 3.dp, modifier = Modifier.size(28.dp))
+                        Text(stringResource(R.string.loading), color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyMedium)
                     }
                     MapLoad.SharingOff -> Message(stringResource(R.string.map_sharing_off))
                     MapLoad.Offline -> Message(stringResource(R.string.server_unreachable))
@@ -202,49 +195,47 @@ fun MapScreen(
 private fun Message(text: String) {
     Box(modifier = Modifier.fillMaxSize().padding(28.dp), contentAlignment = Alignment.Center) {
         MapCard {
-            Text(text, fontSize = 16.sp, lineHeight = 22.sp, color = Color.White, textAlign = TextAlign.Center)
+            Text(text, fontSize = 16.sp, lineHeight = 22.sp, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
         }
     }
 }
 
-/** A floating dark glass card over the light map, rising in. */
+/** A floating card over the map, rising in. */
 @Composable
 private fun MapCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     Column(
         modifier = modifier
             .staggeredAppear(0)
-            .glass(RoundedCornerShape(24.dp), strong = true)
+            .panel(RoundedCornerShape(24.dp), strong = true)
             .padding(horizontal = 22.dp, vertical = 18.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) { content() }
 }
 
-/**
- * A round floating button: light glass with a dark icon, or glossy dark with a white icon (Liquid Glass,
- * owner 2026-11-22). The map stays light in dark mode too, so the light glass is fixed.
- */
+/** A round Material floating button over the map: a light surface, or the primary colour (owner 2026-11-22). */
 @Composable
 private fun RoundButton(icon: ImageVector, description: String, light: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    CompositionLocalProvider(LocalGlass provides LightGlass) {
-        val look = if (light) {
-            Modifier.glass(CircleShape, strong = true, elevation = 6.dp)
-        } else {
-            Modifier.shadow(6.dp, CircleShape).clip(CircleShape).background(DarkButton).glossy(CircleShape, strength = 0.7f)
-        }
-        val interaction = remember { MutableInteractionSource() }
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = modifier
-                .size(52.dp)
-                .pressScale(interaction, 0.88f)
-                .then(look)
-                .clickable(interactionSource = interaction, indication = ripple(), role = Role.Button, onClick = onClick),
-        ) {
-            Icon(icon, contentDescription = description, tint = if (light) Color(0xFF111111) else Color.White, modifier = Modifier.size(24.dp))
-        }
+    // Material floating buttons: a light surface, or the primary colour for "where am I".
+    val colors = MaterialTheme.colorScheme
+    val look = if (light) {
+        Modifier.shadow(4.dp, CircleShape).clip(CircleShape).background(colors.surfaceContainerLowest)
+    } else {
+        Modifier.shadow(4.dp, CircleShape).clip(CircleShape).background(colors.primary)
+    }
+    val interaction = remember { MutableInteractionSource() }
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = modifier
+            .size(52.dp)
+            .pressScale(interaction, 0.88f)
+            .then(look)
+            .clickable(interactionSource = interaction, indication = ripple(), role = Role.Button, onClick = onClick),
+    ) {
+        Icon(icon, contentDescription = description, tint = if (light) colors.onSurface else colors.onPrimary, modifier = Modifier.size(24.dp))
     }
 }
+
 
 private fun FriendsMapDto.toPins(): List<Pin> {
     val list = people.map { Pin(it.username, mercatorX(it.lng), mercatorY(it.lat), epochMs(it.capturedAt), it.connectionId) }
@@ -385,14 +376,14 @@ private fun TileMap(
         if (pins.none { it.name != null }) {
             Text(
                 stringResource(R.string.map_nobody),
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 14.sp,
                 lineHeight = 20.sp,
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(start = 14.dp, end = 80.dp, top = 14.dp)
                     .staggeredAppear(1)
-                    .glass(RoundedCornerShape(18.dp), strong = true)
+                    .panel(RoundedCornerShape(18.dp), strong = true)
                     .padding(14.dp),
             )
         }
@@ -440,7 +431,6 @@ private fun LabelAction(icon: ImageVector, description: String, onClick: () -> U
             .pressScale(interaction, 0.86f)
             .clip(CircleShape)
             .background(Color.White)
-            .glossy(CircleShape, strength = 0.5f)
             .clickable(interactionSource = interaction, indication = ripple(), role = Role.Button, onClick = onClick),
     ) {
         Icon(icon, contentDescription = description, tint = Color(0xFF111111), modifier = Modifier.size(20.dp))
@@ -485,7 +475,7 @@ private fun Marker(
             exit = fadeOut() + scaleOut(targetScale = 0.8f, transformOrigin = TransformOrigin(0.5f, 1f)),
         ) {
           Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(modifier = Modifier.glass(RoundedCornerShape(18.dp), strong = true)) {
+            Box(modifier = Modifier.panel(RoundedCornerShape(18.dp), strong = true)) {
                 Column(modifier = Modifier.widthIn(max = 220.dp).padding(horizontal = 14.dp, vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         pin.name ?: stringResource(R.string.map_me),
@@ -494,7 +484,7 @@ private fun Marker(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    Text(ago, fontSize = 11.sp, color = Color.White.copy(alpha = 0.7f))
+                    Text(ago, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     // Chat, voice call and video call with this person straight from the Map (owner, 2026-11-21).
                     if (onChat != null && onCall != null) {
                         Row(modifier = Modifier.padding(top = 8.dp, bottom = 2.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {

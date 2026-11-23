@@ -1,5 +1,8 @@
 package app.vaultchat.ui.snap
 
+import app.vaultchat.ui.theme.DarkPanel
+import app.vaultchat.ui.theme.LocalPanel
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
@@ -20,10 +23,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import app.vaultchat.ui.components.pressScale
 import app.vaultchat.ui.components.staggeredAppear
-import app.vaultchat.ui.theme.MintGradient
-import app.vaultchat.ui.theme.glass
-import app.vaultchat.ui.theme.glassBackdrop
-import app.vaultchat.ui.theme.glossy
+import app.vaultchat.ui.theme.panel
+import app.vaultchat.ui.theme.screenBackground
 import android.app.Activity
 import android.graphics.BitmapFactory
 import android.view.WindowManager
@@ -123,105 +124,108 @@ fun SnapViewerScreen(repo: SnapRepository, snapIds: List<String>, onClose: () ->
         if (index + 1 < snapIds.size) index++ else onClose()
     }
 
-    Surface(modifier = Modifier.fillMaxSize(), color = VaultGreen.Deepest, contentColor = VaultGreen.Mint) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            when (stage) {
-                // Waiting, gone and the end of a snap sit on the app's glass screen in a glass card (owner 2026-11-22).
-                Stage.OPENING -> Box(Modifier.fillMaxSize().glassBackdrop(), contentAlignment = Alignment.Center) {
-                    Column(
-                        Modifier.staggeredAppear(0).glass(RoundedCornerShape(24.dp)).padding(horizontal = 28.dp, vertical = 22.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        CircularProgressIndicator(color = VaultGreen.Sage, strokeWidth = 3.dp)
-                        Text(stringResource(R.string.snap_opening), modifier = Modifier.padding(top = 12.dp))
+    // Snaps are shown on a dark screen, with dark panels.
+    CompositionLocalProvider(LocalPanel provides DarkPanel) {
+        Surface(modifier = Modifier.fillMaxSize(), color = VaultGreen.Deepest, contentColor = VaultGreen.Mint) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                when (stage) {
+                    // Waiting, gone and the end of a snap sit in a card on the dark screen.
+                    Stage.OPENING -> Box(Modifier.fillMaxSize().screenBackground(), contentAlignment = Alignment.Center) {
+                        Column(
+                            Modifier.staggeredAppear(0).panel(RoundedCornerShape(24.dp)).padding(horizontal = 28.dp, vertical = 22.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            CircularProgressIndicator(color = VaultGreen.Sage, strokeWidth = 3.dp)
+                            Text(stringResource(R.string.snap_opening), modifier = Modifier.padding(top = 12.dp))
+                        }
                     }
-                }
-                Stage.GONE -> Box(Modifier.fillMaxSize().glassBackdrop().padding(24.dp), contentAlignment = Alignment.Center) {
-                    Column(
-                        Modifier.staggeredAppear(0).glass(RoundedCornerShape(28.dp)).padding(horizontal = 24.dp, vertical = 24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                    ) {
-                        Text(stringResource(R.string.snap_gone), style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
-                        ViewerButton(stringResource(R.string.call_close), primary = false, onClick = ::next)
+                    Stage.GONE -> Box(Modifier.fillMaxSize().screenBackground().padding(24.dp), contentAlignment = Alignment.Center) {
+                        Column(
+                            Modifier.staggeredAppear(0).panel(RoundedCornerShape(28.dp)).padding(horizontal = 24.dp, vertical = 24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                        ) {
+                            Text(stringResource(R.string.snap_gone), style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
+                            ViewerButton(stringResource(R.string.call_close), primary = false, onClick = ::next)
+                        }
                     }
-                }
-                Stage.SHOWING -> {
-                    val current = snap
-                    if (current != null) {
-                        // Photos close by themselves after a few seconds or on a tap; videos when they end.
-                        Box(modifier = Modifier.fillMaxSize().clickable { stage = Stage.AFTER }) {
-                            if (current.kind == SnapKind.PHOTO) {
-                                // Decoded off the main thread, so opening a snap does not stutter.
-                                var bitmap by remember(showing) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
-                                LaunchedEffect(showing) {
-                                    bitmap = withContext(Dispatchers.Default) {
-                                        BitmapFactory.decodeByteArray(current.bytes, 0, current.bytes.size)?.asImageBitmap()
+                    Stage.SHOWING -> {
+                        val current = snap
+                        if (current != null) {
+                            // Photos close by themselves after a few seconds or on a tap; videos when they end.
+                            Box(modifier = Modifier.fillMaxSize().clickable { stage = Stage.AFTER }) {
+                                if (current.kind == SnapKind.PHOTO) {
+                                    // Decoded off the main thread, so opening a snap does not stutter.
+                                    var bitmap by remember(showing) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+                                    LaunchedEffect(showing) {
+                                        bitmap = withContext(Dispatchers.Default) {
+                                            BitmapFactory.decodeByteArray(current.bytes, 0, current.bytes.size)?.asImageBitmap()
+                                        }
+                                    }
+                                    // Pinch or double-tap to zoom; a single tap still closes the photo.
+                                    bitmap?.let { ZoomableImage(it, onTap = { stage = Stage.AFTER }) }
+                                    // Time left as a thin bar along the top that empties smoothly (drawn, not recomposed).
+                                    val progress = remember(showing) { Animatable(1f) }
+                                    LaunchedEffect(showing) {
+                                        progress.animateTo(0f, tween(SnapRules.PHOTO_SECONDS * 1000, easing = LinearEasing))
+                                        stage = Stage.AFTER
+                                    }
+                                    Box(
+                                        Modifier
+                                            .align(Alignment.TopCenter)
+                                            .safeDrawingPadding()
+                                            .padding(horizontal = 14.dp, vertical = 10.dp)
+                                            .fillMaxWidth()
+                                            .height(3.dp)
+                                            .drawBehind {
+                                                val r = CornerRadius(size.height / 2f)
+                                                drawRoundRect(Color.White.copy(alpha = 0.28f), cornerRadius = r)
+                                                drawRoundRect(Color.White, size = Size(size.width * progress.value, size.height), cornerRadius = r)
+                                            },
+                                    )
+                                } else {
+                                    videoFile?.let { file ->
+                                        androidx.compose.runtime.key(showing) {
+                                            LoopingVideo(file, Modifier.fillMaxSize(), loop = false, onDone = { stage = Stage.AFTER })
+                                        }
                                     }
                                 }
-                                // Pinch or double-tap to zoom; a single tap still closes the photo.
-                                bitmap?.let { ZoomableImage(it, onTap = { stage = Stage.AFTER }) }
-                                // Time left as a thin bar along the top that empties smoothly (drawn, not recomposed).
-                                val progress = remember(showing) { Animatable(1f) }
-                                LaunchedEffect(showing) {
-                                    progress.animateTo(0f, tween(SnapRules.PHOTO_SECONDS * 1000, easing = LinearEasing))
-                                    stage = Stage.AFTER
+                                if (current.viewOnce) {
+                                    Text(
+                                        stringResource(R.string.snap_view_once_badge),
+                                        style = MaterialTheme.typography.labelLarge,
+                                        modifier = Modifier
+                                            .align(Alignment.TopStart)
+                                            .safeDrawingPadding()
+                                            .padding(top = 28.dp, start = 16.dp)
+                                            .background(Color.Black.copy(alpha = 0.32f), CircleShape)
+                                            .panel(CircleShape)
+                                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                                    )
                                 }
-                                Box(
-                                    Modifier
-                                        .align(Alignment.TopCenter)
-                                        .safeDrawingPadding()
-                                        .padding(horizontal = 14.dp, vertical = 10.dp)
-                                        .fillMaxWidth()
-                                        .height(3.dp)
-                                        .drawBehind {
-                                            val r = CornerRadius(size.height / 2f)
-                                            drawRoundRect(Color.White.copy(alpha = 0.28f), cornerRadius = r)
-                                            drawRoundRect(Color.White, size = Size(size.width * progress.value, size.height), cornerRadius = r)
-                                        },
-                                )
-                            } else {
-                                videoFile?.let { file ->
-                                    androidx.compose.runtime.key(showing) {
-                                        LoopingVideo(file, Modifier.fillMaxSize(), loop = false, onDone = { stage = Stage.AFTER })
-                                    }
-                                }
-                            }
-                            if (current.viewOnce) {
                                 Text(
-                                    stringResource(R.string.snap_view_once_badge),
-                                    style = MaterialTheme.typography.labelLarge,
-                                    modifier = Modifier
-                                        .align(Alignment.TopStart)
-                                        .safeDrawingPadding()
-                                        .padding(top = 28.dp, start = 16.dp)
-                                        .background(Color.Black.copy(alpha = 0.32f), CircleShape)
-                                        .glass(CircleShape)
-                                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                                    stringResource(R.string.snap_tap_to_close),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    modifier = Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(16.dp),
                                 )
                             }
-                            Text(
-                                stringResource(R.string.snap_tap_to_close),
-                                style = MaterialTheme.typography.labelMedium,
-                                modifier = Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(16.dp),
-                            )
                         }
                     }
-                }
-                Stage.AFTER -> Box(Modifier.fillMaxSize().glassBackdrop(), contentAlignment = Alignment.Center) {
-                    Column(
-                        modifier = Modifier.staggeredAppear(0).glass(RoundedCornerShape(28.dp)).padding(horizontal = 24.dp, vertical = 24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        if (replaysLeft > 0 && snap != null) {
-                            ViewerButton(stringResource(R.string.snap_replay), primary = true) {
-                                replaysLeft--
-                                showing++
-                                stage = Stage.SHOWING
+                    Stage.AFTER -> Box(Modifier.fillMaxSize().screenBackground(), contentAlignment = Alignment.Center) {
+                        Column(
+                            modifier = Modifier.staggeredAppear(0).panel(RoundedCornerShape(28.dp)).padding(horizontal = 24.dp, vertical = 24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            if (replaysLeft > 0 && snap != null) {
+                                ViewerButton(stringResource(R.string.snap_replay), primary = true) {
+                                    replaysLeft--
+                                    showing++
+                                    stage = Stage.SHOWING
+                                }
                             }
+                            ViewerButton(stringResource(R.string.call_close), primary = false, onClick = ::next)
                         }
-                        ViewerButton(stringResource(R.string.call_close), primary = false, onClick = ::next)
                     }
                 }
             }
@@ -229,7 +233,7 @@ fun SnapViewerScreen(repo: SnapRepository, snapIds: List<String>, onClose: () ->
     }
 }
 
-/** A wide pill on the snap viewer: mint with depth for the main action, glass otherwise. */
+/** A wide pill on the snap viewer: the accent colour for the main action, a dark panel otherwise. */
 @Composable
 private fun ViewerButton(label: String, primary: Boolean, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
@@ -240,7 +244,7 @@ private fun ViewerButton(label: String, primary: Boolean, onClick: () -> Unit) {
             .widthIn(min = 180.dp)
             .heightIn(min = 48.dp)
             .pressScale(interaction, 0.95f)
-            .then(if (primary) Modifier.clip(shape).background(MintGradient).glossy(shape, strength = 0.7f) else Modifier.glass(shape))
+            .then(if (primary) Modifier.clip(shape).background(VaultGreen.Sage) else Modifier.panel(shape))
             .clickable(interactionSource = interaction, indication = ripple(), role = Role.Button, onClick = onClick)
             .padding(horizontal = 24.dp, vertical = 12.dp),
     ) {

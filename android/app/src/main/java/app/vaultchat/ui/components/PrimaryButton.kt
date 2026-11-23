@@ -15,9 +15,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import app.vaultchat.R
-import app.vaultchat.ui.theme.glossy
 
-/** Full-width glossy primary action (Liquid Glass, owner 2026-11-22). While [loading], it is disabled and shows a spinner. */
+/** Full-width primary action. While [loading], it is disabled and shows a spinner. */
 @Composable
 fun PrimaryButton(
     text: String,
@@ -29,7 +28,7 @@ fun PrimaryButton(
     Button(
         onClick = onClick,
         enabled = enabled && !loading,
-        modifier = modifier.fillMaxWidth().heightIn(min = 52.dp).glossy(CircleShape, strength = 0.6f, over = true),
+        modifier = modifier.fillMaxWidth().heightIn(min = 52.dp),
     ) {
         if (loading) {
             val description = stringResource(R.string.loading)

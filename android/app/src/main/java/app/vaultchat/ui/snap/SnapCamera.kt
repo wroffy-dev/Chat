@@ -1,5 +1,8 @@
 package app.vaultchat.ui.snap
 
+import app.vaultchat.ui.theme.DarkPanel
+import app.vaultchat.ui.theme.LocalPanel
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Spacer
 import app.vaultchat.ui.components.InitialsAvatar
@@ -36,12 +39,9 @@ import androidx.compose.ui.text.style.TextAlign
 import app.vaultchat.ui.components.pressScale
 import app.vaultchat.ui.components.staggeredAppear
 import app.vaultchat.ui.permissions.openAppSettings
-import app.vaultchat.ui.theme.MintGradient
-import app.vaultchat.ui.theme.glass
-import app.vaultchat.ui.theme.glassBackdrop
-import app.vaultchat.ui.theme.glow
+import app.vaultchat.ui.theme.panel
+import app.vaultchat.ui.theme.screenBackground
 import java.util.Locale
-import app.vaultchat.ui.theme.glossy
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
@@ -281,155 +281,158 @@ fun SnapCameraScreen(
     DisposableEffect(Unit) { onDispose { (taken as? Taken.Video)?.file?.delete() } }
     BackHandler { if (taken != null && !sending) discard() else onClose() }
 
-    Surface(modifier = Modifier.fillMaxSize(), color = VaultGreen.Deepest, contentColor = VaultGreen.Mint) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            when {
-                camera.status != PermissionStatus.Granted -> Box(
-                    modifier = Modifier.fillMaxSize().glassBackdrop().safeDrawingPadding().padding(24.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    // A glass card; when Android will no longer ask, its button opens the app's settings instead.
-                    val blocked = camera.status == PermissionStatus.PermanentlyDenied
-                    Column(
-                        modifier = Modifier.staggeredAppear(0).glass(RoundedCornerShape(28.dp)).padding(horizontal = 24.dp, vertical = 28.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
+    // The camera stays dark around the picture, with dark panels (owner 2026-11-22: the rest of the app is light).
+    CompositionLocalProvider(LocalPanel provides DarkPanel) {
+        Surface(modifier = Modifier.fillMaxSize(), color = VaultGreen.Deepest, contentColor = VaultGreen.Mint) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                when {
+                    camera.status != PermissionStatus.Granted -> Box(
+                        modifier = Modifier.fillMaxSize().screenBackground().safeDrawingPadding().padding(24.dp),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        Box(
-                            modifier = Modifier.size(64.dp).background(MintGradient, CircleShape).glossy(CircleShape),
-                            contentAlignment = Alignment.Center,
-                        ) { Icon(AppIcons.PhotoCamera, contentDescription = null, tint = VaultGreen.Deepest, modifier = Modifier.size(30.dp)) }
-                        Text(
-                            stringResource(if (blocked) R.string.scan_qr_camera_denied else R.string.snap_needs_camera),
-                            style = MaterialTheme.typography.bodyLarge,
-                            textAlign = TextAlign.Center,
-                        )
-                        CameraPillButton(
-                            label = stringResource(if (blocked) R.string.action_open_settings else R.string.talk_allow_microphone),
-                            primary = true,
-                            onClick = { if (blocked) openAppSettings(context) else camera.request() },
-                        )
+                        // A card; when Android will no longer ask, its button opens the app's settings instead.
+                        val blocked = camera.status == PermissionStatus.PermanentlyDenied
+                        Column(
+                            modifier = Modifier.staggeredAppear(0).panel(RoundedCornerShape(28.dp)).padding(horizontal = 24.dp, vertical = 28.dp),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Box(
+                                modifier = Modifier.size(64.dp).background(VaultGreen.Sage, CircleShape),
+                                contentAlignment = Alignment.Center,
+                            ) { Icon(AppIcons.PhotoCamera, contentDescription = null, tint = VaultGreen.Deepest, modifier = Modifier.size(30.dp)) }
+                            Text(
+                                stringResource(if (blocked) R.string.scan_qr_camera_denied else R.string.snap_needs_camera),
+                                style = MaterialTheme.typography.bodyLarge,
+                                textAlign = TextAlign.Center,
+                            )
+                            CameraPillButton(
+                                label = stringResource(if (blocked) R.string.action_open_settings else R.string.talk_allow_microphone),
+                                primary = true,
+                                onClick = { if (blocked) openAppSettings(context) else camera.request() },
+                            )
+                        }
                     }
-                }
-                taken == null -> CaptureView(
-                    withAudio = mic.status == PermissionStatus.Granted,
-                    onPhoto = { taken = it },
-                    onVideo = { taken = it },
-                    onWantAudio = { if (mic.status != PermissionStatus.Granted) mic.request() },
-                    onGallery = {
-                        if (!preparing) gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
-                    },
-                )
-                else -> taken?.let { ReviewView(it) }
-            }
-
-            val photo = taken as? Taken.Photo
-            if (photo != null && editing == null) {
-                // Text and pen for a photo, top right (videos are sent as recorded).
-                Row(
-                    modifier = Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    ReviewTool("Aa", stringResource(R.string.snap_add_text)) { editing = SnapEditMode.TEXT }
-                    ReviewTool("✎", stringResource(R.string.snap_draw)) { editing = SnapEditMode.DRAW }
-                }
-            }
-            if (taken != null && editing == null) {
-                // View once: a pill at the top left that turns bright when on.
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .safeDrawingPadding()
-                        .padding(12.dp)
-                        .cameraGlass(CircleShape, on = viewOnce)
-                        .clickable(enabled = !sending, role = Role.Switch, onClickLabel = stringResource(R.string.snap_view_once)) { viewOnce = !viewOnce }
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                ) {
-                    Text("①", color = if (viewOnce) VaultGreen.Deepest else Color.White, fontWeight = FontWeight.Bold)
-                    Text(stringResource(R.string.snap_view_once), color = if (viewOnce) VaultGreen.Deepest else Color.White, fontWeight = FontWeight.SemiBold)
-                }
-                Row(
-                    modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().safeDrawingPadding().padding(20.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    CameraPillButton(stringResource(R.string.snap_retake), enabled = !sending, onClick = ::discard)
-                    // Save your own photo or video to the phone (owner, 2026-11-20). Received snaps have no Save, and
-                    // one picked from the gallery is already there.
-                    val savedText = stringResource(R.string.snap_saved)
-                    val saveFailedText = stringResource(R.string.snap_save_failed)
-                    if (taken?.fromGallery != true) CameraPillButton(
-                        label = stringResource(R.string.snap_save),
-                        icon = AppIcons.Download,
-                        enabled = !sending && !saving,
-                        onClick = {
-                            val item = taken ?: return@CameraPillButton
-                            saving = true
-                            scope.launch {
-                                val ok = withContext(Dispatchers.IO) {
-                                    when (item) {
-                                        is Taken.Photo -> SnapSaver.savePhoto(context, item.jpeg)
-                                        is Taken.Video -> SnapSaver.saveVideo(context, item.file)
-                                    }
-                                }
-                                saving = false
-                                notice = if (ok) savedText else saveFailedText
-                            }
+                    taken == null -> CaptureView(
+                        withAudio = mic.status == PermissionStatus.Granted,
+                        onPhoto = { taken = it },
+                        onVideo = { taken = it },
+                        onWantAudio = { if (mic.status != PermissionStatus.Granted) mic.request() },
+                        onGallery = {
+                            if (!preparing) gallery.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
                         },
                     )
-                    CameraPillButton(
-                        label = stringResource(R.string.snap_send_to),
-                        icon = AppIcons.ArrowUpward,
-                        primary = true,
-                        busy = sending,
-                        enabled = !sending,
-                        onClick = { picking = true },
-                    )
+                    else -> taken?.let { ReviewView(it) }
                 }
-            }
-            val mode = editing
-            if (photo != null && mode != null) {
-                SnapEditor(
-                    photo = photo.preview,
-                    startMode = mode,
-                    onDone = { painted ->
-                        editing = null
-                        if (painted != null) scope.launch { taken = withContext(Dispatchers.Default) { encodePhoto(painted) } }
-                    },
-                    onCancel = { editing = null },
-                )
-            }
-            if (preparing) {
-                Box(
-                    modifier = Modifier.fillMaxSize().background(VaultGreen.Deepest.copy(alpha = 0.7f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Column(
-                        modifier = Modifier.staggeredAppear(0).glass(RoundedCornerShape(24.dp)).padding(horizontal = 28.dp, vertical = 22.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
+
+                val photo = taken as? Taken.Photo
+                if (photo != null && editing == null) {
+                    // Text and pen for a photo, top right (videos are sent as recorded).
+                    Row(
+                        modifier = Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        CircularProgressIndicator(color = VaultGreen.Sage, strokeWidth = 3.dp)
-                        Text(stringResource(R.string.snap_preparing), modifier = Modifier.padding(top = 12.dp))
+                        ReviewTool("Aa", stringResource(R.string.snap_add_text)) { editing = SnapEditMode.TEXT }
+                        ReviewTool("✎", stringResource(R.string.snap_draw)) { editing = SnapEditMode.DRAW }
                     }
                 }
-            }
-            if (picking) {
-                RecipientPicker(recipients, preselect, onSend = ::sendTo, onDismiss = { picking = false })
-            }
-            notice?.let {
-                key(it) {
-                    Text(
-                        it,
-                        style = MaterialTheme.typography.labelLarge,
-                        modifier = Modifier.align(Alignment.TopCenter).safeDrawingPadding().padding(top = 24.dp)
-                            .staggeredAppear(0)
-                            .cameraGlass(CircleShape, on = false)
-                            .padding(horizontal = 18.dp, vertical = 10.dp),
+                if (taken != null && editing == null) {
+                    // View once: a pill at the top left that turns bright when on.
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .safeDrawingPadding()
+                            .padding(12.dp)
+                            .cameraChip(CircleShape, on = viewOnce)
+                            .clickable(enabled = !sending, role = Role.Switch, onClickLabel = stringResource(R.string.snap_view_once)) { viewOnce = !viewOnce }
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                    ) {
+                        Text("①", color = if (viewOnce) VaultGreen.Deepest else Color.White, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.snap_view_once), color = if (viewOnce) VaultGreen.Deepest else Color.White, fontWeight = FontWeight.SemiBold)
+                    }
+                    Row(
+                        modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().safeDrawingPadding().padding(20.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CameraPillButton(stringResource(R.string.snap_retake), enabled = !sending, onClick = ::discard)
+                        // Save your own photo or video to the phone (owner, 2026-11-20). Received snaps have no Save, and
+                        // one picked from the gallery is already there.
+                        val savedText = stringResource(R.string.snap_saved)
+                        val saveFailedText = stringResource(R.string.snap_save_failed)
+                        if (taken?.fromGallery != true) CameraPillButton(
+                            label = stringResource(R.string.snap_save),
+                            icon = AppIcons.Download,
+                            enabled = !sending && !saving,
+                            onClick = {
+                                val item = taken ?: return@CameraPillButton
+                                saving = true
+                                scope.launch {
+                                    val ok = withContext(Dispatchers.IO) {
+                                        when (item) {
+                                            is Taken.Photo -> SnapSaver.savePhoto(context, item.jpeg)
+                                            is Taken.Video -> SnapSaver.saveVideo(context, item.file)
+                                        }
+                                    }
+                                    saving = false
+                                    notice = if (ok) savedText else saveFailedText
+                                }
+                            },
+                        )
+                        CameraPillButton(
+                            label = stringResource(R.string.snap_send_to),
+                            icon = AppIcons.ArrowUpward,
+                            primary = true,
+                            busy = sending,
+                            enabled = !sending,
+                            onClick = { picking = true },
+                        )
+                    }
+                }
+                val mode = editing
+                if (photo != null && mode != null) {
+                    SnapEditor(
+                        photo = photo.preview,
+                        startMode = mode,
+                        onDone = { painted ->
+                            editing = null
+                            if (painted != null) scope.launch { taken = withContext(Dispatchers.Default) { encodePhoto(painted) } }
+                        },
+                        onCancel = { editing = null },
                     )
                 }
-                LaunchedEffect(it) { delay(3_000); notice = null }
+                if (preparing) {
+                    Box(
+                        modifier = Modifier.fillMaxSize().background(VaultGreen.Deepest.copy(alpha = 0.7f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Column(
+                            modifier = Modifier.staggeredAppear(0).panel(RoundedCornerShape(24.dp)).padding(horizontal = 28.dp, vertical = 22.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            CircularProgressIndicator(color = VaultGreen.Sage, strokeWidth = 3.dp)
+                            Text(stringResource(R.string.snap_preparing), modifier = Modifier.padding(top = 12.dp))
+                        }
+                    }
+                }
+                if (picking) {
+                    RecipientPicker(recipients, preselect, onSend = ::sendTo, onDismiss = { picking = false })
+                }
+                notice?.let {
+                    key(it) {
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.labelLarge,
+                            modifier = Modifier.align(Alignment.TopCenter).safeDrawingPadding().padding(top = 24.dp)
+                                .staggeredAppear(0)
+                                .cameraChip(CircleShape, on = false)
+                                .padding(horizontal = 18.dp, vertical = 10.dp),
+                        )
+                    }
+                    LaunchedEffect(it) { delay(3_000); notice = null }
+                }
             }
         }
     }
@@ -721,7 +724,7 @@ private fun CaptureView(
                     style = MaterialTheme.typography.labelLarge,
                     color = Color.White,
                     modifier = Modifier
-                        .cameraGlass(CircleShape, on = false)
+                        .cameraChip(CircleShape, on = false)
                         .clickable(role = Role.Button) {
                             val cam = boundCamera ?: return@clickable
                             val min = cam.cameraInfo.zoomState.value?.minZoomRatio ?: 1f
@@ -743,7 +746,7 @@ private fun CaptureView(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier
                         .widthIn(max = 300.dp)
-                        .cameraGlass(RoundedCornerShape(20.dp), on = false)
+                        .cameraChip(RoundedCornerShape(20.dp), on = false)
                         .padding(horizontal = 14.dp, vertical = 7.dp),
                 ) {
                     if (recording != null) {
@@ -775,7 +778,7 @@ private fun CaptureView(
                     ) {
                         Box(
                             contentAlignment = Alignment.Center,
-                            modifier = Modifier.size(48.dp).cameraGlass(RoundedCornerShape(14.dp), on = false),
+                            modifier = Modifier.size(48.dp).cameraChip(RoundedCornerShape(14.dp), on = false),
                         ) {
                             Icon(AppIcons.Gallery, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
                         }
@@ -855,8 +858,7 @@ private fun CaptureView(
                                 scaleY = discScale
                             }
                             .clip(RoundedCornerShape(corner))
-                            .background(discColor)
-                            .glossy(RoundedCornerShape(corner), strength = 0.5f),
+                            .background(discColor),
                     )
                 }
                 // Balances the gallery, so the shutter stays in the middle.
@@ -934,18 +936,18 @@ private fun RecordingDot() {
 }
 
 /**
- * Glass over the camera: a dark tint first, so white icons and text read over a bright picture, then the glass
- * rim and grain. [on] makes it a bright glossy white, for a control that is switched on.
+ * A control over the camera: a dark translucent fill, so white icons and text read over a bright picture. [on]
+ * makes it white, for a control that is switched on.
  */
 @Composable
-private fun Modifier.cameraGlass(shape: androidx.compose.ui.graphics.Shape, on: Boolean): Modifier =
+private fun Modifier.cameraChip(shape: androidx.compose.ui.graphics.Shape, on: Boolean): Modifier =
     if (on) {
-        clip(shape).background(Color.White.copy(alpha = 0.94f)).glossy(shape, strength = 0.5f)
+        clip(shape).background(Color.White.copy(alpha = 0.94f))
     } else {
-        background(Color.Black.copy(alpha = 0.32f), shape).glass(shape)
+        clip(shape).background(Color.Black.copy(alpha = 0.4f))
     }
 
-/** A pill button on the camera screens: glass, or mint with depth for the main action. */
+/** A pill button on the camera screens: dark translucent, or the accent colour for the main action. */
 @Composable
 private fun CameraPillButton(
     label: String,
@@ -964,7 +966,7 @@ private fun CameraPillButton(
         modifier = Modifier
             .heightIn(min = 48.dp)
             .pressScale(interaction, 0.94f)
-            .then(if (primary) Modifier.glow(VaultGreen.Sage, spread = 10.dp, strength = 0.3f).clip(shape).background(MintGradient).glossy(shape, strength = 0.7f) else Modifier.cameraGlass(shape, on = false))
+            .then(if (primary) Modifier.clip(shape).background(VaultGreen.Sage) else Modifier.cameraChip(shape, on = false))
             .clickable(interactionSource = interaction, indication = ripple(), enabled = enabled, role = Role.Button, onClick = onClick)
             .graphicsLayer { alpha = if (enabled || busy) 1f else 0.5f }
             .padding(horizontal = 16.dp, vertical = 12.dp),
@@ -994,7 +996,7 @@ private fun CameraToggle(
         modifier = Modifier
             .size(46.dp)
             .pressScale(interaction, 0.86f)
-            .cameraGlass(CircleShape, on = on)
+            .cameraChip(CircleShape, on = on)
             .clickable(interactionSource = interaction, indication = ripple(), enabled = enabled, role = Role.Button, onClickLabel = description, onClick = onClick)
             .graphicsLayer { alpha = if (enabled) 1f else 0.45f }
             .semantics { contentDescription = description },
@@ -1059,7 +1061,7 @@ private fun ReviewTool(label: String, description: String, onClick: () -> Unit) 
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .size(46.dp)
-            .cameraGlass(CircleShape, on = false)
+            .cameraChip(CircleShape, on = false)
             .clickable(role = Role.Button, onClickLabel = description, onClick = onClick),
     ) {
         Text(label, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)

@@ -1,6 +1,5 @@
 package app.vaultchat.ui.components
 
-import app.vaultchat.ui.theme.glossy
 import app.vaultchat.ui.theme.Radii
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
@@ -49,13 +48,12 @@ fun StatusBanner(
         BannerKind.INFO -> Icons.Filled.Info
         BannerKind.WARNING, BannerKind.ERROR -> Icons.Filled.Warning
     }
-    // Liquid Glass (owner 2026-11-22): the banner's colour with a glossy shine.
     val shape = RoundedCornerShape(Radii.lg)
     Surface(
         color = container,
         contentColor = content,
         shape = shape,
-        modifier = modifier.fillMaxWidth().glossy(shape, strength = 0.6f, over = true).semantics { liveRegion = LiveRegionMode.Polite },
+        modifier = modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),

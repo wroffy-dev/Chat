@@ -25,7 +25,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
-import app.vaultchat.ui.theme.glassInset
+import app.vaultchat.ui.theme.selectedPill
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.floor
@@ -33,12 +33,12 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
- * Motion of the glass UI (owner 2026-11-22: "ultra level ke animation … jaise apple mein … slide ho glass effect
+ * Motion of the UI (owner 2026-11-22: "ultra level ke animation … jaise apple mein … slide ho glass effect
  * ke sath"). Every animation here is a spring, so it can be interrupted and feels physical, and it runs in the
  * layout or draw phase only: nothing recomposes per frame, which keeps it smooth (owner 2026-11-21: no lag).
  */
-object GlassMotion {
-    /** The sliding glass of a switch or tab bar: quick, with a small settle. */
+object Springs {
+    /** The sliding indicator of a switch or tab bar: quick, with a small settle. */
     val slide = spring<Float>(dampingRatio = 0.7f, stiffness = 420f)
 
     /** Letting go of a pressed element: a soft bounce back. */
@@ -52,11 +52,11 @@ object GlassMotion {
 }
 
 /**
- * The state of a sliding glass indicator over a row of segments: its position is a fractional segment index, so
+ * The state of a sliding indicator over a row of segments: its position is a fractional segment index, so
  * between two segments it sits (and stretches) in between, and a finger can drag it.
  */
 @Stable
-class GlassSlider internal constructor(initial: Int, count: Int) {
+class SlideState internal constructor(initial: Int, count: Int) {
     val position = Animatable(initial.toFloat())
     internal val bounds = mutableStateListOf<Rect>().apply { repeat(count) { add(Rect.Zero) } }
     internal var origin by mutableStateOf(Offset.Zero)
@@ -93,29 +93,29 @@ class GlassSlider internal constructor(initial: Int, count: Int) {
 }
 
 /**
- * A [GlassSlider] that glides to [selected] whenever it changes. [from] is where it starts, so a screen can open
+ * A [SlideState] that glides to [selected] whenever it changes. [from] is where it starts, so a screen can open
  * with the indicator sliding over from the tab the user came from.
  */
 @Composable
-fun rememberGlassSlider(selected: Int, count: Int, from: Int = selected): GlassSlider {
-    val slider = remember(count) { GlassSlider(from.coerceIn(0, count - 1), count) }
-    LaunchedEffect(slider, selected) { slider.position.animateTo(selected.toFloat(), GlassMotion.slide) }
+fun rememberSlideState(selected: Int, count: Int, from: Int = selected): SlideState {
+    val slider = remember(count) { SlideState(from.coerceIn(0, count - 1), count) }
+    LaunchedEffect(slider, selected) { slider.position.animateTo(selected.toFloat(), Springs.slide) }
     return slider
 }
 
 /** Marks segment [index] of [slider], so the indicator knows where it is. */
-fun Modifier.glassSegment(slider: GlassSlider, index: Int): Modifier = onPlaced { coordinates ->
+fun Modifier.slideSegment(slider: SlideState, index: Int): Modifier = onPlaced { coordinates ->
     val rect = Rect(coordinates.positionInRoot(), coordinates.size.toSize())
     if (index in slider.bounds.indices && slider.bounds[index] != rect) slider.bounds[index] = rect
 }
 
 /**
- * The pressed-in glass that slides between the segments of [slider]. Put it first inside the box that holds the
- * segments. On its way it stretches with its speed and flattens a little, like a drop of liquid glass, then
+ * The selected pill that slides between the segments of [slider]. Put it first inside the box that holds the
+ * segments. On its way it stretches a little with its speed and flattens slightly, then
  * settles with a small bounce.
  */
 @Composable
-fun GlassSliderIndicator(slider: GlassSlider, shape: Shape, modifier: Modifier = Modifier) {
+fun SlidingIndicator(slider: SlideState, shape: Shape, modifier: Modifier = Modifier) {
     val density = LocalDensity.current
     val maxStretch = with(density) { 26.dp.toPx() }
     val perSpeed = with(density) { 10.dp.toPx() }
@@ -137,7 +137,7 @@ fun GlassSliderIndicator(slider: GlassSlider, shape: Shape, modifier: Modifier =
                 scaleY = 1f - min(speed * 0.02f, 0.08f)
                 transformOrigin = TransformOrigin.Center
             }
-            .glassInset(shape),
+            .selectedPill(shape),
     )
 }
 
@@ -150,7 +150,7 @@ fun Modifier.staggeredAppear(index: Int): Modifier {
     val progress = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
         delay((index * 45L).coerceAtMost(360L))
-        progress.animateTo(1f, GlassMotion.appear)
+        progress.animateTo(1f, Springs.appear)
     }
     return graphicsLayer {
         val v = progress.value
@@ -172,7 +172,7 @@ fun Modifier.popOnChange(key: Any?): Modifier {
             first = false
         } else {
             scale.snapTo(1.28f)
-            scale.animateTo(1f, GlassMotion.release)
+            scale.animateTo(1f, Springs.release)
         }
     }
     return graphicsLayer {

@@ -1,6 +1,5 @@
 package app.vaultchat.ui.components
 
-import app.vaultchat.ui.theme.MintGradient
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -47,8 +46,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.vaultchat.ui.theme.Radii
-import app.vaultchat.ui.theme.glass
-import app.vaultchat.ui.theme.glossy
+import app.vaultchat.ui.theme.panel
 import app.vaultchat.ui.theme.Sizes
 import app.vaultchat.ui.theme.Spacing
 
@@ -66,7 +64,7 @@ fun Modifier.pressScale(interaction: MutableInteractionSource, pressed: Float = 
     val isPressed by interaction.collectIsPressedAsState()
     val scale = remember { androidx.compose.animation.core.Animatable(1f) }
     androidx.compose.runtime.LaunchedEffect(isPressed) {
-        scale.animateTo(if (isPressed) pressed else 1f, if (isPressed) GlassMotion.press else GlassMotion.release)
+        scale.animateTo(if (isPressed) pressed else 1f, if (isPressed) Springs.press else Springs.release)
     }
     return graphicsLayer {
         scaleX = scale.value
@@ -75,8 +73,8 @@ fun Modifier.pressScale(interaction: MutableInteractionSource, pressed: Float = 
 }
 
 /**
- * A round glass icon button, 44 dp with a 48 dp touch area, used in headers. With a [container] colour it
- * is a solid glossy button instead (Liquid Glass, owner 2026-11-22).
+ * A Material icon button with a 48 dp touch area, used in headers and rows: no fill, as in a top app bar. With a
+ * [container] colour it is a filled circle instead (owner 2026-11-22: Google Messages-like look).
  */
 @Composable
 fun VaultIconButton(
@@ -94,9 +92,9 @@ fun VaultIconButton(
         contentAlignment = Alignment.Center,
     ) {
         val look = if (container == Color.Unspecified) {
-            Modifier.glass(CircleShape)
+            Modifier.clip(CircleShape)
         } else {
-            Modifier.clip(CircleShape).background(container).glossy(CircleShape)
+            Modifier.clip(CircleShape).background(container)
         }
         Box(
             modifier = Modifier
@@ -107,7 +105,7 @@ fun VaultIconButton(
                 .semantics { this.contentDescription = contentDescription },
             contentAlignment = Alignment.Center,
         ) {
-            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(Sizes.iconSm + 2.dp))
+            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(Sizes.icon))
         }
     }
 }
@@ -122,8 +120,7 @@ fun UnreadBadge(count: Int, modifier: Modifier = Modifier) {
             .popOnChange(count)
             .heightIn(min = 22.dp)
             .widthIn(min = 22.dp)
-            .background(MintGradient, CircleShape)
-            .glossy(CircleShape, strength = 0.8f)
+            .background(MaterialTheme.colorScheme.primary, CircleShape)
             .padding(horizontal = 7.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -167,11 +164,11 @@ fun SectionHeader(text: String, modifier: Modifier = Modifier) {
     )
 }
 
-/** A rounded group of settings rows, as one glass card. */
+/** A rounded group of settings rows, as one tonal card. */
 @Composable
 fun SettingsGroup(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     Column(
-        modifier = modifier.fillMaxWidth().padding(horizontal = Spacing.screen).glass(RoundedCornerShape(Radii.card)),
+        modifier = modifier.fillMaxWidth().padding(horizontal = Spacing.screen).panel(RoundedCornerShape(Radii.card)),
     ) { content() }
 }
 

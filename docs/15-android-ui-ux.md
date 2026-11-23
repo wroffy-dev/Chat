@@ -6,7 +6,12 @@ where this document and the built screens differ, the plan records what exists.
 
 ## 1. Design principles
 
-**Dark glass (owner 2026-11-22, Implemented, replaces the Liquid Glass paragraph and the colours below):** the
+**Light Material 3 (owner 2026-11-22, Implemented, replaces the dark glass and Liquid Glass paragraphs below):**
+the owner asked to remove the glass and give the app a look like Google Messages, always light. Colours come from
+the phone's wallpaper (Material You) on Android 12+, otherwise a calm blue scheme; panels are flat tonal surfaces;
+chat rows are plain list rows with colourful avatars; the camera, snap viewer and calls stay dark.
+
+**Dark glass (owner 2026-11-22, superseded the same day):** the
 app is always dark, matching the owner's dark glass mockup exactly: near-black screens with faint teal and warm
 lights, glass panels with bright edges, a pressed-in segment for All/Unread and the tab bar, a silver camera
 button, dark grey-teal avatars, mint `#7FE0B5` for my bubbles, badges and send. No doodle background in chats.
