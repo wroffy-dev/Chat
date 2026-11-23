@@ -312,7 +312,8 @@ fun VaultChatNavHost(container: AppContainer) {
             ChangePasswordScreen(
                 viewModel = viewModel,
                 forced = route.forced,
-                onDone = { navController.replaceAll(NotesRoute) },
+                // A change the user chose returns to where they were; a forced one starts the app afresh.
+                onDone = { if (route.forced) navController.replaceAll(NotesRoute) else navController.popBackStack() },
                 onSessionEnded = { navController.replaceAll(LoginRoute) },
                 onBack = { navController.popBackStack() },
             )
@@ -352,6 +353,7 @@ fun VaultChatNavHost(container: AppContainer) {
                 onOpenCamera = { navController.navigate(SnapCameraRoute()) },
                 onSnapTo = { c -> navController.navigate(SnapCameraRoute(c.id)) },
                 onOpenMap = { navController.navigate(MapRoute) { launchSingleTop = true } },
+                onChangePassword = { navController.navigate(ChangePasswordRoute(forced = false)) },
             )
         }
         composable<ChatRoute> { entry ->

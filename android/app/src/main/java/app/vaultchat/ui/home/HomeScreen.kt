@@ -137,6 +137,8 @@ fun HomeScreen(
     onSnapTo: (Connection) -> Unit = {},
     /** The Map tab: connected people's latest locations (D-06 as widened 2026-11-19). */
     onOpenMap: () -> Unit = {},
+    /** The user's own password change (owner 2026-11-23), from the avatar sheet. */
+    onChangePassword: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -174,6 +176,7 @@ fun HomeScreen(
             val listState = rememberLazyListState()
             Header(
                 listState = listState,
+                onChangePassword = onChangePassword,
                 searching = searching || state.query.isNotEmpty(),
                 onSearch = {
                     if (searching || state.query.isNotEmpty()) {
@@ -241,7 +244,7 @@ fun HomeScreen(
  * is the floating "Connect" button over the list (owner 2026-11-22: Google Messages-like look). No Settings button (removed by the owner, 2026-11-20) and no sign-out (owner request 2026-11-02).
  */
 @Composable
-private fun Header(listState: LazyListState, searching: Boolean, onSearch: () -> Unit) {
+private fun Header(listState: LazyListState, searching: Boolean, onSearch: () -> Unit, onChangePassword: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(start = Spacing.xl, end = Spacing.sm, top = Spacing.lg, bottom = Spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
@@ -270,7 +273,7 @@ private fun Header(listState: LazyListState, searching: Boolean, onSearch: () ->
             onClick = onSearch,
         )
         // The user's own avatar; tapping it picks a built-in one (D-32, owner 2026-11-23).
-        MyAvatarButton(modifier = Modifier.padding(end = Spacing.xs))
+        MyAvatarButton(modifier = Modifier.padding(end = Spacing.xs), onChangePassword = onChangePassword)
     }
 }
 
