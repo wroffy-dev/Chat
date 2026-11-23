@@ -48,6 +48,14 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.vaultchat.R
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.Icons
 import app.vaultchat.VaultChatApplication
 import app.vaultchat.data.network.ApiResult
 import app.vaultchat.data.profile.ProfileApi
@@ -61,7 +69,12 @@ import kotlinx.coroutines.launch
  * initial until the server has answered.
  */
 @Composable
-fun MyAvatarButton(modifier: Modifier = Modifier, size: Int = 36) {
+fun MyAvatarButton(
+    modifier: Modifier = Modifier,
+    size: Int = 36,
+    /** Opens the change-password screen (owner 2026-11-23); offered at the bottom of the sheet. */
+    onChangePassword: (() -> Unit)? = null,
+) {
     val api = (LocalContext.current.applicationContext as VaultChatApplication).container.profileApi
     var username by remember { mutableStateOf("") }
     var avatar by remember { mutableStateOf<String?>(null) }
@@ -101,6 +114,7 @@ fun MyAvatarButton(modifier: Modifier = Modifier, size: Int = 36) {
                 }
             },
             onDismiss = { picking = false },
+            onChangePassword = onChangePassword?.let { open -> { picking = false; open() } },
         )
     }
 }
@@ -108,7 +122,14 @@ fun MyAvatarButton(modifier: Modifier = Modifier, size: Int = 36) {
 /** A sheet of the built-in avatars (no photos), with the initial as the first choice. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AvatarPicker(current: String?, name: String, saving: Boolean, onPick: (String?) -> Unit, onDismiss: () -> Unit) {
+fun AvatarPicker(
+    current: String?,
+    name: String,
+    saving: Boolean,
+    onPick: (String?) -> Unit,
+    onDismiss: () -> Unit,
+    onChangePassword: (() -> Unit)? = null,
+) {
     val colors = MaterialTheme.colorScheme
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).navigationBarsPadding()) {
@@ -119,7 +140,8 @@ fun AvatarPicker(current: String?, name: String, saving: Boolean, onPick: (Strin
             val choices: List<String?> = listOf<String?>(null) + BuiltInAvatars.map { it.key }
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(64.dp),
-                contentPadding = PaddingValues(bottom = 24.dp),
+                contentPadding = PaddingValues(bottom = if (onChangePassword != null) 8.dp else 24.dp),
+                modifier = Modifier.weight(1f, fill = false),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -146,6 +168,17 @@ fun AvatarPicker(current: String?, name: String, saving: Boolean, onPick: (Strin
                         }
                     }
                 }
+            }
+            if (onChangePassword != null) {
+                HorizontalDivider(color = colors.outlineVariant)
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.password_change_entry)) },
+                    supportingContent = { Text(stringResource(R.string.password_change_entry_body)) },
+                    leadingContent = { Icon(Icons.Filled.Lock, contentDescription = null, tint = colors.primary) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    modifier = Modifier.clip(RoundedCornerShape(16.dp)).clickable(role = Role.Button, onClick = onChangePassword),
+                )
+                Spacer(Modifier.height(16.dp))
             }
         }
     }

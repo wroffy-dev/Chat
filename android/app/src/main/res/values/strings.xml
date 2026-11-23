@@ -405,4 +405,6 @@
     <string name="nickname_cancel">Cancel</string>
     <string name="chat_nickname_line_mine">You changed their name from “%1$s” to “%2$s”</string>
     <string name="chat_nickname_line_theirs">%1$s changed your name from “%2$s” to “%3$s”</string>
+    <string name="password_change_entry">Change password</string>
+    <string name="password_change_entry_body">Your other phones are signed out after the change.</string>
 </resources>
