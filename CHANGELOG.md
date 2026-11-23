@@ -8,7 +8,7 @@ Versions of the Android app (`versionName`) and the backend (`package.json`). Th
 ### Just Notes
 - **The app is now called Just Notes** and opens on your notes: write notes with a title and text; they are
   saved on their own and kept on the server. Tap the "Just Notes" title to open the chats, Map and camera; Back returns to the
-  notes. The backend needs a redeploy for the new `notes` table.
+  notes. The app icon is now a notes page instead of the lock. The backend needs a redeploy for the new `notes` table.
 
 ### Look (latest)
 - **Chat doodles:** the light doodle background is back in chats, like WhatsApp.
