@@ -10,6 +10,7 @@ Versions of the Android app (`versionName`) and the backend (`package.json`). Th
   360p at 30 fps and comes back up when the network is good again.
 
 ### Just Notes
+- **After a password reset:** the app no longer asks for the temporary password a second time; only the new one.
 - **Change password:** tap your avatar at the top of the chats, then "Change password". A forgotten password is still
   reset by the administrator.
 - **New app icon:** a blue notes page with a white pencil and a curling corner, in Deskzo's blue.

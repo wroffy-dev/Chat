@@ -114,7 +114,10 @@ Traefik's network** (Fastify `trustProxy` set to the Docker network CIDR), other
 | Admin reset | Administrator, Admin Console | Admin enters or generates a temporary password (shown once, never stored in plaintext or logged); `must_change_password = true`; **all of that user's sessions revoked**; audit `admin.user_password_reset` |
 | Forced change after reset | App user | Login succeeds with a restricted session that can only call `POST /auth/change-password` and `POST /auth/logout`; any other endpoint returns `403 PASSWORD_CHANGE_REQUIRED` |
 
-The temporary password is handed to the user out of band (in person or another trusted channel).
+The temporary password is handed to the user out of band (in person or another trusted channel). Since 2026-11-23
+(owner: "reset password se current password hta do") the app keeps the temporary password typed at sign-in in memory
+only and sends it as the current password of the forced change, so that screen asks only for the new password; if the
+app was restarted in between (or the server refuses it), the field is shown again. The server still checks it.
 There is no email/SMS reset by design.
 
 ## 7. First-time setup and recovery

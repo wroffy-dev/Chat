@@ -24,10 +24,18 @@ data class ChangePasswordUiState(
     val failure: ChangePasswordFailure? = null,
     val submitting: Boolean = false,
     val outcome: ChangePasswordOutcome? = null,
+    /** The temporary password is already known from the sign-in just before, so its field is not shown. */
+    val currentKnown: Boolean = false,
 )
 
-class ChangePasswordViewModel(private val auth: AuthRepository) : ViewModel() {
-    private val _state = MutableStateFlow(ChangePasswordUiState())
+class ChangePasswordViewModel(
+    private val auth: AuthRepository,
+    /** The temporary password typed at sign-in (forced change only), or null to ask for the current one. */
+    temporaryPassword: String? = null,
+) : ViewModel() {
+    private val _state = MutableStateFlow(
+        if (temporaryPassword.isNullOrEmpty()) ChangePasswordUiState() else ChangePasswordUiState(current = temporaryPassword, currentKnown = true),
+    )
     val state: StateFlow<ChangePasswordUiState> = _state.asStateFlow()
 
     fun onCurrentChange(v: String) = _state.update { it.copy(current = v, inputError = null, failure = null) }
@@ -51,6 +59,9 @@ class ChangePasswordViewModel(private val auth: AuthRepository) : ViewModel() {
                         it.copy(submitting = false, current = "", new = "", confirm = "", outcome = ChangePasswordOutcome.CHANGED)
                     is ChangePasswordResult.Failure -> if (result.reason == ChangePasswordFailure.SESSION_ENDED) {
                         it.copy(submitting = false, outcome = ChangePasswordOutcome.SESSION_ENDED)
+                    } else if (result.reason == ChangePasswordFailure.WRONG_CURRENT_PASSWORD && it.currentKnown) {
+                        // The remembered password did not match after all: ask for it after all.
+                        it.copy(submitting = false, failure = result.reason, current = "", currentKnown = false)
                     } else {
                         it.copy(submitting = false, failure = result.reason)
                     }
