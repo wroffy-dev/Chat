@@ -358,13 +358,18 @@ every 10 s with one; the incoming-call check every 3 s / 15 s; the pairing scree
 
 ## Notes (D-31, 2026-11-23)
 
-A signed-in, unrestricted user's own notes; nobody else can read or change them (another user's id answers
-`404 NOT_FOUND`). A note is `{ id, title, body, createdAt, updatedAt }`.
+A signed-in, unrestricted user's own notes and, since 2026-11-23, those of the people they are connected with. Only
+the writer can change or delete a note; connected people can add lines. A note the caller may not see answers
+`404 NOT_FOUND`. A note is `{ id, title, body, mine, authorUsername, lines[], createdAt, updatedAt }`, where each line
+is `{ id, body, authorUsername, mine, createdAt }`, oldest first.
 
-- `GET /notes` → `{ items[] }`, newest change first.
+- `GET /notes` → `{ items[] }`: own and connected people's notes, newest change first.
 - `POST /notes` — `{ "title"?: string ≤ 200, "body"?: string ≤ 20000 }` → `201` with the note. `409 CONFLICT` at
   2 000 notes. 60/min.
-- `PATCH /notes/{id}` — at least one of `title`, `body` (same limits) → the note. 240/min.
-- `DELETE /notes/{id}` → `204`.
+- `PATCH /notes/{id}` — at least one of `title`, `body` (same limits) → the note. The writer only. 240/min.
+- `DELETE /notes/{id}` → `204` (the writer only; its lines go with it).
+- `POST /notes/{id}/lines` — `{ "body": string, 1–2000 characters, not only spaces }` on a note the caller can see →
+  `201` with the note; the note moves to the top. `409 CONFLICT` at 500 lines. 60/min.
+- `DELETE /notes/{id}/lines/{lineId}` → `204`. The line's author, or the note's writer, may remove it; otherwise `404`.
 
 Unknown fields, longer text or a non-uuid id → `400 VALIDATION_FAILED`.

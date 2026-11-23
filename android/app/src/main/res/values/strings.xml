@@ -363,10 +363,18 @@
     <string name="note_back">Back</string>
     <string name="note_delete">Delete note</string>
     <string name="note_delete_title">Delete this note?</string>
-    <string name="note_delete_body">It is removed from this phone and from the server.</string>
+    <string name="note_delete_body">It is removed from the server, also for the people you are connected with, with all lines added to it.</string>
     <string name="note_delete_confirm">Delete</string>
     <string name="note_cancel">Cancel</string>
     <string name="note_saving">Saving…</string>
     <string name="note_saved">Saved</string>
+    <string name="notes_from">From %1$s</string>
+    <string name="note_shared_by">%1$s\'s note · you can add lines</string>
+    <string name="note_line_you">You</string>
+    <string name="note_line_preview">%1$s: %2$s</string>
+    <string name="note_line_delete">Remove line</string>
+    <string name="note_line_failed">Couldn\'t update the lines. Check the connection and try again.</string>
+    <string name="note_add_line_hint">Add a line</string>
+    <string name="note_add_line">Add line</string>
     <string name="note_save_failed">Not saved. It will try again when you type.</string>
 </resources>

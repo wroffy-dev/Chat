@@ -359,3 +359,8 @@ today or yesterday, else 0.
 `''` (CHECK ≤ 200 characters), `body` text default `''` (CHECK ≤ 20 000), `created_at`, `updated_at`. Index
 `(user_id, updated_at)`. Kept until the user deletes a note (or the user is deleted); unlike messages they are not
 swept and are in backups. At most 2 000 per user, enforced by the service.
+
+`note_lines` (migration `20261123100000_note_lines`, owner 2026-11-23: notes shared with connected people, who can
+add lines): `id` uuid, `note_id` → notes (cascade), `user_id` → users (cascade; who added it), `body` text (CHECK 1–2 000
+characters), `created_at`. Indexes `(note_id, created_at)` and `(user_id)`. At most 500 per note, enforced by the
+service. Adding a line sets the note's `updated_at`.
