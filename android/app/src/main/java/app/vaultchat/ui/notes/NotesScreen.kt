@@ -62,6 +62,16 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.vaultchat.R
+import app.vaultchat.data.notes.NotesApi
+import app.vaultchat.data.notes.NoteLineDto
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.automirrored.filled.Send
 import app.vaultchat.data.notes.NoteDto
 import app.vaultchat.ui.components.BannerKind
 import app.vaultchat.ui.components.EmptyState
@@ -149,16 +159,28 @@ fun NotesScreen(
     }
 }
 
+/** A note in the list: the user's own on the plain surface, a connected person's in green (owner 2026-11-23). */
 @Composable
 private fun NoteCard(note: NoteDto, onClick: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     Surface(
         shape = RoundedCornerShape(16.dp),
-        color = colors.surface,
-        border = BorderStroke(1.dp, colors.outlineVariant),
+        color = if (note.mine) colors.surface else colors.primaryContainer,
+        contentColor = if (note.mine) colors.onSurface else colors.onPrimaryContainer,
+        border = BorderStroke(1.dp, if (note.mine) colors.outlineVariant else colors.primary.copy(alpha = 0.45f)),
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
     ) {
         Column(Modifier.padding(Spacing.md)) {
+            if (!note.mine) {
+                Text(
+                    stringResource(R.string.notes_from, note.authorUsername),
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = colors.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(Spacing.xs))
+            }
             if (note.title.isNotBlank()) {
                 Text(
                     note.title,
@@ -172,12 +194,23 @@ private fun NoteCard(note: NoteDto, onClick: () -> Unit) {
                 Text(
                     note.body,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = colors.onSurfaceVariant,
+                    color = if (note.mine) colors.onSurfaceVariant else colors.onPrimaryContainer,
                     maxLines = 8,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            if (note.title.isBlank() && note.body.isBlank()) {
+            // The latest added lines, each with who added it; other people's in green.
+            for (line in note.lines.takeLast(3)) {
+                Spacer(Modifier.height(Spacing.xs))
+                Text(
+                    stringResource(R.string.note_line_preview, if (line.mine) stringResource(R.string.note_line_you) else line.authorUsername, line.body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (line.mine) colors.onSurfaceVariant else colors.primary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (note.title.isBlank() && note.body.isBlank() && note.lines.isEmpty()) {
                 Text(stringResource(R.string.notes_untitled), style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
             }
             Spacer(Modifier.height(Spacing.sm))
@@ -239,19 +272,28 @@ fun NoteEditorScreen(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(horizontal = Spacing.sm).weight(1f, fill = false),
             )
-            VaultIconButton(Icons.Filled.Delete, stringResource(R.string.note_delete), { confirmDelete = true })
+            if (state.mine) VaultIconButton(Icons.Filled.Delete, stringResource(R.string.note_delete), { confirmDelete = true })
         }
         if (state.loading) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             return@Column
         }
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = Spacing.xl, vertical = Spacing.sm),
+            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = Spacing.xl, vertical = Spacing.sm),
         ) {
+            if (!state.mine) {
+                Text(
+                    stringResource(R.string.note_shared_by, state.authorUsername),
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = colors.primary,
+                )
+                Spacer(Modifier.height(Spacing.sm))
+            }
             val titleStyle = MaterialTheme.typography.headlineSmall.copy(color = colors.onSurface, fontWeight = FontWeight.Medium)
             BasicTextField(
                 value = state.title,
                 onValueChange = viewModel::setTitle,
+                readOnly = !state.mine,
                 textStyle = titleStyle,
                 cursorBrush = SolidColor(colors.primary),
                 singleLine = true,
@@ -259,7 +301,7 @@ fun NoteEditorScreen(
                 modifier = Modifier.fillMaxWidth(),
                 decorationBox = { inner ->
                     Box {
-                        if (state.title.isEmpty()) Text(stringResource(R.string.note_title_hint), style = titleStyle.copy(color = colors.outline))
+                        if (state.title.isEmpty() && state.mine) Text(stringResource(R.string.note_title_hint), style = titleStyle.copy(color = colors.outline))
                         inner()
                     }
                 },
@@ -269,18 +311,32 @@ fun NoteEditorScreen(
             BasicTextField(
                 value = state.body,
                 onValueChange = viewModel::setBody,
+                readOnly = !state.mine,
                 textStyle = bodyStyle,
                 cursorBrush = SolidColor(colors.primary),
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                 modifier = Modifier.fillMaxWidth(),
                 decorationBox = { inner ->
                     Box {
-                        if (state.body.isEmpty()) Text(stringResource(R.string.note_body_hint), style = bodyStyle.copy(color = colors.outline))
+                        if (state.body.isEmpty() && state.mine) Text(stringResource(R.string.note_body_hint), style = bodyStyle.copy(color = colors.outline))
                         inner()
                     }
                 },
             )
+            if (state.lines.isNotEmpty()) {
+                Spacer(Modifier.height(Spacing.lg))
+                HorizontalDivider(color = colors.outlineVariant)
+                for (line in state.lines) {
+                    LineRow(line, canRemove = line.mine || state.mine, onRemove = { viewModel.deleteLine(line.id) })
+                }
+            }
+            if (state.lineFailed) {
+                Spacer(Modifier.height(Spacing.sm))
+                Text(stringResource(R.string.note_line_failed), style = MaterialTheme.typography.labelMedium, color = colors.error)
+            }
         }
+        // Anyone who can see a saved note can add a line under it (owner 2026-11-23).
+        if (state.exists) AddLineBar(sending = state.sendingLine, onAdd = viewModel::addLine)
     }
 
     if (confirmDelete) {
@@ -295,5 +351,63 @@ fun NoteEditorScreen(
             },
             dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text(stringResource(R.string.note_cancel)) } },
         )
+    }
+}
+
+/** One added line: who added it (others' in green) and the text; the cross removes it where allowed. */
+@Composable
+private fun LineRow(line: NoteLineDto, canRemove: Boolean, onRemove: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Row(Modifier.fillMaxWidth().padding(top = Spacing.sm), verticalAlignment = Alignment.Top) {
+        Column(Modifier.weight(1f).padding(top = Spacing.xs)) {
+            Text(
+                if (line.mine) stringResource(R.string.note_line_you) else line.authorUsername,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = if (line.mine) colors.outline else colors.primary,
+            )
+            Text(
+                line.body,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (line.mine) colors.onSurface else colors.primary,
+            )
+        }
+        if (canRemove) {
+            IconButton(onClick = onRemove) {
+                Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.note_line_delete), tint = colors.outline)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AddLineBar(sending: Boolean, onAdd: (String, (Boolean) -> Unit) -> Unit) {
+    var text by rememberSaveable { mutableStateOf("") }
+    val colors = MaterialTheme.colorScheme
+    val send = {
+        if (text.isNotBlank()) onAdd(text) { ok -> if (ok) text = "" }
+    }
+    Surface(color = colors.surfaceContainer, modifier = Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = Spacing.md, vertical = Spacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it.take(NotesApi.LINE_MAX) },
+                placeholder = { Text(stringResource(R.string.note_add_line_hint)) },
+                maxLines = 4,
+                shape = RoundedCornerShape(24.dp),
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(Spacing.sm))
+            FilledIconButton(onClick = send, enabled = text.isNotBlank() && !sending) {
+                if (sending) {
+                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                } else {
+                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = stringResource(R.string.note_add_line))
+                }
+            }
+        }
     }
 }

@@ -49,6 +49,7 @@ model User {
   snapsSent                  Snap[]                    @relation("SnapSender")
   snapsReceived              Snap[]                    @relation("SnapRecipient")
   notes                      Note[]
+  noteLines                  NoteLine[]
   callDiagnostics            CallDiagnostic[]
   conversationParticipants   ConversationParticipant[]
   sentMessages               Message[]
@@ -414,8 +415,26 @@ model Note {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lines NoteLine[]
 
   @@index([userId, updatedAt])
   @@map("notes")
+}
+
+/// A line added under a note by its writer or by someone they are connected with (D-31 as changed 2026-11-23).
+model NoteLine {
+  id        String   @id @default(uuid()) @db.Uuid
+  noteId    String   @map("note_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  /// 1 to 2000 characters (CHECK in SQL).
+  body      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  note Note @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([noteId, createdAt])
+  @@index([userId])
+  @@map("note_lines")
 }

@@ -6,6 +6,8 @@ Versions of the Android app (`versionName`) and the backend (`package.json`). Th
 ## Unreleased
 
 ### Just Notes
+- **Shared notes:** your notes are also shown to the people you are connected with, in green on their phone. They
+  can add lines under a note (with their name), but only you can change or delete it.
 - **The app is now called Just Notes** and opens on your notes: write notes with a title and text; they are
   saved on their own and kept on the server. Tap the "Just Notes" title to open the chats, Map and camera; Back returns to the
   notes. The app icon is now a notes page instead of the lock. The backend needs a redeploy for the new `notes` table.

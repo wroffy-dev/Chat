@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.vaultchat.data.network.ApiResult
 import app.vaultchat.data.notes.NoteDto
+import app.vaultchat.data.notes.NoteLineDto
 import app.vaultchat.data.notes.NotesApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -50,6 +51,13 @@ data class EditorState(
     val exists: Boolean = false,
     val deleted: Boolean = false,
     val signedOut: Boolean = false,
+    /** False for a connected person's note: it is read only, but lines can be added. */
+    val mine: Boolean = true,
+    val authorUsername: String = "",
+    val lines: List<NoteLineDto> = emptyList(),
+    val sendingLine: Boolean = false,
+    /** Adding or removing a line failed. */
+    val lineFailed: Boolean = false,
 )
 
 /**
@@ -76,7 +84,7 @@ class NoteEditorViewModel(
                 when (val r = api.list()) {
                     is ApiResult.Ok -> {
                         val note = r.value.items.firstOrNull { it.id == noteId }
-                        _state.update { if (note == null) it.copy(loading = false, deleted = true) else it.copy(loading = false, title = note.title, body = note.body) }
+                        _state.update { if (note == null) it.copy(loading = false, deleted = true) else it.copy(loading = false, title = note.title, body = note.body, mine = note.mine, authorUsername = note.authorUsername, lines = note.lines) }
                     }
                     is ApiResult.HttpError -> _state.update { if (r.status == 401) it.copy(signedOut = true) else it.copy(loading = false, save = SaveState.FAILED) }
                     ApiResult.NetworkError -> _state.update { it.copy(loading = false, save = SaveState.FAILED) }
@@ -90,7 +98,7 @@ class NoteEditorViewModel(
     fun setBody(value: String) = edit { it.copy(body = value.take(NotesApi.BODY_MAX)) }
 
     private fun edit(change: (EditorState) -> EditorState) {
-        if (_state.value.loading) return
+        if (_state.value.loading || !_state.value.mine) return
         _state.update(change)
         dirty = true
         pending?.cancel()
@@ -125,7 +133,56 @@ class NoteEditorViewModel(
         }
     }
 
+    /** Adds [text] as a line under the note; true once the server has it. */
+    fun addLine(text: String, done: (Boolean) -> Unit) {
+        val existing = id ?: return
+        val body = text.trim().take(NotesApi.LINE_MAX)
+        if (body.isEmpty() || _state.value.sendingLine) return
+        _state.update { it.copy(sendingLine = true, lineFailed = false) }
+        viewModelScope.launch {
+            when (val r = api.addLine(existing, body)) {
+                is ApiResult.Ok -> {
+                    _state.update { it.copy(sendingLine = false, lines = r.value.lines) }
+                    done(true)
+                }
+                is ApiResult.HttpError -> {
+                    _state.update {
+                        when (r.status) {
+                            401 -> it.copy(signedOut = true)
+                            404 -> it.copy(deleted = true)
+                            else -> it.copy(sendingLine = false, lineFailed = true)
+                        }
+                    }
+                    done(false)
+                }
+                ApiResult.NetworkError -> {
+                    _state.update { it.copy(sendingLine = false, lineFailed = true) }
+                    done(false)
+                }
+            }
+        }
+    }
+
+    /** Removes a line the user added, or any line under their own note. */
+    fun deleteLine(lineId: String) {
+        val existing = id ?: return
+        viewModelScope.launch {
+            when (val r = api.deleteLine(existing, lineId)) {
+                is ApiResult.Ok -> _state.update { s -> s.copy(lines = s.lines.filterNot { it.id == lineId }, lineFailed = false) }
+                is ApiResult.HttpError -> _state.update {
+                    when (r.status) {
+                        401 -> it.copy(signedOut = true)
+                        404 -> it.copy(lines = it.lines.filterNot { l -> l.id == lineId })
+                        else -> it.copy(lineFailed = true)
+                    }
+                }
+                ApiResult.NetworkError -> _state.update { it.copy(lineFailed = true) }
+            }
+        }
+    }
+
     fun delete() {
+        if (!_state.value.mine) return
         pending?.cancel()
         viewModelScope.launch { saving.withLock { deleteLocked() } }
     }

@@ -76,7 +76,13 @@ describe.skipIf(!TEST_DB_URL)("notes (PostgreSQL)", () => {
     expect((await req(alice, "DELETE", `/notes/${second.id}`)).statusCode).toBe(404);
   });
 
-  it("keeps notes private: another user cannot list, read, edit or delete them", async () => {
+  async function connectUsers(a: string, b: string) {
+    const ua = (await database.prisma.user.findUnique({ where: { username: a } }))!.id;
+    const ub = (await database.prisma.user.findUnique({ where: { username: b } }))!.id;
+    await database.prisma.connection.create({ data: { userAId: ua, userBId: ub } });
+  }
+
+  it("hides notes from people the writer is not connected with", async () => {
     const alice = await login("alice");
     const bob = await login("bob");
     const note = (await req(alice, "POST", "/notes", { title: "Private", body: "secret" })).json();
@@ -84,7 +90,50 @@ describe.skipIf(!TEST_DB_URL)("notes (PostgreSQL)", () => {
     expect((await req(bob, "GET", "/notes")).json().items).toEqual([]);
     expect((await req(bob, "PATCH", `/notes/${note.id}`, { body: "changed" })).statusCode).toBe(404);
     expect((await req(bob, "DELETE", `/notes/${note.id}`)).statusCode).toBe(404);
-    expect((await req(alice, "GET", "/notes")).json().items[0]).toMatchObject({ body: "secret" });
+    expect((await req(bob, "POST", `/notes/${note.id}/lines`, { body: "hi" })).statusCode).toBe(404);
+    expect((await req(alice, "GET", "/notes")).json().items[0]).toMatchObject({ body: "secret", mine: true, authorUsername: "alice", lines: [] });
+  });
+
+  it("shares notes with connected people, who can add lines but not edit or delete the note", async () => {
+    const alice = await login("alice");
+    const bob = await login("bob");
+    const carol = await login("carol");
+    await connectUsers("alice", "bob");
+    const note = (await req(alice, "POST", "/notes", { title: "Trip", body: "tickets" })).json();
+    const other = (await req(alice, "POST", "/notes", { body: "newer" })).json();
+
+    const seen = (await req(bob, "GET", "/notes")).json().items;
+    expect(seen).toHaveLength(2);
+    expect(seen.find((n: { id: string }) => n.id === note.id)).toMatchObject({ mine: false, authorUsername: "alice", body: "tickets" });
+    expect((await req(carol, "GET", "/notes")).json().items).toEqual([]);
+
+    // Bob cannot change or delete Alice's note.
+    expect((await req(bob, "PATCH", `/notes/${note.id}`, { body: "changed" })).statusCode).toBe(404);
+    expect((await req(bob, "DELETE", `/notes/${note.id}`)).statusCode).toBe(404);
+
+    // Bob adds a line; the note moves to the top for both.
+    const added = await req(bob, "POST", `/notes/${note.id}/lines`, { body: "hotel booked" });
+    expect(added.statusCode).toBe(201);
+    expect(added.json().lines).toMatchObject([{ body: "hotel booked", authorUsername: "bob", mine: true }]);
+    const forAlice = (await req(alice, "GET", "/notes")).json().items;
+    expect(forAlice.map((n: { id: string }) => n.id)).toEqual([note.id, other.id]);
+    expect(forAlice[0].lines).toMatchObject([{ body: "hotel booked", authorUsername: "bob", mine: false }]);
+    const lineId = forAlice[0].lines[0].id as string;
+
+    // Alice's own line; Bob may not remove it, but Alice (the writer) may remove Bob's.
+    const mine = (await req(alice, "POST", `/notes/${note.id}/lines`, { body: "thanks" })).json().lines[1];
+    expect((await req(bob, "DELETE", `/notes/${note.id}/lines/${mine.id}`)).statusCode).toBe(404);
+    expect((await req(carol, "DELETE", `/notes/${note.id}/lines/${lineId}`)).statusCode).toBe(404);
+    expect((await req(alice, "DELETE", `/notes/${note.id}/lines/${lineId}`)).statusCode).toBe(204);
+    expect((await req(bob, "GET", "/notes")).json().items[0].lines).toMatchObject([{ body: "thanks", authorUsername: "alice" }]);
+
+    // Blank or too-long lines are refused.
+    expect((await req(bob, "POST", `/notes/${note.id}/lines`, { body: "   " })).statusCode).toBe(400);
+    expect((await req(bob, "POST", `/notes/${note.id}/lines`, { body: "x".repeat(2_001) })).statusCode).toBe(400);
+
+    // Deleting the note deletes its lines.
+    expect((await req(alice, "DELETE", `/notes/${note.id}`)).statusCode).toBe(204);
+    expect(await database.prisma.noteLine.count()).toBe(0);
   });
 
   it("rejects missing sign-in, too-long text and empty edits", async () => {
