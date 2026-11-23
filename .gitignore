@@ -23,3 +23,6 @@ local.properties
 .idea/
 .vscode/
 .DS_Store
+
+# Python caches (the ui-ux-pro-max skill scripts)
+__pycache__/
