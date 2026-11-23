@@ -40,6 +40,7 @@ import app.vaultchat.data.app.AppVersionApi
 import app.vaultchat.data.app.AppVersionInfo
 import app.vaultchat.platform.ApkHash
 import app.vaultchat.platform.update.AppUpdater
+import app.vaultchat.platform.update.UpdateFailure
 import app.vaultchat.platform.update.UpdateState
 import app.vaultchat.ui.components.BannerKind
 import app.vaultchat.ui.components.StatusBanner
@@ -161,6 +162,16 @@ fun UpdateBanner(updater: AppUpdater, modifier: Modifier = Modifier) {
         is UpdateState.Failed -> StatusBanner(
             kind = BannerKind.ERROR,
             title = stringResource(R.string.update_failed),
+            body = stringResource(
+                when (s.reason) {
+                    UpdateFailure.NETWORK -> R.string.update_failed_network
+                    UpdateFailure.BLOCKED -> R.string.update_failed_blocked
+                    UpdateFailure.CONFLICT -> R.string.update_failed_conflict
+                    UpdateFailure.STORAGE -> R.string.update_failed_storage
+                    UpdateFailure.CANCELLED -> R.string.update_failed_cancelled
+                    UpdateFailure.OTHER -> R.string.update_failed_other
+                },
+            ),
             actionLabel = stringResource(R.string.action_retry),
             onAction = updater::start,
             modifier = modifier,
