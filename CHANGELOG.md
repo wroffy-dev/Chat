@@ -9,6 +9,10 @@ Versions of the Android app (`versionName`) and the backend (`package.json`). Th
 - **Smoother video:** up to 60 fps where the phone's camera supports it; on a slow network the video drops to
   360p at 30 fps and comes back up when the network is good again.
 
+### Updates
+- **Clearer update errors:** a failed in-app update now says why (Samsung Auto Blocker, free space, download, …), and
+  Retry always fetches the latest build.
+
 ### Just Notes
 - **After a password reset:** the app no longer asks for the temporary password a second time; only the new one.
 - **Change password:** tap your avatar at the top of the chats, then "Change password". A forgotten password is still

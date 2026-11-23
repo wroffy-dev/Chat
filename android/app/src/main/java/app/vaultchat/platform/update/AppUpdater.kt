@@ -30,7 +30,22 @@ sealed interface UpdateState {
     data class Downloading(val versionCode: Int, val progress: Float) : UpdateState
     /** Waiting for the user to confirm Android's install dialog. */
     data class Installing(val versionCode: Int) : UpdateState
-    data class Failed(val versionCode: Int) : UpdateState
+    data class Failed(val versionCode: Int, val reason: UpdateFailure = UpdateFailure.OTHER) : UpdateState
+}
+
+/** Why an update did not install, so the banner can say what to do (owner 2026-11-23: it failed on a Samsung). */
+enum class UpdateFailure {
+    /** The download broke off or the server could not be reached. */
+    NETWORK,
+    /** Android (on Samsung: Auto Blocker) refused apps from outside the store. */
+    BLOCKED,
+    /** The installed app was signed with another key: it must be uninstalled once. */
+    CONFLICT,
+    /** Not enough free space. */
+    STORAGE,
+    /** The person cancelled Android's install dialog. */
+    CANCELLED,
+    OTHER,
 }
 
 /**
@@ -78,28 +93,44 @@ class AppUpdater(
         }
         _state.value = UpdateState.Downloading(versionCode, 0f)
         scope.launch {
+            // Always the build the server offers now: a newer one may have been published since the last check, and
+            // its file would not match the older checksum (each retry then failed the same way).
+            var target = refreshLatest() ?: (versionCode to sha)
             val file = File(context.cacheDir, "updates/vaultchat-update.apk").apply { parentFile?.mkdirs() }
-            val result = downloader.download(file, sha) { _state.value = UpdateState.Downloading(versionCode, it) }
+            var result = downloader.download(file, target.second) { _state.value = UpdateState.Downloading(target.first, it) }
+            if (result == ApkDownloader.Result.Corrupt) {
+                // Replaced on the server while downloading: once more with the new checksum.
+                target = refreshLatest() ?: target
+                result = downloader.download(file, target.second) { _state.value = UpdateState.Downloading(target.first, it) }
+            }
             if (result != ApkDownloader.Result.Done) {
-                _state.value = UpdateState.Failed(versionCode)
+                _state.value = UpdateState.Failed(target.first, UpdateFailure.NETWORK)
                 return@launch
             }
-            _state.value = UpdateState.Installing(versionCode)
+            _state.value = UpdateState.Installing(target.first)
             try {
                 withContext(Dispatchers.IO) { install(file) }
             } catch (_: IOException) {
-                _state.value = UpdateState.Failed(versionCode)
+                _state.value = UpdateState.Failed(target.first, if (context.cacheDir.usableSpace < file.length() * 2) UpdateFailure.STORAGE else UpdateFailure.OTHER)
             } catch (_: SecurityException) {
-                _state.value = UpdateState.Failed(versionCode)
+                _state.value = UpdateState.Failed(target.first, UpdateFailure.BLOCKED)
             } finally {
                 file.delete()
             }
         }
     }
 
+    /** The newest build the server offers now (and remembers it), or null when it cannot be asked. */
+    private suspend fun refreshLatest(): Pair<Int, String>? {
+        val info = versionApi.fetch() ?: return null
+        val sha = info.latestApkSha256 ?: return null
+        if (!info.downloadAvailable || info.latestVersionCode <= BuildConfig.VERSION_CODE) return null
+        return (info.latestVersionCode to sha).also { latest = it }
+    }
+
     /** From [UpdateInstallReceiver]: Android refused or the user cancelled. */
-    fun installFailed() {
-        _state.value = UpdateState.Failed(latest?.first ?: return)
+    fun installFailed(reason: UpdateFailure = UpdateFailure.OTHER) {
+        _state.value = UpdateState.Failed(latest?.first ?: return, reason)
     }
 
     private fun canInstall(): Boolean = context.packageManager.canRequestPackageInstalls()
@@ -138,7 +169,15 @@ class UpdateInstallReceiver : BroadcastReceiver() {
             }
             // On success Android restarts the app into the new version.
             PackageInstaller.STATUS_SUCCESS -> Unit
-            else -> (context.applicationContext as VaultChatApplication).container.appUpdater.installFailed()
+            else -> (context.applicationContext as VaultChatApplication).container.appUpdater.installFailed(
+                when (intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)) {
+                    PackageInstaller.STATUS_FAILURE_BLOCKED -> UpdateFailure.BLOCKED
+                    PackageInstaller.STATUS_FAILURE_CONFLICT, PackageInstaller.STATUS_FAILURE_INCOMPATIBLE -> UpdateFailure.CONFLICT
+                    PackageInstaller.STATUS_FAILURE_STORAGE -> UpdateFailure.STORAGE
+                    PackageInstaller.STATUS_FAILURE_ABORTED -> UpdateFailure.CANCELLED
+                    else -> UpdateFailure.OTHER
+                },
+            )
         }
     }
 }

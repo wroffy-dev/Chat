@@ -12,4 +12,10 @@
     <string name="update_downloading">Downloading update… %1$d%%</string>
     <string name="update_installing">Confirm the installation in Android\'s dialog.</string>
     <string name="update_failed">The update could not be installed.</string>
+    <string name="update_failed_network">The download stopped. Check the internet connection and tap Retry.</string>
+    <string name="update_failed_blocked">The phone blocked it. On Samsung: Settings → Security and privacy → Auto Blocker → Off, then tap Retry.</string>
+    <string name="update_failed_conflict">The installed app was signed differently. Uninstall it once and install the new one; your chats and notes are on the server.</string>
+    <string name="update_failed_storage">Not enough free space. Free some storage and tap Retry.</string>
+    <string name="update_failed_cancelled">The installation was cancelled. Tap Retry and choose Install.</string>
+    <string name="update_failed_other">Tap Retry. If it fails again, turn off Auto Blocker (Samsung) and check free space.</string>
 </resources>
