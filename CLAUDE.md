@@ -47,6 +47,9 @@ decisions there are either recorded as decided or still open; never decide an op
   app has no in-app switch; sharing stops only by revoking Android's permission or switching the phone's location off
   (which blocks the app). Do not
   widen it further (more often than every 15 minutes, a longer history, sharing beyond connected people) without the owner.
+- The app is called **Just Notes** and opens on the user's own notes (D-31, owner 2026-11-23); the chats, Map and camera
+  are reached only by tapping the "Just Notes" title. Notes are private to their writer; do not share them or show them to the
+  administrator without the owner.
 - Do not claim end-to-end encryption, guaranteed screenshot prevention, or guaranteed deletion. (Chats set
   `FLAG_SECURE` per D-23, which stops ordinary screenshots and recordings, not another camera or a rooted phone.)
 - Do not claim the VPS supports N simultaneous calls or 1080p without real-device test results.

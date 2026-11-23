@@ -246,7 +246,7 @@ private fun Header(listState: LazyListState, searching: Boolean, onSearch: () ->
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            stringResource(R.string.app_name),
+            stringResource(R.string.home_title),
             style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Medium, letterSpacing = 0.sp),
             maxLines = 1,
             modifier = Modifier

@@ -352,3 +352,10 @@ today or yesterday, else 0.
 - `conversations.disappear_seconds INTEGER NULL` — CHECK null or one of 60, 300, 3600, 86400. Null = Off.
 - `messages.seen_at TIMESTAMPTZ(3) NULL` — when the recipient first displayed the message; partial index where not null.
 - `messages.kind` CHECK now allows `text`, `missed_call`, `disappear`.
+
+## Notes (D-31, 2026-11-23, migration `20261123060000_notes`)
+
+`notes`: a user's own notes (the Just Notes screen). `id` uuid, `user_id` → users (cascade), `title` text default
+`''` (CHECK ≤ 200 characters), `body` text default `''` (CHECK ≤ 20 000), `created_at`, `updated_at`. Index
+`(user_id, updated_at)`. Kept until the user deletes a note (or the user is deleted); unlike messages they are not
+swept and are in backups. At most 2 000 per user, enforced by the service.

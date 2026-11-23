@@ -48,6 +48,7 @@ model User {
   callsReceived              Call[]                    @relation("CallCallee")
   snapsSent                  Snap[]                    @relation("SnapSender")
   snapsReceived              Snap[]                    @relation("SnapRecipient")
+  notes                      Note[]
   callDiagnostics            CallDiagnostic[]
   conversationParticipants   ConversationParticipant[]
   sentMessages               Message[]
@@ -400,4 +401,21 @@ model SnapStreak {
   connection Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
 
   @@map("snap_streaks")
+}
+
+/// A user's own note (D-31, owner 2026-11-23). Visible only to its owner; kept until deleted.
+model Note {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  /// At most 200 characters (CHECK in SQL).
+  title     String   @default("")
+  /// At most 20000 characters (CHECK in SQL).
+  body      String   @default("")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, updatedAt])
+  @@map("notes")
 }

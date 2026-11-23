@@ -12,7 +12,7 @@
     <string name="call_ongoing">Call in progress</string>
     <string name="snap_new_notification">New snap</string>
     <string name="full_screen_calls_title">Show calls full screen</string>
-    <string name="full_screen_calls_body">To open an incoming call full screen even while you are using the phone, allow Vault to “Display over other apps” on the next page. Without it, Android shows a small pop-up instead.</string>
+    <string name="full_screen_calls_body">To open an incoming call full screen even while you are using the phone, allow Just Notes to “Display over other apps” on the next page. Without it, Android shows a small pop-up instead.</string>
     <string name="full_screen_calls_open">Open settings</string>
     <string name="full_screen_calls_later">Not now</string>
     <string name="talk_playing">Playing a voice message</string>

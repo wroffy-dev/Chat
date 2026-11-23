@@ -355,3 +355,16 @@ every 10 s with one; the incoming-call check every 3 s / 15 s; the pairing scree
   A repeated value changes nothing. 20/min. `400 VALIDATION_FAILED` for any other value.
 - Message `kind` may be `disappear`. Reading a message (`POST /conversations/{id}/read`) sets its `seen_at`; the
   timer sweep deletes messages `seen_at + disappear_seconds` after they were seen and bumps the epoch.
+
+## Notes (D-31, 2026-11-23)
+
+A signed-in, unrestricted user's own notes; nobody else can read or change them (another user's id answers
+`404 NOT_FOUND`). A note is `{ id, title, body, createdAt, updatedAt }`.
+
+- `GET /notes` → `{ items[] }`, newest change first.
+- `POST /notes` — `{ "title"?: string ≤ 200, "body"?: string ≤ 20000 }` → `201` with the note. `409 CONFLICT` at
+  2 000 notes. 60/min.
+- `PATCH /notes/{id}` — at least one of `title`, `body` (same limits) → the note. 240/min.
+- `DELETE /notes/{id}` → `204`.
+
+Unknown fields, longer text or a non-uuid id → `400 VALIDATION_FAILED`.

@@ -1,5 +1,6 @@
 package app.vaultchat
 
+import app.vaultchat.data.notes.NotesApi
 import android.content.Context
 import android.os.Build
 import app.vaultchat.data.auth.AuthApi
@@ -84,6 +85,7 @@ class AppContainer(context: Context) {
 
     /** Location sharing with the administrator (D-06); the app is used only while it is on. */
     val locationApi = LocationApi(httpJson, caller)
+    val notesApi = NotesApi(httpJson, caller)
     val locationSharing = LocationSharing(appContext, locationApi, applicationScope) { authRepository.currentUser()?.id }
 
     /** In-app updates (Home shows the Update button after sign-in). */

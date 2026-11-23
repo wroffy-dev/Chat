@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Vault</string>
+    <string name="app_name">Just Notes</string>
 
     <string name="login_title">Sign in</string>
     <string name="login_subtitle">Private calls and messages</string>
@@ -79,7 +79,7 @@
     <string name="scan_qr_allow_camera">Allow camera</string>
     <string name="scan_qr_camera_denied">Camera access is turned off for this app. You can turn it on in Settings.</string>
     <string name="scan_qr_waiting">Request sent. Waiting for %1$s to accept…</string>
-    <string name="scan_qr_not_our_code">This isn\'t a Vault code.</string>
+    <string name="scan_qr_not_our_code">This isn\'t a Just Notes code.</string>
     <string name="scan_qr_rejected">The request was rejected.</string>
     <string name="scan_qr_expired">The request expired. Ask for a new code.</string>
     <string name="scan_qr_cancelled">The request was cancelled.</string>
@@ -152,7 +152,7 @@
     <string name="snap_failed">Could not send the snap. Try again.</string>
     <string name="snap_too_large">This video is too large to send.</string>
     <string name="snap_flip">Flip camera</string>
-    <string name="snap_needs_camera">Vault needs the camera to take a snap.</string>
+    <string name="snap_needs_camera">Just Notes needs the camera to take a snap.</string>
     <string name="snap_waiting">📸 %1$s sent you a snap · tap to view</string>
     <string name="snap_waiting_more">📸 %1$d snaps from %2$s · tap to view</string>
     <string name="snap_opening">Opening…</string>
@@ -168,7 +168,7 @@
     <string name="talk_not_reached">%1$s\'s phone could not be reached. Nothing was sent.</string>
     <string name="talk_busy">%1$s is on a call. Nothing was sent.</string>
     <string name="talk_failed">Could not send. Try again.</string>
-    <string name="talk_needs_microphone">Vault needs the microphone to send your voice.</string>
+    <string name="talk_needs_microphone">Just Notes needs the microphone to send your voice.</string>
     <string name="talk_allow_microphone">Allow</string>
     <string name="talk_stop">Stop</string>
     <string name="call_zoom_button">Zoom · mine %1$s · theirs %2$s</string>
@@ -238,15 +238,15 @@
     </plurals>
     <string name="action_close">Close</string>
     <!-- Location sharing with the administrator (D-06, docs/11) -->
-    <string name="location_required_title">Share your location to use Vault</string>
-    <string name="location_permission_title">Allow location for Vault</string>
+    <string name="location_required_title">Share your location to use Just Notes</string>
+    <string name="location_permission_title">Allow location for Just Notes</string>
     <string name="location_device_off_title">Turn on your phone\'s location</string>
     <string name="location_consent_loading">Loading what is shared…</string>
     <string name="location_agree">Agree and turn on location</string>
     <string name="location_turning_on">Turning on…</string>
     <string name="location_allow">Allow location</string>
-    <string name="location_permission_body">Vault needs Android\'s location permission. If you choose \"approximate\", only an approximate location is sent.</string>
-    <string name="location_device_off_body">Your phone\'s location is switched off, so Vault cannot read where you are.</string>
+    <string name="location_permission_body">Just Notes needs Android\'s location permission. If you choose \"approximate\", only an approximate location is sent.</string>
+    <string name="location_device_off_body">Your phone\'s location is switched off, so Just Notes cannot read where you are.</string>
     <string name="location_open_device_settings">Open location settings</string>
     <string name="location_error_offline">Could not reach the server. Check your connection and try again.</string>
     <string name="location_error_failed">That did not work. Try again.</string>
@@ -261,7 +261,7 @@
     <string name="location_never">never</string>
     <string name="location_turn_off">Turn off</string>
     <string name="location_turn_off_confirm">Turn off anyway</string>
-    <string name="location_off_warning">Turning it off deletes your location from the server, and Vault cannot be used until you turn it on again.</string>
+    <string name="location_off_warning">Turning it off deletes your location from the server, and Just Notes cannot be used until you turn it on again.</string>
     <!-- Bottom menu and Map (owner, 2026-11-19) -->
     <string name="tab_chat">Chat</string>
     <string name="tab_camera">Camera</string>
@@ -293,12 +293,12 @@
     <string name="snap_sound_off">Sound off</string>
     <string name="map_everyone">Show everyone</string>
     <string name="map_center_me">Show me</string>
-    <string name="map_nobody">Nobody you are connected with has shared a location yet. Each person\'s latest location appears here after they open Vault.</string>
+    <string name="map_nobody">Nobody you are connected with has shared a location yet. Each person\'s latest location appears here after they open Just Notes.</string>
     <string name="map_sharing_off">Turn on location sharing to see the Map.</string>
     <string name="map_attribution">© OpenStreetMap contributors</string>
     <!-- Background location (owner, 2026-11-19; D-06) -->
     <string name="background_location_title">Keep your Map location current</string>
-    <string name="background_location_body">Like Snap Map, Vault can update your location about every 15 minutes while the app is closed, so the people you are connected with see where you are. On the next screen choose \"Allow all the time\".</string>
+    <string name="background_location_body">Like Snap Map, Just Notes can update your location about every 15 minutes while the app is closed, so the people you are connected with see where you are. On the next screen choose \"Allow all the time\".</string>
     <string name="background_location_allow">Allow</string>
     <string name="chat_deletion_more">How deletion works</string>
     <string name="chat_deletion_sheet_title">Messages don\'t stay</string>
@@ -311,9 +311,9 @@
     <string name="home_search_close">Close search</string>
     <string name="home_search_clear">Clear search</string>
     <!-- Login in the owner's reference design (2026-11-20) -->
-    <string name="login_brand">VaultChat</string>
+    <string name="login_brand">Just Notes</string>
     <string name="login_private_access">Private Access</string>
-    <string name="login_heading">Sign in to your vault</string>
+    <string name="login_heading">Sign in to Just Notes</string>
     <string name="login_intro">Enter your assigned username and passphrase. Access is limited to paired members.</string>
     <string name="login_username_hint">Assigned by your workspace administrator</string>
     <string name="login_passphrase">Passphrase</string>
@@ -322,7 +322,7 @@
     <string name="login_show_passphrase">Show passphrase</string>
     <string name="login_hide_passphrase">Hide passphrase</string>
     <string name="login_no_registration">No public registration.</string>
-    <string name="login_version">VaultChat Android v%1$s</string>
+    <string name="login_version">Just Notes Android v%1$s</string>
     <!-- Chat in the owner's reference design and disappearing messages (2026-11-20, D-30) -->
     <string name="chat_message_hint">Message %1$s…</string>
     <string name="chat_options">Conversation options</string>
@@ -351,4 +351,22 @@
     <string name="snap_save_failed">Could not save it</string>
     <string name="chat_chars_left">%1$d characters left</string>
     <string name="chat_to_newest">Go to the newest message</string>
+    <string name="notes_title">Just Notes</string>
+    <string name="notes_new">New note</string>
+    <string name="notes_empty_title">No notes yet</string>
+    <string name="notes_empty_body">Tap New note to write your first one.</string>
+    <string name="notes_offline">Can\'t reach the server. Pull down or try again.</string>
+    <string name="notes_retry">Try again</string>
+    <string name="notes_untitled">Untitled</string>
+    <string name="note_title_hint">Title</string>
+    <string name="note_body_hint">Note</string>
+    <string name="note_back">Back</string>
+    <string name="note_delete">Delete note</string>
+    <string name="note_delete_title">Delete this note?</string>
+    <string name="note_delete_body">It is removed from this phone and from the server.</string>
+    <string name="note_delete_confirm">Delete</string>
+    <string name="note_cancel">Cancel</string>
+    <string name="note_saving">Saving…</string>
+    <string name="note_saved">Saved</string>
+    <string name="note_save_failed">Not saved. It will try again when you type.</string>
 </resources>
