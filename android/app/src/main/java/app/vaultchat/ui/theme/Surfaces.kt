@@ -32,10 +32,10 @@ class PanelStyle(
 /** Panels on the dark media screens (camera, snap viewer, calls). */
 val DarkPanel = PanelStyle(
     fill = Color.White.copy(alpha = 0.12f),
-    fillStrong = Color(0xFF2B2E33),
+    fillStrong = Color(0xFF163832),
     track = Color.White.copy(alpha = 0.10f),
     selected = Color.White.copy(alpha = 0.22f),
-    ground = Color(0xFF111316),
+    ground = Color(0xFF051F20),
 )
 
 /** Null means "use the light colour scheme". */

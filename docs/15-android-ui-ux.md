@@ -6,6 +6,9 @@ where this document and the built screens differ, the plan records what exists.
 
 ## 1. Design principles
 
+**Green palette in the light Material look (owner 2026-11-23, Implemented):** the colours below (the owner's six
+greens) are used again in the light Material layout; wallpaper colours are off.
+
 **Light Material 3 (owner 2026-11-22, Implemented, replaces the dark glass and Liquid Glass paragraphs below):**
 the owner asked to remove the glass and give the app a look like Google Messages, always light. Colours come from
 the phone's wallpaper (Material You) on Android 12+, otherwise a calm blue scheme; panels are flat tonal surfaces;

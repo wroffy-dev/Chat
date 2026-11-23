@@ -19,11 +19,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-// Colourful circles with a white initial, each person keeping one colour (owner 2026-11-22: Google Messages-like
-// look). Every colour is dark enough for white text.
+// Green circles with a white initial from the owner's palette (owner 2026-11-23), each person keeping one shade.
+// Every shade is dark enough for white text.
 private val AvatarColors = listOf(
-    Color(0xFF3F63D8), Color(0xFFC4561B), Color(0xFF1E7F52), Color(0xFFB3261E),
-    Color(0xFF7A4CC2), Color(0xFF0E7490), Color(0xFFB0306E), Color(0xFF5B6B12),
+    Color(0xFF235347), Color(0xFF163832), Color(0xFF2F6B57), Color(0xFF3E7D63),
+    Color(0xFF1F4D45), Color(0xFF4A7A64), Color(0xFF0B2B26), Color(0xFF356A5A),
 )
 
 /**

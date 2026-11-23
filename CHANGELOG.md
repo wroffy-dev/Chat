@@ -6,6 +6,7 @@ Versions of the Android app (`versionName`) and the backend (`package.json`). Th
 ## Unreleased
 
 ### Look (latest)
+- **Green again:** the light Material look now uses the owner's green palette instead of wallpaper colours.
 - **Light Material look:** the glass is gone. The app is always light and looks like Google's own messaging app:
   wallpaper colours on Android 12+, plain chat rows, colourful avatars, a "Connect" button, a Material navigation
   bar, grey and colour message bubbles and a Material chat top bar with a ⋮ menu. The camera, snaps and calls stay
