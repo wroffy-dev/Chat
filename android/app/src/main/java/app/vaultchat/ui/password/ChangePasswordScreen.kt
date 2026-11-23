@@ -78,7 +78,8 @@ fun ChangePasswordScreen(
                     }
 
                     val inputError = state.inputError
-                    PasswordField(
+                    // After an admin reset the temporary password was just typed at sign-in; it is not asked again.
+                    if (!state.currentKnown) PasswordField(
                         value = state.current,
                         onValueChange = viewModel::onCurrentChange,
                         label = stringResource(if (forced) R.string.password_current_temporary else R.string.password_current),

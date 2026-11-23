@@ -293,7 +293,7 @@ fun VaultChatNavHost(container: AppContainer) {
     ) {
         composable<LoginRoute> {
             val viewModel: LoginViewModel = viewModel(
-                factory = viewModelFactory { initializer { LoginViewModel(container.authRepository, container.apiClient) } },
+                factory = viewModelFactory { initializer { LoginViewModel(container.authRepository, container.apiClient) { container.temporaryPassword = it } } },
             )
             LoginScreen(
                 viewModel = viewModel,
@@ -307,7 +307,14 @@ fun VaultChatNavHost(container: AppContainer) {
         composable<ChangePasswordRoute> { entry ->
             val route = entry.toRoute<ChangePasswordRoute>()
             val viewModel: ChangePasswordViewModel = viewModel(
-                factory = viewModelFactory { initializer { ChangePasswordViewModel(container.authRepository) } },
+                factory = viewModelFactory {
+                    initializer {
+                        // Used once, then forgotten: a later screen never sees the temporary password.
+                        val temporary = if (route.forced) container.temporaryPassword else null
+                        container.temporaryPassword = null
+                        ChangePasswordViewModel(container.authRepository, temporary)
+                    }
+                },
             )
             ChangePasswordScreen(
                 viewModel = viewModel,

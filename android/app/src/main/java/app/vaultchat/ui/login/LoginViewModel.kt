@@ -37,6 +37,11 @@ enum class LoginOutcome { HOME, CHANGE_PASSWORD }
 class LoginViewModel(
     private val authRepository: AuthRepository,
     private val apiClient: ApiClient,
+    /**
+     * Keeps a temporary password (after an admin reset) in memory for the forced change that follows, so the user
+     * does not type it twice (owner 2026-11-23). Never written to disk.
+     */
+    private val rememberTemporaryPassword: (String) -> Unit = {},
 ) : ViewModel() {
     private val _state = MutableStateFlow(LoginUiState())
     val state: StateFlow<LoginUiState> = _state.asStateFlow()
@@ -79,6 +84,7 @@ class LoginViewModel(
         _state.update { it.copy(submitting = true, failure = null) }
         viewModelScope.launch {
             val result = authRepository.login(LoginInput.normalizeUsername(current.username), current.password)
+            if (result is LoginResult.Success && result.mustChangePassword) rememberTemporaryPassword(current.password)
             _state.update {
                 when (result) {
                     // The password is dropped from memory as soon as it is no longer needed.

@@ -88,6 +88,13 @@ class AppContainer(context: Context) {
     val locationApi = LocationApi(httpJson, caller)
     val notesApi = NotesApi(httpJson, caller)
     val profileApi = ProfileApi(httpJson, caller)
+
+    /**
+     * The temporary password typed at sign-in after an admin reset, held in memory only until the forced password
+     * change reads it (owner 2026-11-23: do not ask for it twice).
+     */
+    @Volatile
+    var temporaryPassword: String? = null
     val locationSharing = LocationSharing(appContext, locationApi, applicationScope) { authRepository.currentUser()?.id }
 
     /** In-app updates (Home shows the Update button after sign-in). */
