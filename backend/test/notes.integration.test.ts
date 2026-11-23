@@ -79,7 +79,9 @@ describe.skipIf(!TEST_DB_URL)("notes (PostgreSQL)", () => {
   async function connectUsers(a: string, b: string) {
     const ua = (await database.prisma.user.findUnique({ where: { username: a } }))!.id;
     const ub = (await database.prisma.user.findUnique({ where: { username: b } }))!.id;
-    await database.prisma.connection.create({ data: { userAId: ua, userBId: ub } });
+    // connections_ordered_pair: user_a_id < user_b_id.
+    const [userAId, userBId] = [ua, ub].sort();
+    await database.prisma.connection.create({ data: { userAId: userAId!, userBId: userBId! } });
   }
 
   it("hides notes from people the writer is not connected with", async () => {
