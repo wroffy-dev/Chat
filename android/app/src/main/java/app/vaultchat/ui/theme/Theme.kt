@@ -1,73 +1,64 @@
 package app.vaultchat.ui.theme
 
-import android.os.Build
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/**
- * Fixed colours for the always-dark media screens (camera, snap viewer, calls). The names keep their old roles:
- * Deepest is the darkest ground, Mint the text on it, Sage the accent.
- */
+// The owner's six-shade green palette (2026-11-19; owner 2026-11-23: "ab vhi green color palate use krdo"), darkest
+// first. The light Material look keeps its layout; only its colours come from these greens.
 object VaultGreen {
-    val Deepest = Color(0xFF111316)
-    val Deep = Color(0xFF1C1F23)
-    val Forest = Color(0xFF2B2E33)
-    val Pine = Color(0xFF44474E)
-    val Sage = Color(0xFFB4C5FF)
-    val Mint = Color(0xFFF1F0F7)
+    val Deepest = Color(0xFF051F20)
+    val Deep = Color(0xFF0B2B26)
+    val Forest = Color(0xFF163832)
+    val Pine = Color(0xFF235347)
+    val Sage = Color(0xFF8EB69B)
+    val Mint = Color(0xFFDAF1DE)
 }
 
-/**
- * The light Material 3 look (owner 2026-11-22: "google msg jaisa look", "dark app ko bhi light krdo"). On Android 12
- * and later the colours come from the phone's wallpaper (Material You), as in Google's own apps; otherwise this
- * calm blue scheme is used. The app is always light.
- */
+/** The always-light Material 3 scheme in the owner's greens (fixed: no wallpaper colours). */
 private val LightColors = lightColorScheme(
-    primary = Color(0xFF3557C6),
+    primary = VaultGreen.Pine,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFDCE1FF),
-    onPrimaryContainer = Color(0xFF00174B),
-    secondary = Color(0xFF595D72),
+    primaryContainer = VaultGreen.Mint,
+    onPrimaryContainer = VaultGreen.Deepest,
+    secondary = VaultGreen.Forest,
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFFDDE1F9),
-    onSecondaryContainer = Color(0xFF161B2C),
+    secondaryContainer = Color(0xFFC9E2CF),
+    onSecondaryContainer = VaultGreen.Deepest,
     tertiary = Color(0xFF75546F),
     onTertiary = Color.White,
     tertiaryContainer = Color(0xFFFFD7F5),
     onTertiaryContainer = Color(0xFF2C1229),
-    background = Color(0xFFF8F9FF),
-    onBackground = Color(0xFF1A1B21),
-    surface = Color(0xFFF8F9FF),
-    onSurface = Color(0xFF1A1B21),
-    surfaceVariant = Color(0xFFE2E2EC),
-    onSurfaceVariant = Color(0xFF45464F),
-    outline = Color(0xFF767680),
-    outlineVariant = Color(0xFFC6C6D0),
-    surfaceDim = Color(0xFFD9D9E0),
-    surfaceBright = Color(0xFFF8F9FF),
+    background = Color(0xFFF4FAF5),
+    onBackground = VaultGreen.Deepest,
+    surface = Color(0xFFF4FAF5),
+    onSurface = VaultGreen.Deepest,
+    surfaceVariant = Color(0xFFDCE8DF),
+    onSurfaceVariant = Color(0xFF41544A),
+    outline = Color(0xFF6F8A78),
+    outlineVariant = Color(0xFFC2D3C6),
+    surfaceDim = Color(0xFFD3DDD5),
+    surfaceBright = Color(0xFFF4FAF5),
     surfaceContainerLowest = Color.White,
-    surfaceContainerLow = Color(0xFFF2F3FA),
-    surfaceContainer = Color(0xFFECEDF4),
-    surfaceContainerHigh = Color(0xFFE7E8EE),
-    surfaceContainerHighest = Color(0xFFE1E2E8),
-    inverseSurface = Color(0xFF2F3036),
-    inverseOnSurface = Color(0xFFF1F0F7),
-    inversePrimary = Color(0xFFB6C4FF),
-    error = Color(0xFFBA1A1A),
+    surfaceContainerLow = Color(0xFFEEF5EF),
+    surfaceContainer = Color(0xFFE8F0EA),
+    surfaceContainerHigh = Color(0xFFE2EBE4),
+    surfaceContainerHighest = Color(0xFFDCE6DE),
+    inverseSurface = VaultGreen.Forest,
+    inverseOnSurface = VaultGreen.Mint,
+    inversePrimary = VaultGreen.Sage,
+    error = Color(0xFFB3261E),
     onError = Color.White,
-    errorContainer = Color(0xFFFFDAD6),
-    onErrorContainer = Color(0xFF410002),
+    errorContainer = Color(0xFFF9DEDC),
+    onErrorContainer = Color(0xFF410E0B),
 )
 
 /**
@@ -103,8 +94,6 @@ private val AppShapes = Shapes(
 
 @Composable
 fun VaultChatTheme(content: @Composable () -> Unit) {
-    // Always light, whatever the phone's setting (owner 2026-11-22).
-    val context = LocalContext.current
-    val colors = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) dynamicLightColorScheme(context) else LightColors
-    MaterialTheme(colorScheme = colors, typography = AppTypography, shapes = AppShapes, content = content)
+    // Always light, in the owner's greens, whatever the phone's setting or wallpaper (owner 2026-11-23).
+    MaterialTheme(colorScheme = LightColors, typography = AppTypography, shapes = AppShapes, content = content)
 }
