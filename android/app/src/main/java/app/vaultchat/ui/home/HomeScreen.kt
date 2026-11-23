@@ -308,7 +308,7 @@ private fun AskBatteryExemptionOnce() {
  * owner on 2026-11-12: calls only). Asked once, and only in builds that can receive pushes.
  */
 @Composable
-private fun AskNotificationPermissionOnce() {
+internal fun AskNotificationPermissionOnce() {
     if (!Push.CALL_NOTIFICATIONS || !Push.configured) return
     val context = LocalContext.current
     val prefs = (context.applicationContext as VaultChatApplication).container.permissionPreferences

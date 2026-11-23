@@ -21,6 +21,8 @@ data class NotesState(
     val loading: Boolean = true,
     val notes: List<NoteDto> = emptyList(),
     val offline: Boolean = false,
+    /** A pull-to-refresh is running. */
+    val refreshing: Boolean = false,
     /** The session ended (401): back to the sign-in screen. */
     val signedOut: Boolean = false,
 )
@@ -30,12 +32,16 @@ class NotesViewModel(private val api: NotesApi) : ViewModel() {
     private val _state = MutableStateFlow(NotesState())
     val state: StateFlow<NotesState> = _state.asStateFlow()
 
-    fun refresh() {
+    /** Reads the notes again; [pulled] shows the pull-to-refresh spinner meanwhile. */
+    fun refresh(pulled: Boolean = false) {
+        if (pulled) _state.update { it.copy(refreshing = true) }
         viewModelScope.launch {
             when (val r = api.list()) {
-                is ApiResult.Ok -> _state.update { it.copy(loading = false, notes = r.value.items, offline = false) }
-                is ApiResult.HttpError -> _state.update { if (r.status == 401) it.copy(signedOut = true) else it.copy(loading = false, offline = true) }
-                ApiResult.NetworkError -> _state.update { it.copy(loading = false, offline = true) }
+                is ApiResult.Ok -> _state.update { it.copy(loading = false, refreshing = false, notes = r.value.items, offline = false) }
+                is ApiResult.HttpError -> _state.update {
+                    if (r.status == 401) it.copy(signedOut = true) else it.copy(loading = false, refreshing = false, offline = true)
+                }
+                ApiResult.NetworkError -> _state.update { it.copy(loading = false, refreshing = false, offline = true) }
             }
         }
     }
@@ -55,6 +61,8 @@ data class EditorState(
     val mine: Boolean = true,
     val authorUsername: String = "",
     val lines: List<NoteLineDto> = emptyList(),
+    /** When the note last changed (ISO time), shown under the title. */
+    val updatedAt: String? = null,
     val sendingLine: Boolean = false,
     /** Adding or removing a line failed. */
     val lineFailed: Boolean = false,
@@ -84,7 +92,7 @@ class NoteEditorViewModel(
                 when (val r = api.list()) {
                     is ApiResult.Ok -> {
                         val note = r.value.items.firstOrNull { it.id == noteId }
-                        _state.update { if (note == null) it.copy(loading = false, deleted = true) else it.copy(loading = false, title = note.title, body = note.body, mine = note.mine, authorUsername = note.authorUsername, lines = note.lines) }
+                        _state.update { if (note == null) it.copy(loading = false, deleted = true) else it.copy(loading = false, title = note.title, body = note.body, mine = note.mine, authorUsername = note.authorUsername, lines = note.lines, updatedAt = note.updatedAt) }
                     }
                     is ApiResult.HttpError -> _state.update { if (r.status == 401) it.copy(signedOut = true) else it.copy(loading = false, save = SaveState.FAILED) }
                     ApiResult.NetworkError -> _state.update { it.copy(loading = false, save = SaveState.FAILED) }
@@ -126,7 +134,7 @@ class NoteEditorViewModel(
                 id = result.value.id
                 // Text typed while this request was on its way is saved by the next round.
                 dirty = _state.value.title != s.title || _state.value.body != s.body
-                _state.update { it.copy(save = SaveState.SAVED, exists = true) }
+                _state.update { it.copy(save = SaveState.SAVED, exists = true, updatedAt = result.value.updatedAt) }
             }
             is ApiResult.HttpError -> _state.update { if (result.status == 401) it.copy(signedOut = true) else it.copy(save = SaveState.FAILED) }
             ApiResult.NetworkError -> _state.update { it.copy(save = SaveState.FAILED) }
@@ -142,7 +150,7 @@ class NoteEditorViewModel(
         viewModelScope.launch {
             when (val r = api.addLine(existing, body)) {
                 is ApiResult.Ok -> {
-                    _state.update { it.copy(sendingLine = false, lines = r.value.lines) }
+                    _state.update { it.copy(sendingLine = false, lines = r.value.lines, updatedAt = r.value.updatedAt) }
                     done(true)
                 }
                 is ApiResult.HttpError -> {

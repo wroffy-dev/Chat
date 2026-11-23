@@ -190,6 +190,9 @@ fun VaultChatNavHost(container: AppContainer) {
     val context = LocalContext.current
     val backStack by navController.currentBackStackEntryAsState()
     val onCallScreen = backStack?.destination?.route?.contains("CallRoute") == true
+    // On the notes screens a new message is still announced as "New notes added" (Push.showNewMessage).
+    val onNotes = backStack?.destination?.route?.let { it.contains("NotesRoute") || it.contains("NoteEditorRoute") } == true
+    LaunchedEffect(onNotes) { Push.onNotesScreen = onNotes }
     // Screens of a signed-in user: calls ring and live updates run on all of them (the Map too).
     val signedIn = backStack?.destination?.route?.let { r -> listOf("NotesRoute", "NoteEditorRoute", "HomeRoute", "InboxRoute", "ShowQrRoute", "ScanQrRoute", "ChatRoute", "MapRoute").any { r.contains(it) } } == true
     // Live change signals while signed in. Not tied to the screen's lifecycle, so an incoming call is

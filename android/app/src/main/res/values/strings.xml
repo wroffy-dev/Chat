@@ -364,10 +364,26 @@
     <string name="note_delete">Delete note</string>
     <string name="note_delete_title">Delete this note?</string>
     <string name="note_delete_body">It is removed from the server, also for the people you are connected with, with all lines added to it.</string>
-    <string name="note_delete_confirm">Delete</string>
-    <string name="note_cancel">Cancel</string>
+    <string name="note_delete_confirm">Delete note</string>
+    <string name="note_cancel">Keep note</string>
     <string name="note_saving">Saving…</string>
     <string name="note_saved">Saved</string>
+    <string name="notes_search_hint">Search your notes</string>
+    <string name="notes_search_clear">Clear search</string>
+    <string name="notes_no_match_title">No matching notes</string>
+    <string name="notes_no_match_body">Nothing matches “%1$s”.</string>
+    <string name="note_delete_title_named">Delete “%1$s”?</string>
+    <string name="note_edited">Edited %1$s</string>
+    <string name="note_lines_header">Added lines</string>
+    <string name="note_save_failed_short">Not saved</string>
+    <plurals name="notes_count">
+        <item quantity="one">%d note</item>
+        <item quantity="other">%d notes</item>
+    </plurals>
+    <plurals name="notes_lines_count">
+        <item quantity="one">%d line</item>
+        <item quantity="other">%d lines</item>
+    </plurals>
     <string name="notes_from">From %1$s</string>
     <string name="note_shared_by">%1$s\'s note · you can add lines</string>
     <string name="note_line_you">You</string>
@@ -376,5 +392,4 @@
     <string name="note_line_failed">Couldn\'t update the lines. Check the connection and try again.</string>
     <string name="note_add_line_hint">Add a line</string>
     <string name="note_add_line">Add line</string>
-    <string name="note_save_failed">Not saved. It will try again when you type.</string>
 </resources>
