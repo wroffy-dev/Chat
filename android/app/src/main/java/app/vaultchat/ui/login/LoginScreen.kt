@@ -1,5 +1,6 @@
 package app.vaultchat.ui.login
 
+import androidx.compose.ui.text.TextStyle
 import app.vaultchat.ui.theme.panel
 import app.vaultchat.ui.theme.screenBackground
 import androidx.compose.foundation.background
