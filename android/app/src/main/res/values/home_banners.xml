@@ -7,7 +7,7 @@
     <string name="server_unreachable">Can\'t reach the server</string>
     <string name="update_available">A new version (%1$d) is available.</string>
     <string name="update_action">Update</string>
-    <string name="update_needs_permission">Allow Vault to install updates, then come back and tap Update.</string>
+    <string name="update_needs_permission">Allow Just Notes to install updates, then come back and tap Update.</string>
     <string name="update_allow">Allow</string>
     <string name="update_downloading">Downloading update… %1$d%%</string>
     <string name="update_installing">Confirm the installation in Android\'s dialog.</string>

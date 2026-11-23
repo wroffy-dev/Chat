@@ -56,6 +56,10 @@ import app.vaultchat.ui.connect.ScanQrViewModel
 import app.vaultchat.ui.connect.ShowQrScreen
 import app.vaultchat.ui.connect.ShowQrViewModel
 import app.vaultchat.ui.home.HomeScreen
+import app.vaultchat.ui.notes.NoteEditorScreen
+import app.vaultchat.ui.notes.NoteEditorViewModel
+import app.vaultchat.ui.notes.NotesScreen
+import app.vaultchat.ui.notes.NotesViewModel
 import app.vaultchat.ui.home.HomeViewModel
 import app.vaultchat.ui.login.LoginOutcome
 import app.vaultchat.ui.login.LoginScreen
@@ -83,8 +87,17 @@ import app.vaultchat.ui.theme.Motion
 @Serializable
 data object LoginRoute
 
+/** The chat list. Reached only by holding the "Just Notes" title (D-31, owner 2026-11-23). */
 @Serializable
 data object HomeRoute
+
+/** Just Notes: the screen the app opens on (D-31). */
+@Serializable
+data object NotesRoute
+
+/** One note; [id] is null for a new one. */
+@Serializable
+data class NoteEditorRoute(val id: String? = null)
 
 @Serializable
 data class ChangePasswordRoute(val forced: Boolean)
@@ -147,6 +160,14 @@ private fun NavHostController.replaceAll(route: Any) {
     }
 }
 
+/** The chat list over the notes, so Back from the chats returns to the notes. */
+private fun NavHostController.openChats() {
+    navigate(HomeRoute) {
+        popUpTo(NotesRoute)
+        launchSingleTop = true
+    }
+}
+
 @Composable
 fun VaultChatNavHost(container: AppContainer) {
     // An outdated build can do nothing but tell the user to update (docs/05 §5, docs/16 §9).
@@ -162,7 +183,7 @@ fun VaultChatNavHost(container: AppContainer) {
         when {
             user == null -> LoginRoute
             user.mustChangePassword -> ChangePasswordRoute(forced = true)
-            else -> HomeRoute
+            else -> NotesRoute
         }
     }
 
@@ -170,7 +191,7 @@ fun VaultChatNavHost(container: AppContainer) {
     val backStack by navController.currentBackStackEntryAsState()
     val onCallScreen = backStack?.destination?.route?.contains("CallRoute") == true
     // Screens of a signed-in user: calls ring and live updates run on all of them (the Map too).
-    val signedIn = backStack?.destination?.route?.let { r -> listOf("HomeRoute", "InboxRoute", "ShowQrRoute", "ScanQrRoute", "ChatRoute", "MapRoute").any { r.contains(it) } } == true
+    val signedIn = backStack?.destination?.route?.let { r -> listOf("NotesRoute", "NoteEditorRoute", "HomeRoute", "InboxRoute", "ShowQrRoute", "ScanQrRoute", "ChatRoute", "MapRoute").any { r.contains(it) } } == true
     // Live change signals while signed in. Not tied to the screen's lifecycle, so an incoming call is
     // still noticed with the screen off while the app is open (owner request 2026-11-03).
     DisposableEffect(signedIn) {
@@ -263,7 +284,7 @@ fun VaultChatNavHost(container: AppContainer) {
                 viewModel = viewModel,
                 onLoggedIn = { outcome ->
                     navController.replaceAll(
-                        if (outcome == LoginOutcome.CHANGE_PASSWORD) ChangePasswordRoute(forced = true) else HomeRoute,
+                        if (outcome == LoginOutcome.CHANGE_PASSWORD) ChangePasswordRoute(forced = true) else NotesRoute,
                     )
                 },
             )
@@ -276,9 +297,31 @@ fun VaultChatNavHost(container: AppContainer) {
             ChangePasswordScreen(
                 viewModel = viewModel,
                 forced = route.forced,
-                onDone = { navController.replaceAll(HomeRoute) },
+                onDone = { navController.replaceAll(NotesRoute) },
                 onSessionEnded = { navController.replaceAll(LoginRoute) },
                 onBack = { navController.popBackStack() },
+            )
+        }
+        composable<NotesRoute> {
+            val viewModel: NotesViewModel = viewModel(
+                factory = viewModelFactory { initializer { NotesViewModel(container.notesApi) } },
+            )
+            NotesScreen(
+                viewModel = viewModel,
+                onOpen = { id -> navController.navigate(NoteEditorRoute(id)) },
+                onOpenChats = { navController.openChats() },
+                onSessionEnded = { navController.replaceAll(LoginRoute) },
+            )
+        }
+        composable<NoteEditorRoute> { entry ->
+            val id = entry.toRoute<NoteEditorRoute>().id
+            val viewModel: NoteEditorViewModel = viewModel(
+                factory = viewModelFactory { initializer { NoteEditorViewModel(container.notesApi, id, container.applicationScope) } },
+            )
+            NoteEditorScreen(
+                viewModel = viewModel,
+                onBack = { navController.popBackStack() },
+                onSessionEnded = { navController.replaceAll(LoginRoute) },
             )
         }
         composable<HomeRoute> {
@@ -453,7 +496,7 @@ fun VaultChatNavHost(container: AppContainer) {
             )
             ShowQrScreen(
                 viewModel = viewModel,
-                onConnected = { navController.replaceAll(HomeRoute) },
+                onConnected = { navController.openChats() },
                 onSessionEnded = { navController.replaceAll(LoginRoute) },
                 onBack = { navController.popBackStack() },
             )
@@ -465,7 +508,7 @@ fun VaultChatNavHost(container: AppContainer) {
             ScanQrScreen(
                 viewModel = viewModel,
                 permissionPreferences = container.permissionPreferences,
-                onConnected = { navController.replaceAll(HomeRoute) },
+                onConnected = { navController.openChats() },
                 onSessionEnded = { navController.replaceAll(LoginRoute) },
                 onBack = { navController.popBackStack() },
             )
