@@ -87,7 +87,7 @@ import app.vaultchat.ui.theme.Motion
 @Serializable
 data object LoginRoute
 
-/** The chat list. Reached only by holding the "Just Notes" title (D-31, owner 2026-11-23). */
+/** The chat list, with the Map and the camera behind it. Reached only by tapping the "Just Notes" title (D-31). */
 @Serializable
 data object HomeRoute
 

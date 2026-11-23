@@ -75,7 +75,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Just Notes: the screen the app opens on (D-31, owner 2026-11-23). The user's own notes, kept on the server.
- * Holding the "Just Notes" title opens the chats; nothing on the screen points to that.
+ * Tapping the "Just Notes" title opens the rest of the app (chats, Map, camera); nothing on the screen points to that.
  */
 @Composable
 fun NotesScreen(
@@ -102,10 +102,14 @@ fun NotesScreen(
                     .padding(start = Spacing.xl, end = Spacing.xl, top = Spacing.lg, bottom = Spacing.sm)
                     .semantics { heading() }
                     .pointerInput(Unit) {
-                        detectTapGestures(onLongPress = {
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onOpenChats()
-                        })
+                        // A tap (or a hold) opens everything else: chats, Map and camera (owner 2026-11-23).
+                        detectTapGestures(
+                            onTap = { onOpenChats() },
+                            onLongPress = {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onOpenChats()
+                            },
+                        )
                     },
             )
             if (state.offline && state.notes.isEmpty()) {
