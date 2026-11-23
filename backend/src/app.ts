@@ -26,6 +26,8 @@ import { locationRoutes } from "./routes/location.js";
 import type { LocationService } from "./location/service.js";
 import { snapRoutes } from "./routes/snaps.js";
 import { noteRoutes } from "./routes/notes.js";
+import { profileRoutes } from "./routes/profile.js";
+import type { ProfileService } from "./profile/service.js";
 import type { NoteService } from "./notes/service.js";
 import type { SnapService } from "./snaps/service.js";
 import { AppError, appError } from "./errors.js";
@@ -52,11 +54,12 @@ export interface AppDeps {
   /** Snaps (D-27). */
   snaps?: SnapService;
   notes?: NoteService;
+  profile?: ProfileService;
   /** Overrides the logger (tests pass `false` or a capturing stream). */
   logger?: FastifyServerOptions["logger"];
 }
 
-export function buildApp({ config, database, auth, connections, calls, chat, media, push, realtime, settings, updates, location, snaps, notes, logger }: AppDeps): FastifyInstance {
+export function buildApp({ config, database, auth, connections, calls, chat, media, push, realtime, settings, updates, location, snaps, notes, profile, logger }: AppDeps): FastifyInstance {
   const app = Fastify({
     logger: logger ?? buildLoggerOptions(config),
     // Client-supplied request IDs are not trusted; every request gets a fresh one.
@@ -151,6 +154,7 @@ export function buildApp({ config, database, auth, connections, calls, chat, med
       if (location) await api.register(locationRoutes, { auth, location });
       if (snaps) await api.register(snapRoutes, { auth, snaps });
       if (notes) await api.register(noteRoutes, { auth, notes });
+      if (profile) await api.register(profileRoutes, { auth, profile });
       if (realtime) {
         // 16 KB frames at most; the app sends nothing but pongs anyway.
         await api.register(websocket, { options: { maxPayload: 16_384 } });

@@ -32,8 +32,9 @@ export const connectionSchema = {
       type: "object",
       additionalProperties: false,
       required: ["id", "username"],
-      properties: { id: { type: "string" }, username: { type: "string" } },
+      properties: { id: { type: "string" }, username: { type: "string" }, avatar: { type: ["string", "null"] } },
     },
+    nickname: { type: ["string", "null"] },
     createdAt: { type: "string", format: "date-time" },
   },
 } as const;
