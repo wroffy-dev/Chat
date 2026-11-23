@@ -32,7 +32,6 @@ import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.itemsIndexed
 import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -81,7 +80,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -98,6 +96,7 @@ import app.vaultchat.data.notes.NotesApi
 import app.vaultchat.ui.components.AppIcons
 import app.vaultchat.ui.components.BannerKind
 import app.vaultchat.ui.components.EmptyState
+import app.vaultchat.ui.components.InitialsAvatar
 import app.vaultchat.ui.components.StatusBanner
 import app.vaultchat.ui.components.VaultIconButton
 import app.vaultchat.ui.components.pressScale
@@ -226,7 +225,7 @@ private fun NoteDto.matches(query: String): Boolean {
     val q = query.trim()
     if (q.isEmpty()) return true
     return title.contains(q, ignoreCase = true) || body.contains(q, ignoreCase = true) ||
-        authorUsername.contains(q, ignoreCase = true) || lines.any { it.body.contains(q, ignoreCase = true) }
+        authorName.contains(q, ignoreCase = true) || lines.any { it.body.contains(q, ignoreCase = true) }
 }
 
 /** A soft pill that filters the notes on this phone; nothing is sent anywhere. */
@@ -261,22 +260,6 @@ private fun SearchField(query: String, onChange: (String) -> Unit, modifier: Mod
     }
 }
 
-/** A round initial for a person (no photos, D-22). */
-@Composable
-private fun Initial(name: String, size: Int = 22) {
-    val colors = MaterialTheme.colorScheme
-    Box(
-        Modifier.size(size.dp).clip(CircleShape).background(colors.primary).clearAndSetSemantics { },
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            name.firstOrNull()?.uppercase() ?: "?",
-            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = (size * 0.5f).sp),
-            color = colors.onPrimary,
-        )
-    }
-}
-
 /** A note in the list: the user's own on a white card, a connected person's in mint green (owner 2026-11-23). */
 @Composable
 private fun NoteCard(note: NoteDto, onClick: () -> Unit, modifier: Modifier = Modifier) {
@@ -297,10 +280,10 @@ private fun NoteCard(note: NoteDto, onClick: () -> Unit, modifier: Modifier = Mo
         Column(Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.md + 2.dp)) {
             if (!note.mine) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Initial(note.authorUsername)
+                    InitialsAvatar(note.authorName, size = 24.dp, avatar = note.authorAvatar)
                     Spacer(Modifier.width(Spacing.sm))
                     Text(
-                        stringResource(R.string.notes_from, note.authorUsername),
+                        stringResource(R.string.notes_from, note.authorName),
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                         color = colors.primary,
                         maxLines = 1,
@@ -336,7 +319,7 @@ private fun NoteCard(note: NoteDto, onClick: () -> Unit, modifier: Modifier = Mo
                 for (line in note.lines.takeLast(3)) {
                     LineAccent(line.mine) {
                         Text(
-                            stringResource(R.string.note_line_preview, if (line.mine) stringResource(R.string.note_line_you) else line.authorUsername, line.body),
+                            stringResource(R.string.note_line_preview, if (line.mine) stringResource(R.string.note_line_you) else line.authorName, line.body),
                             style = MaterialTheme.typography.bodySmall,
                             color = if (line.mine) colors.onSurfaceVariant else colors.primary,
                             maxLines = 2,
@@ -449,7 +432,7 @@ fun NoteEditorScreen(
             if (!state.mine) {
                 Surface(shape = RoundedCornerShape(16.dp), color = colors.primaryContainer, modifier = Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm + 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Initial(state.authorUsername, size = 28)
+                        InitialsAvatar(state.authorUsername, size = 32.dp, avatar = state.authorAvatar)
                         Spacer(Modifier.width(Spacing.md))
                         Text(
                             stringResource(R.string.note_shared_by, state.authorUsername),
@@ -585,7 +568,7 @@ private fun LineRow(line: NoteLineDto, canRemove: Boolean, onRemove: () -> Unit)
             LineAccent(line.mine) {
                 Column {
                     Text(
-                        if (line.mine) stringResource(R.string.note_line_you) else line.authorUsername,
+                        if (line.mine) stringResource(R.string.note_line_you) else line.authorName,
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                         color = if (line.mine) colors.outline else colors.primary,
                     )

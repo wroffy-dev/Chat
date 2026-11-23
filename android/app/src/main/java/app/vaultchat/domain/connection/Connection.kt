@@ -4,6 +4,7 @@ package app.vaultchat.domain.connection
 data class Connection(
     val id: String,
     val peerId: String,
+    /** The name shown for the person: the user's nickname for them (D-32), else their username. */
     val peerUsername: String,
     val conversationId: String,
     val sinceEpochMs: Long,
@@ -13,6 +14,12 @@ data class Connection(
     val streak: Int = 0,
     /** Snaps from this person waiting to be opened. */
     val pendingSnaps: Int = 0,
+    /** The person's real username (D-32: [peerUsername] may be a nickname). */
+    val username: String = peerUsername,
+    /** The user's own name for this person (D-32), or null. */
+    val nickname: String? = null,
+    /** The person's built-in avatar key (D-32), or null. */
+    val peerAvatar: String? = null,
 )
 
 enum class RequestDirection { INCOMING, OUTGOING }

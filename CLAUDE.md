@@ -24,7 +24,8 @@ decisions there are either recorded as decided or still open; never decide an op
 - Never commit secrets: passwords, LiveKit API keys/secrets, signing keystores, Firebase service
   account JSON, database URLs with credentials, TOTP seeds. Use placeholders like `<livekit-secret>`.
 - Never put backend secrets or LiveKit API secrets in the Android app.
-- No public signup, no user search, no profiles, no profile photos, no media uploads, no file
+- No public signup, no user search, no profiles, no profile photos (a built-in avatar and a private nickname are
+  allowed, D-32, 2026-11-23), no media uploads, no file
   attachments, no voice notes. Text chat only. The walkie-talkie (D-26, 2026-11-12) is live one-way audio of
   at most 10 s that is never recorded or stored; do not turn it into stored voice messages, lengthen it or
   let the listening phone send audio without the owner. Snaps (D-27, 2026-11-19) are the one exception to "no

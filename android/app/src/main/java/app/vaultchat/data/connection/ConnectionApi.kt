@@ -12,7 +12,7 @@ import kotlinx.serialization.Serializable
 import java.time.Instant
 
 @Serializable
-data class PeerDto(val id: String, val username: String)
+data class PeerDto(val id: String, val username: String, val avatar: String? = null)
 
 @Serializable
 data class ConnectionDto(
@@ -20,6 +20,8 @@ data class ConnectionDto(
     val peer: PeerDto,
     val conversationId: String,
     val createdAt: String,
+    /** The user's own name for the peer (D-32); absent from older servers. */
+    val nickname: String? = null,
     // Only in GET /connections (the chat list).
     val unreadCount: Int = 0,
     val lastMessageAt: String? = null,
@@ -56,7 +58,11 @@ data class RedeemBody(val token: String)
 fun ConnectionDto.toDomain() = Connection(
     id = id,
     peerId = peer.id,
-    peerUsername = peer.username,
+    // Shown everywhere the person's name appears; the real username stays in [Connection.username].
+    peerUsername = nickname?.takeIf { it.isNotBlank() } ?: peer.username,
+    username = peer.username,
+    nickname = nickname,
+    peerAvatar = peer.avatar,
     conversationId = conversationId,
     sinceEpochMs = Instant.parse(createdAt).toEpochMilli(),
     unreadCount = unreadCount,

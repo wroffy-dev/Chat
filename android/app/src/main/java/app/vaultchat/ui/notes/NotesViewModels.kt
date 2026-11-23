@@ -60,6 +60,7 @@ data class EditorState(
     /** False for a connected person's note: it is read only, but lines can be added. */
     val mine: Boolean = true,
     val authorUsername: String = "",
+    val authorAvatar: String? = null,
     val lines: List<NoteLineDto> = emptyList(),
     /** When the note last changed (ISO time), shown under the title. */
     val updatedAt: String? = null,
@@ -92,7 +93,7 @@ class NoteEditorViewModel(
                 when (val r = api.list()) {
                     is ApiResult.Ok -> {
                         val note = r.value.items.firstOrNull { it.id == noteId }
-                        _state.update { if (note == null) it.copy(loading = false, deleted = true) else it.copy(loading = false, title = note.title, body = note.body, mine = note.mine, authorUsername = note.authorUsername, lines = note.lines, updatedAt = note.updatedAt) }
+                        _state.update { if (note == null) it.copy(loading = false, deleted = true) else it.copy(loading = false, title = note.title, body = note.body, mine = note.mine, authorUsername = note.authorName, authorAvatar = note.authorAvatar, lines = note.lines, updatedAt = note.updatedAt) }
                     }
                     is ApiResult.HttpError -> _state.update { if (r.status == 401) it.copy(signedOut = true) else it.copy(loading = false, save = SaveState.FAILED) }
                     ApiResult.NetworkError -> _state.update { it.copy(loading = false, save = SaveState.FAILED) }

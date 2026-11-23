@@ -25,6 +25,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.vaultchat.domain.call.CallResult
 import app.vaultchat.platform.push.Push
+import app.vaultchat.data.network.ApiResult
+import app.vaultchat.domain.connection.Connection
 import app.vaultchat.platform.call.TalkPlayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -113,7 +115,17 @@ data object ShowQrRoute
 data object ScanQrRoute
 
 @Serializable
-data class ChatRoute(val conversationId: String, val peerUsername: String, val connectionId: String)
+data class ChatRoute(
+    val conversationId: String,
+    /** The name shown: the user's nickname for the person, else their username (D-32). */
+    val peerUsername: String,
+    val connectionId: String,
+    val username: String = "",
+    val nickname: String? = null,
+    val peerAvatar: String? = null,
+)
+
+private fun Connection.chatRoute() = ChatRoute(conversationId, peerUsername, id, username, nickname, peerAvatar)
 
 /** Taking a snap (D-27); opened by swiping right on the chat list, the recipients are picked at Send. */
 @Serializable
@@ -336,7 +348,7 @@ fun VaultChatNavHost(container: AppContainer) {
                 onSignedOut = { navController.replaceAll(LoginRoute) },
                 onPasswordChangeRequired = { navController.replaceAll(ChangePasswordRoute(forced = true)) },
                 onOpenInbox = { navController.navigate(InboxRoute) },
-                onChat = { c -> navController.navigate(ChatRoute(c.conversationId, c.peerUsername, c.id)) },
+                onChat = { c -> navController.navigate(c.chatRoute()) },
                 onOpenCamera = { navController.navigate(SnapCameraRoute()) },
                 onSnapTo = { c -> navController.navigate(SnapCameraRoute(c.id)) },
                 onOpenMap = { navController.navigate(MapRoute) { launchSingleTop = true } },
@@ -389,6 +401,10 @@ fun VaultChatNavHost(container: AppContainer) {
                 onBack = { navController.popBackStack() },
                 onSessionEnded = { navController.replaceAll(LoginRoute) },
                 onCall = { video -> navController.navigate(CallRoute(video = video, peerUsername = route.peerUsername, connectionId = route.connectionId)) },
+                peerAvatar = route.peerAvatar,
+                realUsername = route.username.ifEmpty { route.peerUsername },
+                nickname = route.nickname,
+                onSetNickname = { name -> container.profileApi.setNickname(route.connectionId, name) is ApiResult.Ok },
             )
         }
         composable<CallRoute>(
@@ -450,7 +466,7 @@ fun VaultChatNavHost(container: AppContainer) {
                 onOpenChat = { connectionId ->
                     scope.launch {
                         val c = (container.connectionRepository.connections() as? ConnResult.Ok)?.value?.find { it.id == connectionId }
-                        if (c != null) navController.navigate(ChatRoute(c.conversationId, c.peerUsername, c.id))
+                        if (c != null) navController.navigate(c.chatRoute())
                     }
                 },
                 onCallPerson = { connectionId, username, video ->

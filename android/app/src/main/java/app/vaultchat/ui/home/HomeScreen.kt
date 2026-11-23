@@ -117,6 +117,7 @@ import app.vaultchat.ui.components.EmptyState
 import app.vaultchat.ui.components.InitialsAvatar
 import app.vaultchat.ui.components.PrimaryButton
 import app.vaultchat.ui.components.StatusBanner
+import app.vaultchat.ui.profile.MyAvatarButton
 
 /**
  * Home: the chat list (D-21: one row per connected person). Calls start from a chat's header.
@@ -268,6 +269,8 @@ private fun Header(listState: LazyListState, searching: Boolean, onSearch: () ->
             contentDescription = stringResource(if (searching) R.string.home_search_close else R.string.home_search_hint),
             onClick = onSearch,
         )
+        // The user's own avatar; tapping it picks a built-in one (D-32, owner 2026-11-23).
+        MyAvatarButton(modifier = Modifier.padding(end = Spacing.xs))
     }
 }
 
@@ -492,7 +495,7 @@ private fun ChatRow(chat: Connection, onClick: () -> Unit, onSnap: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
-        InitialsAvatar(chat.peerUsername, size = Sizes.avatarRow, highlighted = snap)
+        InitialsAvatar(chat.peerUsername, size = Sizes.avatarRow, highlighted = snap, avatar = chat.peerAvatar)
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(

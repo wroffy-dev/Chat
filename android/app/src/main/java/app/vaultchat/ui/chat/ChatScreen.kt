@@ -151,6 +151,12 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import kotlin.math.roundToInt
 import app.vaultchat.R
+import androidx.compose.runtime.saveable.rememberSaveable
+import app.vaultchat.ui.profile.NicknameDialog
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.Json
+import androidx.compose.material.icons.filled.Edit
 import app.vaultchat.domain.chat.EmojiEffects
 import kotlinx.coroutines.delay
 import app.vaultchat.domain.chat.ChatMessage
@@ -184,7 +190,20 @@ fun ChatScreen(
     onSnap: () -> Unit = {},
     waitingSnaps: Int = 0,
     onOpenSnaps: () -> Unit = {},
+    /** The person's built-in avatar (D-32). */
+    peerAvatar: String? = null,
+    /** The person's real username and the user's nickname for them (D-32); [peerUsername] is what is shown. */
+    realUsername: String = peerUsername,
+    nickname: String? = null,
+    /** Saves a nickname (null removes it); true when the server took it. */
+    onSetNickname: suspend (String?) -> Boolean = { false },
 ) {
+    // The shown name follows a nickname set from this screen at once.
+    var currentNickname by rememberSaveable { mutableStateOf(nickname) }
+    val shownName = currentNickname?.takeIf { it.isNotBlank() } ?: realUsername.ifEmpty { peerUsername }
+    var editingNickname by rememberSaveable { mutableStateOf(false) }
+    var savingNickname by remember { mutableStateOf(false) }
+    val nicknameScope = rememberCoroutineScope()
     val controller = viewModel.controller
     val state by controller.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -263,7 +282,7 @@ fun ChatScreen(
     var showExpiry by remember { mutableStateOf(false) }
     if (showExpiry) {
         DisappearingScreen(
-            peerUsername = peerUsername,
+            peerUsername = shownName,
             current = state.disappearSeconds,
             onBack = { showExpiry = false },
             onSet = { seconds ->
@@ -277,13 +296,15 @@ fun ChatScreen(
     Surface(modifier = Modifier.fillMaxSize(), color = Ref.Surface, contentColor = Ref.OnSurface) {
         Column(modifier = Modifier.fillMaxSize().screenBackground().safeDrawingPadding().imePadding()) {
             ChatHeader(
-                peerUsername = peerUsername,
+                peerUsername = shownName,
+                peerAvatar = peerAvatar,
                 typing = state.peerTyping,
                 onBack = onBack,
                 onVoice = { onCall(false) },
                 onVideo = { onCall(true) },
                 onTalk = onTalk,
                 onDisappearing = { showExpiry = true },
+                onNickname = { editingNickname = true },
             )
             StatusStrip(disappearSeconds = state.disappearSeconds, onExpiry = { showExpiry = true })
             if (waitingSnaps > 0) {
@@ -300,7 +321,7 @@ fun ChatScreen(
                 ) {
                     Icon(AppIcons.PhotoCamera, contentDescription = null, tint = Ref.Primary, modifier = Modifier.size(18.dp))
                     Text(
-                        if (waitingSnaps == 1) stringResource(R.string.snap_waiting, peerUsername) else stringResource(R.string.snap_waiting_more, waitingSnaps, peerUsername),
+                        if (waitingSnaps == 1) stringResource(R.string.snap_waiting, shownName) else stringResource(R.string.snap_waiting_more, waitingSnaps, shownName),
                         color = Ref.OnPrimaryContainer,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -329,7 +350,7 @@ fun ChatScreen(
                     onReact = controller::react,
                     onReply = { replyTo = it },
                     onCallBack = onCall,
-                    peerUsername = peerUsername,
+                    peerUsername = shownName,
                     myUserId = myUserId,
                     peerReadSeq = state.peerReadSeq,
                     disappearing = state.disappearSeconds != null,
@@ -346,7 +367,7 @@ fun ChatScreen(
                 onCancelReply = { replyTo = null },
                 open = state.phase == ChatPhase.OPEN,
                 myUserId = myUserId,
-                peerUsername = peerUsername,
+                peerUsername = shownName,
                 onSnap = onSnap,
                 onTyping = controller::typing,
                 onSend = { text ->
@@ -362,6 +383,24 @@ fun ChatScreen(
             )
         }
         burst?.let { (key, effect) -> EmojiBurst(effect, key) { if (burst?.first == key) burst = null } }
+    }
+    if (editingNickname) {
+        NicknameDialog(
+            username = realUsername.ifEmpty { peerUsername },
+            current = currentNickname,
+            saving = savingNickname,
+            onSave = { name ->
+                savingNickname = true
+                nicknameScope.launch {
+                    if (onSetNickname(name)) {
+                        currentNickname = name
+                        editingNickname = false
+                    }
+                    savingNickname = false
+                }
+            },
+            onDismiss = { editingNickname = false },
+        )
     }
 }
 
@@ -582,12 +621,14 @@ private fun RoundAction(
 @Composable
 private fun ChatHeader(
     peerUsername: String,
+    peerAvatar: String?,
     typing: Boolean,
     onBack: () -> Unit,
     onVoice: () -> Unit,
     onVideo: () -> Unit,
     onTalk: () -> Unit,
     onDisappearing: () -> Unit,
+    onNickname: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 4.dp),
@@ -599,7 +640,7 @@ private fun ChatHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            InitialsAvatar(peerUsername, size = 40.dp)
+            InitialsAvatar(peerUsername, size = 40.dp, avatar = peerAvatar)
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     peerUsername,
@@ -634,6 +675,11 @@ private fun ChatHeader(
                     text = { Text(stringResource(R.string.talk_button)) },
                     leadingIcon = { Icon(AppIcons.Mic, contentDescription = null) },
                     onClick = { menu = false; onTalk() },
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.nickname_menu)) },
+                    leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                    onClick = { menu = false; onNickname() },
                 )
             }
         }
@@ -717,6 +763,32 @@ private fun DisappearLine(m: ChatMessage, mine: Boolean, peerUsername: String) {
             modifier = Modifier.panel(RoundedCornerShape(50)).padding(horizontal = 12.dp, vertical = 6.dp),
         ) {
             Icon(AppIcons.Timer, contentDescription = null, tint = Ref.OnSurfaceVariant, modifier = Modifier.size(14.dp))
+            Text(text, color = Ref.OnSurfaceVariant, fontSize = 12.sp, lineHeight = 16.sp)
+        }
+    }
+}
+
+/** "X changed your name from A to B" (D-32); the text is JSON {"from","to"} written by the server. */
+@Composable
+private fun NicknameLine(m: ChatMessage, mine: Boolean, peerUsername: String) {
+    val names = remember(m.text) {
+        runCatching {
+            val o = Json.parseToJsonElement(m.text).jsonObject
+            (o["from"]?.jsonPrimitive?.content ?: "") to (o["to"]?.jsonPrimitive?.content ?: "")
+        }.getOrDefault("" to "")
+    }
+    val text = if (mine) {
+        stringResource(R.string.chat_nickname_line_mine, names.first, names.second)
+    } else {
+        stringResource(R.string.chat_nickname_line_theirs, peerUsername, names.first, names.second)
+    }
+    Box(Modifier.fillMaxWidth().padding(horizontal = 24.dp), contentAlignment = Alignment.Center) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.panel(RoundedCornerShape(50)).padding(horizontal = 12.dp, vertical = 6.dp),
+        ) {
+            Icon(Icons.Filled.Edit, contentDescription = null, tint = Ref.OnSurfaceVariant, modifier = Modifier.size(14.dp))
             Text(text, color = Ref.OnSurfaceVariant, fontSize = 12.sp, lineHeight = 16.sp)
         }
     }
@@ -829,6 +901,7 @@ private fun MessageList(
                 when (m.kind) {
                     MessageKind.MISSED_CALL -> MissedCallLine(m, mine = mine, onCallBack = onCallBack)
                     MessageKind.DISAPPEAR -> DisappearLine(m, mine = mine, peerUsername = peerUsername)
+                    MessageKind.NICKNAME -> NicknameLine(m, mine = mine, peerUsername = peerUsername)
                     MessageKind.TEXT -> {
                         val onThis = reactions[m.id].orEmpty()
                         val quoted = m.replyToId?.let { id -> messages.find { it.id == id } }

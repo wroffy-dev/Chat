@@ -21,6 +21,8 @@ enum class MessageKind {
     MISSED_CALL,
     /** A line saying who changed the disappearing timer (D-30); its text is the seconds or "off". */
     DISAPPEAR,
+    /** A line saying the sender changed the name they show for the other person (D-32); text is JSON {"from","to"}. */
+    NICKNAME,
 }
 
 /** The disappearing timer choices (D-30), in seconds; null is Off. */
