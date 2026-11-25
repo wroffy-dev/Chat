@@ -113,6 +113,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.vaultchat.R
+import app.vaultchat.domain.connection.ConnResult
+import app.vaultchat.VaultChatApplication
 import app.vaultchat.domain.call.StatsSample
 import app.vaultchat.BuildConfig
 import app.vaultchat.domain.call.CallEndReason
@@ -990,8 +992,23 @@ private fun CallAvatar(name: String, pulsing: Boolean) {
             }
         },
     ) {
-        InitialsAvatar(name, size = Sizes.avatarCall)
+        InitialsAvatar(name, size = Sizes.avatarCall, avatar = rememberPeerAvatar(name))
     }
+}
+
+/**
+ * The built-in avatar (D-32) of the person on the call, found among the user's connections by the name the call shows
+ * (their nickname for an outgoing call, their username for an incoming one); null until known or when none.
+ */
+@Composable
+private fun rememberPeerAvatar(name: String): String? {
+    val container = (LocalContext.current.applicationContext as VaultChatApplication).container
+    var avatar by remember(name) { mutableStateOf<String?>(null) }
+    LaunchedEffect(name) {
+        val people = (container.connectionRepository.connections() as? ConnResult.Ok)?.value.orEmpty()
+        avatar = people.firstOrNull { it.peerUsername == name || it.username == name }?.peerAvatar
+    }
+    return avatar
 }
 
 /**

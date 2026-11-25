@@ -97,7 +97,13 @@ export async function locationRoutes(app: FastifyInstance, opts: { auth: AuthSer
                 type: ["object", "null"],
                 additionalProperties: false,
                 required: ["lat", "lng", "accuracyM", "capturedAt"],
-                properties: { lat: { type: "number" }, lng: { type: "number" }, accuracyM: { type: "number" }, capturedAt: { type: "string" } },
+                properties: {
+                  lat: { type: "number" },
+                  lng: { type: "number" },
+                  accuracyM: { type: "number" },
+                  capturedAt: { type: "string" },
+                  avatar: { type: ["string", "null"] },
+                },
               },
               people: {
                 type: "array",
@@ -108,6 +114,8 @@ export async function locationRoutes(app: FastifyInstance, opts: { auth: AuthSer
                   properties: {
                     connectionId: { type: "string" },
                     username: { type: "string" },
+                    avatar: { type: ["string", "null"] },
+                    nickname: { type: ["string", "null"] },
                     lat: { type: "number" },
                     lng: { type: "number" },
                     accuracyM: { type: "number" },

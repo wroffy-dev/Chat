@@ -14,6 +14,8 @@ Versions of the Android app (`versionName`) and the backend (`package.json`). Th
   Retry always fetches the latest build.
 
 ### Just Notes
+- **Checklists:** a new "New checklist" button and a checklist switch in a note, with tick boxes, like a shopping list.
+- **Avatars on the Map and in calls.**
 - **After a password reset:** the app no longer asks for the temporary password a second time; only the new one.
 - **Change password:** tap your avatar at the top of the chats, then "Change password". A forgotten password is still
   reset by the administrator.

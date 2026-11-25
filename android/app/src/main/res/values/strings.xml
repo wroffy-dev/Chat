@@ -407,4 +407,11 @@
     <string name="chat_nickname_line_theirs">%1$s changed your name from “%2$s” to “%3$s”</string>
     <string name="password_change_entry">Change password</string>
     <string name="password_change_entry_body">Your other phones are signed out after the change.</string>
+    <string name="notes_new_checklist">New checklist</string>
+    <string name="note_to_checklist">Make a checklist</string>
+    <string name="note_to_text">Back to plain text</string>
+    <string name="checklist_item_hint">List item</string>
+    <string name="checklist_add">Add item</string>
+    <string name="checklist_remove">Remove item</string>
+    <string name="checklist_more">+%1$d more</string>
 </resources>

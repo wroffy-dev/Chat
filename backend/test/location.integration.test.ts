@@ -179,10 +179,16 @@ describe.skipIf(!TEST_DB_URL)("location sharing (PostgreSQL)", () => {
     await on(carol);
     await call(carol.token, "PUT", "/location-sharing/current", point());
 
+    // Avatars and Alice's nickname for Bob are on the markers (D-32, owner 2026-11-25).
+    await database.prisma.user.update({ where: { id: bob.id }, data: { avatar: "fox" } });
+    await database.prisma.user.update({ where: { id: alice.id }, data: { avatar: "owl" } });
+    const bobConnection = await database.prisma.connection.findFirstOrThrow({ where: { OR: [{ userAId: bob.id }, { userBId: bob.id }] } });
+    await database.prisma.nickname.create({ data: { userId: alice.id, connectionId: bobConnection.id, nickname: "Bobby" } });
+
     const map = (await call(alice.token, "GET", "/location-sharing/connections")).json();
-    expect(map.me).toMatchObject({ lat: 28.61394, lng: 77.20902 });
+    expect(map.me).toMatchObject({ lat: 28.61394, lng: 77.20902, avatar: "owl" });
     expect(map.people).toHaveLength(1);
-    expect(map.people[0]).toMatchObject({ username: "bob", lat: 19.1, lng: 72.9, accuracyM: 8 });
+    expect(map.people[0]).toMatchObject({ username: "bob", avatar: "fox", nickname: "Bobby", lat: 19.1, lng: 72.9, accuracyM: 8 });
 
     // Bob turns sharing off: his point is gone from Alice's Map.
     await call(bob.token, "PUT", "/location-sharing", { enabled: false });
