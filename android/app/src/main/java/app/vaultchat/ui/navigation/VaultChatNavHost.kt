@@ -99,7 +99,7 @@ data object NotesRoute
 
 /** One note; [id] is null for a new one. */
 @Serializable
-data class NoteEditorRoute(val id: String? = null)
+data class NoteEditorRoute(val id: String? = null, val checklist: Boolean = false)
 
 @Serializable
 data class ChangePasswordRoute(val forced: Boolean)
@@ -332,14 +332,17 @@ fun VaultChatNavHost(container: AppContainer) {
             NotesScreen(
                 viewModel = viewModel,
                 onOpen = { id -> navController.navigate(NoteEditorRoute(id)) },
+                onNewChecklist = { navController.navigate(NoteEditorRoute(checklist = true)) },
                 onOpenChats = { navController.openChats() },
                 onSessionEnded = { navController.replaceAll(LoginRoute) },
             )
         }
         composable<NoteEditorRoute> { entry ->
-            val id = entry.toRoute<NoteEditorRoute>().id
+            val route = entry.toRoute<NoteEditorRoute>()
             val viewModel: NoteEditorViewModel = viewModel(
-                factory = viewModelFactory { initializer { NoteEditorViewModel(container.notesApi, id, container.applicationScope) } },
+                factory = viewModelFactory {
+                    initializer { NoteEditorViewModel(container.notesApi, route.id, container.applicationScope, route.checklist) }
+                },
             )
             NoteEditorScreen(
                 viewModel = viewModel,

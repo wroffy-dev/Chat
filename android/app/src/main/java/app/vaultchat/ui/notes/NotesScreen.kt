@@ -90,6 +90,15 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.vaultchat.R
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.SmallFloatingActionButton
 import app.vaultchat.data.notes.NoteDto
 import app.vaultchat.data.notes.NoteLineDto
 import app.vaultchat.data.notes.NotesApi
@@ -120,6 +129,8 @@ fun NotesScreen(
     onOpen: (id: String?) -> Unit,
     onOpenChats: () -> Unit,
     onSessionEnded: () -> Unit,
+    /** A new note that starts as a checklist (owner 2026-11-25). */
+    onNewChecklist: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     LifecycleResumeEffect(Unit) {
@@ -208,16 +219,30 @@ fun NotesScreen(
                 }
             }
         }
-        ExtendedFloatingActionButton(
-            onClick = { onOpen(null) },
-            expanded = atTop,
-            icon = { Icon(Icons.Filled.Edit, contentDescription = null) },
-            text = { Text(stringResource(R.string.notes_new), fontWeight = FontWeight.SemiBold) },
-            shape = RoundedCornerShape(20.dp),
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
+        Column(
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(Spacing.md),
             modifier = Modifier.align(Alignment.BottomEnd).padding(Spacing.xl),
-        )
+        ) {
+            // A new checklist, like a shopping list (owner 2026-11-25).
+            SmallFloatingActionButton(
+                onClick = onNewChecklist,
+                shape = RoundedCornerShape(14.dp),
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            ) {
+                Icon(AppIcons.DoneAll, contentDescription = stringResource(R.string.notes_new_checklist))
+            }
+            ExtendedFloatingActionButton(
+                onClick = { onOpen(null) },
+                expanded = atTop,
+                icon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                text = { Text(stringResource(R.string.notes_new), fontWeight = FontWeight.SemiBold) },
+                shape = RoundedCornerShape(20.dp),
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            )
+        }
     }
 }
 
@@ -300,7 +325,10 @@ private fun NoteCard(note: NoteDto, onClick: () -> Unit, modifier: Modifier = Mo
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            if (note.body.isNotBlank()) {
+            if (Checklist.isChecklist(note.body)) {
+                if (note.title.isNotBlank()) Spacer(Modifier.height(Spacing.xs))
+                ChecklistPreview(Checklist.parse(note.body), mine = note.mine)
+            } else if (note.body.isNotBlank()) {
                 if (note.title.isNotBlank()) Spacer(Modifier.height(Spacing.xs))
                 Text(
                     note.body,
@@ -407,6 +435,16 @@ fun NoteEditorScreen(
             Spacer(Modifier.weight(1f))
             SaveChip(state.save)
             if (state.mine) {
+                Spacer(Modifier.width(Spacing.xs))
+                // Turns the note into a ☐/☑ list and back (owner 2026-11-25).
+                VaultIconButton(
+                    AppIcons.DoneAll,
+                    stringResource(if (Checklist.isChecklist(state.body)) R.string.note_to_text else R.string.note_to_checklist),
+                    viewModel::toggleChecklist,
+                    tint = if (Checklist.isChecklist(state.body)) colors.primary else colors.onSurfaceVariant,
+                )
+            }
+            if (state.mine) {
                 Spacer(Modifier.width(Spacing.sm))
                 // A soft red button: clearly "delete", but not shouting next to the text (owner 2026-11-23).
                 FilledTonalIconButton(
@@ -470,7 +508,9 @@ fun NoteEditorScreen(
             }
             Spacer(Modifier.height(Spacing.lg))
             val bodyStyle = MaterialTheme.typography.bodyLarge.copy(color = colors.onSurface, lineHeight = 26.sp)
-            BasicTextField(
+            if (Checklist.isChecklist(state.body)) {
+                ChecklistEditor(Checklist.parse(state.body), editable = state.mine, onChange = viewModel::setItems)
+            } else BasicTextField(
                 value = state.body,
                 onValueChange = viewModel::setBody,
                 readOnly = !state.mine,
@@ -631,3 +671,112 @@ private fun AddLineBar(sending: Boolean, onAdd: (String, (Boolean) -> Unit) -> U
         }
     }
 }
+
+/** Up to six items of a checklist on a card: ☐ open, ☑ ticked and struck through; "+N more" for the rest. */
+@Composable
+private fun ChecklistPreview(items: List<CheckItem>, mine: Boolean) {
+    val colors = MaterialTheme.colorScheme
+    val base = if (mine) colors.onSurfaceVariant else colors.onPrimaryContainer.copy(alpha = 0.85f)
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        for (item in items.take(6)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (item.done) "☑" else "☐",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (item.done) colors.primary else base,
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    item.text,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        textDecoration = if (item.done) TextDecoration.LineThrough else TextDecoration.None,
+                    ),
+                    color = if (item.done) colors.outline else base,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        if (items.size > 6) {
+            Text(stringResource(R.string.checklist_more, items.size - 6), style = MaterialTheme.typography.labelSmall, color = colors.outline)
+        }
+    }
+}
+
+/**
+ * The checklist itself: a tick box and a text field per item. Enter adds the next item, the cross removes one; ticked
+ * items are struck through. On a connected person's note it is read only.
+ */
+@Composable
+private fun ChecklistEditor(items: List<CheckItem>, editable: Boolean, onChange: (List<CheckItem>) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    var focusIndex by remember { mutableStateOf<Int?>(null) }
+    val requesters = remember(items.size) { List(items.size) { FocusRequester() } }
+    LaunchedEffect(focusIndex, items.size) {
+        focusIndex?.let { i -> requesters.getOrNull(i)?.requestFocus() }
+        focusIndex = null
+    }
+    Column {
+        items.forEachIndexed { index, item ->
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Checkbox(
+                    checked = item.done,
+                    onCheckedChange = { done -> onChange(items.toMutableList().also { it[index] = item.copy(done = done) }) },
+                    enabled = editable,
+                    colors = CheckboxDefaults.colors(checkedColor = colors.primary),
+                )
+                val style = MaterialTheme.typography.bodyLarge.copy(
+                    color = if (item.done) colors.outline else colors.onSurface,
+                    textDecoration = if (item.done) TextDecoration.LineThrough else TextDecoration.None,
+                )
+                BasicTextField(
+                    value = item.text,
+                    onValueChange = { text ->
+                        if ('\n' in text) {
+                            // A pasted or typed line break starts the next item.
+                            onChange(items.toMutableList().also { it[index] = item.copy(text = text.substringBefore('\n')); it.add(index + 1, CheckItem(text.substringAfter('\n'), false)) })
+                            focusIndex = index + 1
+                        } else {
+                            onChange(items.toMutableList().also { it[index] = item.copy(text = text) })
+                        }
+                    },
+                    readOnly = !editable,
+                    singleLine = true,
+                    textStyle = style,
+                    cursorBrush = SolidColor(colors.primary),
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Next),
+                    keyboardActions = KeyboardActions(onNext = {
+                        onChange(items.toMutableList().also { it.add(index + 1, CheckItem("", false)) })
+                        focusIndex = index + 1
+                    }),
+                    modifier = Modifier.weight(1f).focusRequester(requesters[index]),
+                    decorationBox = { inner ->
+                        Box {
+                            if (item.text.isEmpty() && editable) Text(stringResource(R.string.checklist_item_hint), style = style.copy(color = colors.outline))
+                            inner()
+                        }
+                    },
+                )
+                if (editable) {
+                    IconButton(onClick = {
+                        val rest = items.toMutableList().also { it.removeAt(index) }
+                        onChange(rest.ifEmpty { listOf(CheckItem("", false)) })
+                    }) {
+                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.checklist_remove), tint = colors.outline, modifier = Modifier.size(18.dp))
+                    }
+                }
+            }
+        }
+        if (editable) {
+            TextButton(onClick = {
+                onChange(items + CheckItem("", false))
+                focusIndex = items.size
+            }) {
+                Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(Spacing.xs))
+                Text(stringResource(R.string.checklist_add))
+            }
+        }
+    }
+}
+

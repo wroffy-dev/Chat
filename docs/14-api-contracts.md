@@ -382,5 +382,6 @@ Unknown fields, longer text or a non-uuid id → `400 VALIDATION_FAILED`.
 - `PUT /connections/{id}/nickname` — `{ "nickname": string ≤ 40 after trimming | null }` (blank or null removes it) →
   `{ nickname }`. Only for the caller's own connection, else `404`. Each real change writes a chat message of kind
   `nickname` (body `{"from","to"}`, sender the caller); a repeat changes nothing. 20/min.
+- `GET /location-sharing/connections` (Map) also carries `me.avatar` and, per person, `avatar` and `nickname` (2026-11-25).
 - Connections (`GET /connections`, `GET /me`'s `connection`) carry `peer.avatar` and `nickname` (the caller's own name
   for the peer, or null). Notes carry `authorAvatar` and `authorNickname`; lines carry `authorNickname`.

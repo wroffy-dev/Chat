@@ -90,6 +90,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.vaultchat.BuildConfig
 import app.vaultchat.R
+import app.vaultchat.ui.components.builtInAvatar
 import app.vaultchat.data.location.FriendsMapDto
 import app.vaultchat.data.location.LocationApi
 import app.vaultchat.data.network.ApiResult
@@ -114,7 +115,7 @@ import kotlin.math.pow
 import kotlin.math.tan
 
 /** One pin: a connected person, or the user (name null). x and y are Web Mercator in 0..1. */
-private data class Pin(val name: String?, val x: Double, val y: Double, val capturedAtMs: Long, val connectionId: String? = null)
+private data class Pin(val name: String?, val x: Double, val y: Double, val capturedAtMs: Long, val connectionId: String? = null, val avatar: String? = null)
 
 private sealed interface MapLoad {
     data object Loading : MapLoad
@@ -238,8 +239,12 @@ private fun RoundButton(icon: ImageVector, description: String, light: Boolean, 
 
 
 private fun FriendsMapDto.toPins(): List<Pin> {
-    val list = people.map { Pin(it.username, mercatorX(it.lng), mercatorY(it.lat), epochMs(it.capturedAt), it.connectionId) }
-    return list + listOfNotNull(me?.let { Pin(null, mercatorX(it.lng), mercatorY(it.lat), epochMs(it.capturedAt)) })
+    val list = people.map {
+        // The nickname the user gave them, else their username (D-32).
+        val name = it.nickname?.takeIf { n -> n.isNotBlank() } ?: it.username
+        Pin(name, mercatorX(it.lng), mercatorY(it.lat), epochMs(it.capturedAt), it.connectionId, it.avatar)
+    }
+    return list + listOfNotNull(me?.let { Pin(null, mercatorX(it.lng), mercatorY(it.lat), epochMs(it.capturedAt), avatar = it.avatar) })
 }
 
 private fun epochMs(iso: String): Long = runCatching { Instant.parse(iso).toEpochMilli() }.getOrDefault(0L)
@@ -515,10 +520,11 @@ private fun Marker(
             val beacon = rememberInfiniteTransition(label = "beacon")
             val wave by beacon.animateFloat(0f, 1f, infiniteRepeatable(tween(2400, easing = LinearEasing)), label = "beaconWave")
             val ringColor = colors.tertiary
+            val myAvatar = builtInAvatar(pin.avatar)
             Surface(
                 onClick = onClick,
                 shape = CircleShape,
-                color = colors.tertiary,
+                color = myAvatar?.background ?: colors.tertiary,
                 contentColor = colors.onTertiary,
                 shadowElevation = 6.dp,
                 modifier = Modifier
@@ -533,12 +539,18 @@ private fun Marker(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier.fillMaxSize().border(3.dp, if (selected) MeBlue else Color.White, CircleShape),
                 ) {
-                    Text(stringResource(R.string.map_me).take(1).uppercase(), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = colors.onTertiary)
+                    // My chosen avatar (D-32), else "M" as before.
+                    if (myAvatar != null) {
+                        Text(myAvatar.glyph, fontSize = 24.sp)
+                    } else {
+                        Text(stringResource(R.string.map_me).take(1).uppercase(), fontSize = 20.sp, fontWeight = FontWeight.Bold, color = colors.onTertiary)
+                    }
                 }
             }
         } else {
             val name = pin.name.orEmpty()
-            val color = PersonColors[abs(name.hashCode()) % PersonColors.size]
+            val avatar = builtInAvatar(pin.avatar)
+            val color = avatar?.background ?: PersonColors[abs(name.hashCode()) % PersonColors.size]
             Surface(
                 onClick = onClick,
                 shape = CircleShape,
@@ -551,7 +563,12 @@ private fun Marker(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier.fillMaxSize().border(3.dp, if (selected) MeBlue else Color.White, CircleShape),
                 ) {
-                    Text(initials(name), fontSize = 19.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    // Their chosen avatar (D-32), else their initials.
+                    if (avatar != null) {
+                        Text(avatar.glyph, fontSize = 27.sp)
+                    } else {
+                        Text(initials(name), fontSize = 19.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
                 }
             }
         }

@@ -47,6 +47,9 @@ export interface OwnPoint {
 export interface ConnectionPoint {
   connectionId: string;
   username: string;
+  /** Their built-in avatar and the asking user's own name for them (D-32), shown on their marker. */
+  avatar: string | null;
+  nickname: string | null;
   lat: number;
   lng: number;
   accuracyM: number;
@@ -130,27 +133,44 @@ export class LocationService {
    * with, for those who agreed to the current consent (which says connected people see it). Only the latest
    * point, never the history. The asking user must be sharing too, so it is never one-sided.
    */
-  async connectionsMap(userId: string): Promise<{ me: OwnPoint | null; people: ConnectionPoint[] }> {
+  async connectionsMap(userId: string): Promise<{ me: (OwnPoint & { avatar: string | null }) | null; people: ConnectionPoint[] }> {
     const own = await this.prisma.locationShare.findUnique({ where: { userId } });
     if (!own?.enabled || own.consentVersion !== LOCATION_CONSENT_VERSION) throw appError(409, "SHARING_DISABLED");
     const me = own.latitude !== null && own.longitude !== null && own.capturedAt !== null
-      ? { lat: own.latitude, lng: own.longitude, accuracyM: own.accuracyM ?? 0, capturedAt: own.capturedAt.toISOString() }
+      ? {
+        lat: own.latitude,
+        lng: own.longitude,
+        accuracyM: own.accuracyM ?? 0,
+        capturedAt: own.capturedAt.toISOString(),
+        // The user's own avatar for their own marker (D-32, owner 2026-11-25).
+        avatar: (await this.prisma.user.findUnique({ where: { id: userId }, select: { avatar: true } }))?.avatar ?? null,
+      }
       : null;
     const connections = await this.prisma.connection.findMany({
       where: { OR: [{ userAId: userId }, { userBId: userId }] },
-      include: { userA: { select: { id: true, username: true } }, userB: { select: { id: true, username: true } } },
+      include: {
+        userA: { select: { id: true, username: true, avatar: true } },
+        userB: { select: { id: true, username: true, avatar: true } },
+        nicknames: { where: { userId }, select: { nickname: true } },
+      },
       orderBy: { createdAt: "asc" },
     });
-    const peers = connections.map((c) => ({ connectionId: c.id, peer: c.userAId === userId ? c.userB : c.userA }));
+    const peers = connections.map((c) => ({
+      connectionId: c.id,
+      peer: c.userAId === userId ? c.userB : c.userA,
+      nickname: c.nicknames[0]?.nickname ?? null,
+    }));
     const shares = await this.prisma.locationShare.findMany({ where: { userId: { in: peers.map((p) => p.peer.id) } } });
     const byUser = new Map(shares.map((s) => [s.userId, s]));
-    const people = peers.flatMap(({ connectionId, peer }) => {
+    const people = peers.flatMap(({ connectionId, peer, nickname }) => {
       const s = byUser.get(peer.id);
       if (!s?.enabled || s.consentVersion !== LOCATION_CONSENT_VERSION) return [];
       if (s.latitude === null || s.longitude === null || s.capturedAt === null) return [];
       return [{
         connectionId,
         username: peer.username,
+        avatar: peer.avatar,
+        nickname,
         lat: s.latitude,
         lng: s.longitude,
         accuracyM: s.accuracyM ?? 0,

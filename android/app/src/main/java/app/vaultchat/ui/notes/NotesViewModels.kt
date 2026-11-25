@@ -78,9 +78,13 @@ class NoteEditorViewModel(
     noteId: String?,
     /** Outlives this screen, so the last save still finishes after Back. */
     private val outlive: CoroutineScope,
+    /** A new note that starts as a checklist (owner 2026-11-25). */
+    checklist: Boolean = false,
 ) : ViewModel() {
     private var id: String? = noteId
-    private val _state = MutableStateFlow(EditorState(loading = noteId != null, exists = noteId != null))
+    private val _state = MutableStateFlow(
+        EditorState(loading = noteId != null, exists = noteId != null, body = if (noteId == null && checklist) Checklist.OPEN else ""),
+    )
     val state: StateFlow<EditorState> = _state.asStateFlow()
     private val saving = Mutex()
     private var pending: Job? = null
@@ -106,6 +110,15 @@ class NoteEditorViewModel(
 
     fun setBody(value: String) = edit { it.copy(body = value.take(NotesApi.BODY_MAX)) }
 
+    /** Saves the checklist's items (ticks and text) as the note's text. */
+    fun setItems(items: List<CheckItem>) = setBody(Checklist.format(items))
+
+    /** Switches the note between ordinary text and a checklist, keeping every line. */
+    fun toggleChecklist() {
+        val body = _state.value.body
+        setBody(if (Checklist.isChecklist(body)) Checklist.toText(Checklist.parse(body)) else Checklist.format(Checklist.fromText(body)))
+    }
+
     private fun edit(change: (EditorState) -> EditorState) {
         if (_state.value.loading || !_state.value.mine) return
         _state.update(change)
@@ -127,7 +140,8 @@ class NoteEditorViewModel(
         if (!dirty) return@withLock
         val s = _state.value
         val existing = id
-        if (existing == null && s.title.isBlank() && s.body.isBlank()) return@withLock
+        // A new note is created only once it has some text (an empty checklist counts as empty).
+        if (existing == null && s.title.isBlank() && (s.body.isBlank() || Checklist.isEmpty(s.body))) return@withLock
         _state.update { it.copy(save = SaveState.SAVING) }
         val result = if (existing == null) api.create(s.title, s.body) else api.update(existing, s.title, s.body)
         when (result) {

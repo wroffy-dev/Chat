@@ -21,10 +21,20 @@ data class ConsentDto(val id: String, val version: Int, val title: String, val p
 
 /** A point on the Map: the user's own (no name) or a connected person's latest. */
 @Serializable
-data class MapPointDto(val lat: Double, val lng: Double, val accuracyM: Double, val capturedAt: String)
+data class MapPointDto(val lat: Double, val lng: Double, val accuracyM: Double, val capturedAt: String, val avatar: String? = null)
 
 @Serializable
-data class MapPersonDto(val connectionId: String, val username: String, val lat: Double, val lng: Double, val accuracyM: Double, val capturedAt: String)
+data class MapPersonDto(
+    val connectionId: String,
+    val username: String,
+    val lat: Double,
+    val lng: Double,
+    val accuracyM: Double,
+    val capturedAt: String,
+    /** Their built-in avatar and the user's own nickname for them (D-32); absent from older servers. */
+    val avatar: String? = null,
+    val nickname: String? = null,
+)
 
 /** GET /location-sharing/connections: connected people's latest points (D-06 as widened 2026-11-19). */
 @Serializable
