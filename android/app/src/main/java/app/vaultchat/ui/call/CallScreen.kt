@@ -113,6 +113,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.vaultchat.R
+import androidx.compose.material3.AlertDialog
+import app.vaultchat.platform.call.AudioOutputs
+import app.vaultchat.platform.call.AudioOutput
 import app.vaultchat.domain.connection.ConnResult
 import app.vaultchat.VaultChatApplication
 import app.vaultchat.domain.call.StatsSample
@@ -187,6 +190,36 @@ fun CallScreen(
 
     val mic = rememberPermissionRequest(AppPermission.MICROPHONE, permissionPreferences)
     val camera = rememberPermissionRequest(AppPermission.CAMERA, permissionPreferences)
+    // Bluetooth earbuds (owner 2026-11-26): Android 12+ shows them to the call only with this permission. Asked
+    // once, after the microphone, so the two dialogs do not collide.
+    val bluetooth = rememberPermissionRequest(AppPermission.BLUETOOTH_CONNECT, permissionPreferences) { status ->
+        if (status == PermissionStatus.Granted) viewModel.media.bluetoothPermissionGranted()
+    }
+    LaunchedEffect(mic.status) {
+        if (mic.status == PermissionStatus.Granted && bluetooth.status != PermissionStatus.Granted &&
+            !permissionPreferences.wasRequested(AppPermission.BLUETOOTH_CONNECT)
+        ) {
+            bluetooth.request()
+        }
+    }
+    val outputs by viewModel.media.audioOutputs.collectAsStateWithLifecycle()
+    var pickingOutput by remember { mutableStateOf(false) }
+    // With earbuds or a headset connected the speaker button chooses where the call is heard; else it toggles the
+    // loudspeaker as before.
+    val routes = outputs.available.any { it == AudioOutput.BLUETOOTH || it == AudioOutput.WIRED }
+    val outputButton = if (routes) outputButtonFor(outputs) else null
+    val onSpeakerTap: () -> Unit = { if (routes) pickingOutput = true else viewModel.controller.toggleSpeaker() }
+    if (pickingOutput && routes) {
+        AudioOutputDialog(
+            outputs = outputs,
+            onPick = { output ->
+                pickingOutput = false
+                if ((output == AudioOutput.SPEAKER) != state.speakerOn) viewModel.controller.toggleSpeaker()
+                viewModel.media.selectAudioOutput(output)
+            },
+            onDismiss = { pickingOutput = false },
+        )
+    }
     val needsCamera = kind == CallKind.VIDEO
     val permissionsReady = mic.status == PermissionStatus.Granted && (!needsCamera || camera.status == PermissionStatus.Granted)
 
@@ -541,7 +574,8 @@ fun CallScreen(
                                 speakerOn = state.speakerOn,
                                 onMic = viewModel.controller::toggleMicrophone,
                                 onCamera = viewModel.controller::toggleCamera,
-                                onSpeaker = viewModel.controller::toggleSpeaker,
+                                onSpeaker = onSpeakerTap,
+                                output = outputButton,
                                 light = light,
                                 onLight = { light = !light },
                                 night = nightVideo,
@@ -687,7 +721,8 @@ fun CallScreen(
                             onMic = viewModel.controller::toggleMicrophone,
                             onCamera = viewModel.controller::toggleCamera,
                             onSwitch = viewModel.controller::switchCamera,
-                            onSpeaker = viewModel.controller::toggleSpeaker,
+                            onSpeaker = onSpeakerTap,
+                                output = outputButton,
                             noiseFilter = if (viewModel.controller.noiseReductionAvailable) state.noiseReduction else null,
                             onNoiseFilter = viewModel.controller::toggleNoiseReduction,
                             endLabel = stringResource(
@@ -865,6 +900,8 @@ private fun RefControls(
     micOn: Boolean,
     cameraOn: Boolean,
     speakerOn: Boolean,
+    /** When earbuds or a headset are connected: where the call is heard, shown on the speaker button. */
+    output: OutputButton? = null,
     onMic: () -> Unit,
     onCamera: () -> Unit,
     onSpeaker: () -> Unit,
@@ -931,11 +968,11 @@ private fun RefControls(
                 }
             }
             RefRound(
-                icon = AppIcons.VolumeUp,
-                label = stringResource(R.string.call_speaker),
-                highlighted = !speakerOn,
+                icon = output?.icon ?: AppIcons.VolumeUp,
+                label = output?.label ?: stringResource(R.string.call_speaker),
+                highlighted = if (output != null) false else !speakerOn,
                 onClick = onSpeaker,
-                state = stringResource(if (speakerOn) R.string.state_on else R.string.state_off),
+                state = output?.label ?: stringResource(if (speakerOn) R.string.state_on else R.string.state_off),
             )
             val endPress = remember { MutableInteractionSource() }
             Box(
@@ -1236,6 +1273,8 @@ private fun Controls(
     micOn: Boolean,
     cameraOn: Boolean,
     speakerOn: Boolean,
+    /** When earbuds or a headset are connected: where the call is heard, shown on the speaker button. */
+    output: OutputButton? = null,
     onMic: () -> Unit,
     onCamera: () -> Unit,
     onSwitch: () -> Unit,
@@ -1290,11 +1329,11 @@ private fun Controls(
                 )
             }
             RoundToggle(
-                label = stringResource(R.string.call_speaker),
-                icon = AppIcons.VolumeUp,
-                on = speakerOn,
+                label = output?.label ?: stringResource(R.string.call_speaker),
+                icon = output?.icon ?: AppIcons.VolumeUp,
+                on = if (output != null) true else speakerOn,
                 onClick = onSpeaker,
-                state = stringResource(if (speakerOn) R.string.state_on else R.string.state_off),
+                state = output?.label ?: stringResource(if (speakerOn) R.string.state_on else R.string.state_off),
             )
         }
         if (noiseFilter != null) {
@@ -1372,3 +1411,47 @@ private fun statsOverlayText(s: StatsSample): String = buildString {
     appendLine("recv ${s.recvWidth ?: "–"}x${s.recvHeight ?: "–"} @${n(s.recvFps)} · freezes ${s.freezeCount}")
     append("path ${s.candidateType ?: "–"}/${s.protocol ?: "–"}")
 }
+
+/** What the speaker button shows while earbuds or a headset are connected. */
+data class OutputButton(val label: String, val icon: ImageVector)
+
+@Composable
+private fun outputButtonFor(outputs: AudioOutputs): OutputButton = when (outputs.selected) {
+    AudioOutput.BLUETOOTH -> OutputButton(outputs.bluetoothName ?: stringResource(R.string.call_output_bluetooth), AppIcons.Bluetooth)
+    AudioOutput.WIRED -> OutputButton(stringResource(R.string.call_output_wired), AppIcons.Headset)
+    AudioOutput.SPEAKER -> OutputButton(stringResource(R.string.call_output_speaker), AppIcons.VolumeUp)
+    AudioOutput.EARPIECE, null -> OutputButton(stringResource(R.string.call_output_phone), AppIcons.PhoneInHand)
+}
+
+/** Choose where the call is heard: the Bluetooth earbuds, a wired headset, the phone's earpiece or the loudspeaker. */
+@Composable
+private fun AudioOutputDialog(outputs: AudioOutputs, onPick: (AudioOutput) -> Unit, onDismiss: () -> Unit) {
+    val order = listOf(AudioOutput.BLUETOOTH, AudioOutput.WIRED, AudioOutput.EARPIECE, AudioOutput.SPEAKER)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.call_output_title)) },
+        text = {
+            Column {
+                for (output in order.filter { it in outputs.available }) {
+                    val choice = outputButtonFor(outputs.copy(selected = output))
+                    val selected = outputs.selected == output
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { onPick(output) }
+                            .padding(horizontal = 8.dp, vertical = 12.dp),
+                    ) {
+                        Icon(choice.icon, contentDescription = null, tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.width(16.dp))
+                        Text(choice.label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                        if (selected) Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.state_on), tint = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
+    )
+}
+

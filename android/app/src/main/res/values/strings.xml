@@ -414,4 +414,9 @@
     <string name="checklist_add">Add item</string>
     <string name="checklist_remove">Remove item</string>
     <string name="checklist_more">+%1$d more</string>
+    <string name="call_output_title">Hear the call on</string>
+    <string name="call_output_bluetooth">Bluetooth earbuds</string>
+    <string name="call_output_wired">Wired headset</string>
+    <string name="call_output_phone">Phone</string>
+    <string name="call_output_speaker">Speaker</string>
 </resources>

@@ -15,6 +15,10 @@
     <!-- Calls: microphone (all calls) and camera (video calls). Requested at the moment of use. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- Bluetooth earbuds and headsets in calls (owner 2026-11-26): Android 12+ needs BLUETOOTH_CONNECT to see and
+         route to them; older versions the install-time BLUETOOTH permission. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-feature android:name="android.hardware.microphone" android:required="true" />
     <!-- Incoming-call notifications (FCM wake-up) and keeping calls alive in the background. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />

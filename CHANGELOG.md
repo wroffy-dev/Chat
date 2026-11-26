@@ -6,6 +6,8 @@ Versions of the Android app (`versionName`) and the backend (`package.json`). Th
 ## Unreleased
 
 ### Calls
+- **Bluetooth earbuds:** voice and video calls play through connected earbuds; the speaker button lets you choose
+  earbuds, phone or speaker.
 - **Smoother video:** up to 60 fps where the phone's camera supports it; on a slow network the video drops to
   360p at 30 fps and comes back up when the network is good again.
 
