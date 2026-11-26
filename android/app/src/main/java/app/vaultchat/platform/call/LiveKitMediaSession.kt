@@ -96,6 +96,31 @@ class LiveKitMediaSession(appContext: Context) : MediaSession {
         private set
 
     private val audio = HandoverAudioHandler(AudioSwitchHandler(appContext))
+
+    private val _audioOutputs = MutableStateFlow(AudioOutputs())
+    /** Where the call is heard (Bluetooth earbuds, wired headset, earpiece, loudspeaker) and which is in use. */
+    val audioOutputs: StateFlow<AudioOutputs> = _audioOutputs.asStateFlow()
+
+    init {
+        // Earbuds that connect or go away mid-call show up here; Android's audio switch moves the call to them on its
+        // own (Bluetooth first, then a wired headset, then the earpiece), unless the person picked another output.
+        audio.own.audioDeviceChangeListener = { devices, selected ->
+            _audioOutputs.value = AudioOutputs(
+                available = devices.mapNotNull(::outputOf).distinct(),
+                selected = selected?.let(::outputOf),
+                bluetoothName = devices.firstOrNull { it is AudioDevice.BluetoothHeadset }?.name,
+            )
+        }
+    }
+
+    /** Sends the call's sound to [output] (owner 2026-11-26: Bluetooth earbuds in calls). */
+    fun selectAudioOutput(output: AudioOutput) {
+        if (audio.handedOver) return
+        audio.own.selectDevice(audio.own.availableAudioDevices.firstOrNull { outputOf(it) == output })
+    }
+
+    /** After the Bluetooth permission was granted mid-call, looks for earbuds again. */
+    fun bluetoothPermissionGranted() = audio.restart()
     private val denoiser = RnNoiseProcessor()
 
     val room: Room = LiveKit.create(
@@ -723,6 +748,15 @@ private class HandoverAudioHandler(val own: AudioSwitchHandler) : AudioHandler {
         started = false
     }
 
+    /** Starts the audio switch again (it only sees Bluetooth devices allowed when it started). */
+    @Synchronized
+    fun restart() {
+        if (started && !handedOver) {
+            own.stop()
+            own.start()
+        }
+    }
+
     @Synchronized
     fun handOver() {
         if (handedOver) return
@@ -745,4 +779,22 @@ private class CallLifecycle : LifecycleOwner {
         // A lifecycle that never started cannot be destroyed (LifecycleRegistry refuses INITIALIZED → DESTROYED).
         if (registry.currentState != Lifecycle.State.INITIALIZED) registry.currentState = Lifecycle.State.DESTROYED
     }
+}
+
+/** A place the call can be heard (owner 2026-11-26). */
+enum class AudioOutput { BLUETOOTH, WIRED, EARPIECE, SPEAKER }
+
+data class AudioOutputs(
+    val available: List<AudioOutput> = emptyList(),
+    val selected: AudioOutput? = null,
+    /** The connected earbuds' or headset's own name, e.g. "Galaxy Buds2". */
+    val bluetoothName: String? = null,
+)
+
+private fun outputOf(device: AudioDevice): AudioOutput? = when (device) {
+    is AudioDevice.BluetoothHeadset -> AudioOutput.BLUETOOTH
+    is AudioDevice.WiredHeadset -> AudioOutput.WIRED
+    is AudioDevice.Earpiece -> AudioOutput.EARPIECE
+    is AudioDevice.Speakerphone -> AudioOutput.SPEAKER
+    else -> null
 }

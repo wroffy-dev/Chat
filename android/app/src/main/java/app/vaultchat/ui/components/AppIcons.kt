@@ -147,6 +147,27 @@ object AppIcons {
         )
     }
 
+    val Bluetooth: ImageVector by lazy {
+        icon(
+            "Bluetooth",
+            "M17.71,7.71L12,2h-1v7.59L6.41,5 5,6.41 10.59,12 5,17.59 6.41,19 11,14.41V22h1l5.71,-5.71 -4.3,-4.29 4.3,-4.29zM13,5.83l1.88,1.88L13,9.59V5.83zM14.88,16.29L13,18.17v-3.76l1.88,1.88z",
+        )
+    }
+
+    val Headset: ImageVector by lazy {
+        icon(
+            "Headset",
+            "M12,1c-4.97,0 -9,4.03 -9,9v7c0,1.66 1.34,3 3,3h3v-8H5v-2c0,-3.87 3.13,-7 7,-7s7,3.13 7,7v2h-4v8h3c1.66,0 3,-1.34 3,-3v-7c0,-4.97 -4.03,-9 -9,-9z",
+        )
+    }
+
+    val PhoneInHand: ImageVector by lazy {
+        icon(
+            "PhoneInHand",
+            "M17,1.01L7,1c-1.1,0 -2,0.9 -2,2v18c0,1.1 0.9,2 2,2h10c1.1,0 2,-0.9 2,-2V3c0,-1.1 -0.9,-1.99 -2,-1.99zM17,19H7V5h10v14z",
+        )
+    }
+
     val CallEnd: ImageVector by lazy {
         icon(
             "CallEnd",

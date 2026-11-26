@@ -276,7 +276,7 @@ saver mode. The result is cached per app version and re-evaluated when thermal s
 | `RECORD_AUDIO` (runtime) | First call | Calls cannot start; explain why; link to app settings if permanently denied |
 | `CAMERA` (runtime) | First video call | Offer voice call instead; camera button disabled with explanation |
 | `POST_NOTIFICATIONS` (runtime, Android 13+) | After login | Incoming calls will not ring when app is closed; persistent warning in Settings |
-| `BLUETOOTH_CONNECT` (runtime, Android 12+) | When a Bluetooth headset is present | Bluetooth audio routing unavailable |
+| `BLUETOOTH_CONNECT` (runtime, Android 12+) | Once, on the call screen after the microphone (**Implemented 2026-11-26**; was missing from the manifest until then, so earbuds were not used) | Bluetooth audio routing unavailable |
 | `MANAGE_OWN_CALLS`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_PHONE_CALL`, `FOREGROUND_SERVICE_CAMERA`, `FOREGROUND_SERVICE_MICROPHONE` | Manifest only | — |
 | `USE_FULL_SCREEN_INTENT` | Manifest; on Android 14+ check `NotificationManager.canUseFullScreenIntent()` | Ask the user to enable it via `ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT`; otherwise incoming calls show as a heads-up notification only |
 | `WAKE_LOCK` | Manifest | Proximity screen-off in voice calls |
@@ -329,7 +329,11 @@ Permissions are requested at the moment they are needed, with a one-line explana
 
 ### 10.4 Camera switching and controls
 
-Controls: mute/unmute mic, camera on/off, switch front/back, speaker/earpiece/Bluetooth picker, end call.
+Controls: mute/unmute mic, camera on/off, switch front/back, speaker/earpiece/Bluetooth picker, end call. **Implemented
+2026-11-26 (owner: "bluetooth earbud on phone call and video call"):** with earbuds or a wired headset connected the
+speaker button shows where the call is heard (the earbuds' name, "Phone" or "Speaker") and opens a picker; the call
+moves to earbuds on its own when they connect (LiveKit's audio switch prefers Bluetooth, then wired, then earpiece).
+Without them it toggles the loudspeaker as before.
 Camera switch flips front ↔ back by publishing a fresh camera track facing the other way and unpublishing the old one (`republishCamera`, the same path the quality change used), since 2026-10-30. Two earlier ways failed on the owner's phones: the SDK's `switchCamera()` handed the switch to the Camera2 capturer, which failed silently (it only logs "switching camera failed"; v120-v122), and `LocalVideoTrack.restartTrack` closed the app (v123). A turned-off camera is never flipped, because a new track would switch it on. One flip at a time. The self-view is mirrored only for the front camera.
 
 The **Switch** button opens a menu with two choices: switch this phone's own camera, or flip **the other** person's camera during a video call ("Switch their camera";
