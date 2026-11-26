@@ -374,6 +374,10 @@ is `{ id, body, authorUsername, mine, createdAt }`, oldest first.
 
 Unknown fields, longer text or a non-uuid id → `400 VALIDATION_FAILED`.
 
+Live notes (2026-11-26): every create, edit, delete and added or removed line sends the WebSocket signal
+`{ "type": "notes.changed", "data": { "noteId" } }` to the writer and the people they are connected with; the app
+reads `GET /notes` again.
+
 ## Profile: avatars and nicknames (D-32, 2026-11-23)
 
 - `GET /me` also returns `avatar` (string or null).

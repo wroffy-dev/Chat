@@ -112,6 +112,7 @@ class RealtimeClient(
             "call.changed" -> field("callId")?.let { RealtimeSignal.CallChanged(it) }
             "snap.changed" -> field("connectionId")?.let { RealtimeSignal.SnapChanged(it) }
             "connection.changed" -> field("requestId")?.let { RealtimeSignal.ConnectionChanged(it) }
+            "notes.changed" -> field("noteId")?.let { RealtimeSignal.NotesChanged(it) }
             else -> null
         }
     } catch (_: Exception) {

@@ -13,6 +13,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.filterIsInstance
+import app.vaultchat.domain.realtime.RealtimeSignals
+import app.vaultchat.domain.realtime.RealtimeSignal
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -28,9 +31,16 @@ data class NotesState(
 )
 
 /** The list of the user's own notes, the screen the app opens on (D-31, owner 2026-11-23). */
-class NotesViewModel(private val api: NotesApi) : ViewModel() {
+class NotesViewModel(private val api: NotesApi, signals: RealtimeSignals? = null) : ViewModel() {
     private val _state = MutableStateFlow(NotesState())
     val state: StateFlow<NotesState> = _state.asStateFlow()
+
+    init {
+        // Live notes (owner 2026-11-26): a note or a line added by anyone shows at once, without pulling to refresh.
+        signals?.let { live ->
+            viewModelScope.launch { live.signals.filterIsInstance<RealtimeSignal.NotesChanged>().collect { refresh() } }
+        }
+    }
 
     /** Reads the notes again; [pulled] shows the pull-to-refresh spinner meanwhile. */
     fun refresh(pulled: Boolean = false) {
@@ -80,6 +90,7 @@ class NoteEditorViewModel(
     private val outlive: CoroutineScope,
     /** A new note that starts as a checklist (owner 2026-11-25). */
     checklist: Boolean = false,
+    signals: RealtimeSignals? = null,
 ) : ViewModel() {
     private var id: String? = noteId
     private val _state = MutableStateFlow(
@@ -89,6 +100,36 @@ class NoteEditorViewModel(
     private val saving = Mutex()
     private var pending: Job? = null
     private var dirty = false
+
+    init {
+        // Live notes: lines added by others (and, on someone else's note, their edits) show while it is open.
+        signals?.let { live ->
+            viewModelScope.launch {
+                live.signals.filterIsInstance<RealtimeSignal.NotesChanged>().collect { signal -> if (signal.noteId == id) reloadFromServer() }
+            }
+        }
+    }
+
+    /** Reads this note again; the user's own unsaved typing is never replaced. */
+    private suspend fun reloadFromServer() {
+        val current = id ?: return
+        val r = api.list()
+        if (r !is ApiResult.Ok) return
+        val note = r.value.items.firstOrNull { it.id == current }
+        if (note == null) {
+            if (!_state.value.mine) _state.update { it.copy(deleted = true) }
+            return
+        }
+        _state.update {
+            val replaceText = !note.mine || !dirty
+            it.copy(
+                lines = note.lines,
+                updatedAt = note.updatedAt,
+                title = if (replaceText) note.title else it.title,
+                body = if (replaceText) note.body else it.body,
+            )
+        }
+    }
 
     init {
         if (noteId != null) {

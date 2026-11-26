@@ -419,4 +419,5 @@
     <string name="call_output_wired">Wired headset</string>
     <string name="call_output_phone">Phone</string>
     <string name="call_output_speaker">Speaker</string>
+    <string name="call_open_chat">Chat</string>
 </resources>

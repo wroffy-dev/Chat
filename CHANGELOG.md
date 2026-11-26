@@ -6,6 +6,7 @@ Versions of the Android app (`versionName`) and the backend (`package.json`). Th
 ## Unreleased
 
 ### Calls
+- **Chat during a call:** a Chat button opens the chat while the call continues in the small picture.
 - **Bluetooth earbuds:** voice and video calls play through connected earbuds; the speaker button lets you choose
   earbuds, phone or speaker.
 - **Smoother video:** up to 60 fps where the phone's camera supports it; on a slow network the video drops to
@@ -16,6 +17,8 @@ Versions of the Android app (`versionName`) and the backend (`package.json`). Th
   Retry always fetches the latest build.
 
 ### Just Notes
+- **Live notes:** new notes and lines from others appear at once.
+- **Quick hide:** put the phone screen-down on the chats and the app goes back to the notes.
 - **Checklists:** a new "New checklist" button and a checklist switch in a note, with tick boxes, like a shopping list.
 - **Avatars on the Map and in calls.**
 - **After a password reset:** the app no longer asks for the temporary password a second time; only the new one.

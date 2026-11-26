@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { PasswordHasher } from "../src/auth/passwords.js";
@@ -13,6 +13,8 @@ describe.skipIf(!TEST_DB_URL)("notes (PostgreSQL)", () => {
   let auth: AuthService;
   let app: FastifyInstance;
   let ip = 0;
+  /** Live "notes changed" signals the service sent, as [user ids, note id]. */
+  let signals: [string[], string][] = [];
 
   beforeAll(() => {
     database = new PrismaDatabase(config, "prisma/migrations");
@@ -23,11 +25,13 @@ describe.skipIf(!TEST_DB_URL)("notes (PostgreSQL)", () => {
   });
   beforeEach(async () => {
     await resetDatabase(database.prisma);
+    signals = [];
+    const events = { publish: (ids: readonly string[], e: { type: string; noteId?: string }) => void signals.push([[...ids].sort(), e.noteId ?? ""]) };
     app = buildApp({
       config,
       database: { checkReadiness: database.checkReadiness.bind(database), close: async () => {} },
       auth,
-      notes: new NoteService(database.prisma),
+      notes: new NoteService(database.prisma, events),
       logger: false,
     });
     await app.ready();
@@ -113,9 +117,12 @@ describe.skipIf(!TEST_DB_URL)("notes (PostgreSQL)", () => {
     expect((await req(bob, "PATCH", `/notes/${note.id}`, { body: "changed" })).statusCode).toBe(404);
     expect((await req(bob, "DELETE", `/notes/${note.id}`)).statusCode).toBe(404);
 
-    // Bob adds a line; the note moves to the top for both.
+    // Bob adds a line; the note moves to the top for both, and both open apps are told at once (live notes).
+    signals = [];
     const added = await req(bob, "POST", `/notes/${note.id}/lines`, { body: "hotel booked" });
     expect(added.statusCode).toBe(201);
+    const ids = [(await database.prisma.user.findUnique({ where: { username: "alice" } }))!.id, (await database.prisma.user.findUnique({ where: { username: "bob" } }))!.id].sort();
+    await vi.waitFor(() => expect(signals).toContainEqual([ids, note.id]));
     expect(added.json().lines).toMatchObject([{ body: "hotel booked", authorUsername: "bob", mine: true }]);
     const forAlice = (await req(alice, "GET", "/notes")).json().items;
     expect(forAlice.map((n: { id: string }) => n.id)).toEqual([note.id, other.id]);

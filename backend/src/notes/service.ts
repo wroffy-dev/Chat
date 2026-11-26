@@ -1,5 +1,6 @@
 import type { PrismaClient } from "../generated/prisma/client.js";
 import { appError } from "../errors.js";
+import type { EventPublisher } from "../realtime/events.js";
 
 /** Longest note title and body, in characters (also enforced by CHECK constraints in SQL). */
 export const NOTE_TITLE_MAX = 200;
@@ -85,7 +86,19 @@ const view = (me: string, n: NoteRow, nicknames: Map<string, string> = new Map()
  * may see is reported as not found, never as forbidden, so ids reveal nothing.
  */
 export class NoteService {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly events: EventPublisher | null = null,
+  ) {}
+
+  /** Tells the open apps of everyone who can see [writerId]'s notes to read them again (live notes). */
+  private changed(writerId: string, noteId: string) {
+    if (!this.events) return;
+    const events = this.events;
+    void this.people(writerId)
+      .then((p) => events.publish(p.writers, { type: "notes.changed", noteId }))
+      .catch(() => undefined);
+  }
 
   /** The user and everyone they are connected with (whose notes they can see), with the user's nicknames for them. */
   private async people(userId: string): Promise<People> {
@@ -130,18 +143,22 @@ export class NoteService {
   async create(userId: string, input: { title: string; body: string }): Promise<NoteView> {
     const count = await this.prisma.note.count({ where: { userId } });
     if (count >= NOTES_PER_USER_MAX) throw appError(409, "CONFLICT");
-    return view(userId, await this.prisma.note.create({ data: { userId, title: input.title, body: input.body }, include }));
+    const created = await this.prisma.note.create({ data: { userId, title: input.title, body: input.body }, include });
+    this.changed(userId, created.id);
+    return view(userId, created);
   }
 
   async update(userId: string, id: string, patch: { title?: string; body?: string }): Promise<NoteView> {
     const changed = await this.prisma.note.updateMany({ where: { id, userId }, data: patch });
     if (changed.count === 0) throw appError(404, "NOT_FOUND");
+    this.changed(userId, id);
     return this.noteView(userId, id);
   }
 
   async remove(userId: string, id: string): Promise<void> {
     const deleted = await this.prisma.note.deleteMany({ where: { id, userId } });
     if (deleted.count === 0) throw appError(404, "NOT_FOUND");
+    this.changed(userId, id);
   }
 
   /** Adds a line under a note the user can see (their own or a connected person's); the note moves to the top. */
@@ -153,6 +170,7 @@ export class NoteService {
       this.prisma.noteLine.create({ data: { noteId, userId, body } }),
       this.prisma.note.update({ where: { id: note.id }, data: { updatedAt: new Date() } }),
     ]);
+    this.changed(note.userId, noteId);
     return this.noteView(userId, noteId);
   }
 
@@ -163,5 +181,6 @@ export class NoteService {
       where: { id: lineId, noteId, ...(note.userId === userId ? {} : { userId }) },
     });
     if (deleted.count === 0) throw appError(404, "NOT_FOUND");
+    this.changed(note.userId, noteId);
   }
 }
