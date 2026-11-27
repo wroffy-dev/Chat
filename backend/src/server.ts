@@ -68,7 +68,7 @@ async function main() {
   const location = new LocationService(database.prisma);
   const snaps = new SnapService(database.prisma, config.SNAPS_DIR ?? null, undefined, push, hub);
   connections.snaps = snaps;
-  const app = buildApp({ config, database, auth, connections, calls, chat, media, push, realtime: { hub }, settings, location, snaps, notes: new NoteService(database.prisma), profile: new ProfileService(database.prisma, chat), ...(updates ? { updates } : {}) });
+  const app = buildApp({ config, database, auth, connections, calls, chat, media, push, realtime: { hub }, settings, location, snaps, notes: new NoteService(database.prisma, hub), profile: new ProfileService(database.prisma, chat), ...(updates ? { updates } : {}) });
   logPush = (msg, extra) => app.log.warn(extra ?? {}, msg);
   // The database is owned (and closed) by the public app; the admin app shares it.
   const adminApp = buildAdminApp({ config, prisma: database.prisma, database, auth, admin, media, pushEnabled: push.enabled, realtime: hub, settings, location });

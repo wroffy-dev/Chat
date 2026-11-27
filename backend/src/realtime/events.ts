@@ -10,7 +10,9 @@ export type RealtimeEvent =
   | { type: "call.changed"; callId: string }
   /** A snap was sent to or opened by this user in this connection (D-27). */
   | { type: "snap.changed"; connectionId: string }
-  | { type: "connection.changed"; requestId: string };
+  | { type: "connection.changed"; requestId: string }
+  /** A note was written, changed, deleted or got a line (owner 2026-11-26: live notes). To its writer and their connections. */
+  | { type: "notes.changed"; noteId: string };
 
 export interface EventPublisher {
   /** Best effort and immediate: users without an open socket simply miss it (they poll or get a push). */

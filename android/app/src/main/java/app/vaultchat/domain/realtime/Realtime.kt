@@ -17,6 +17,8 @@ sealed interface RealtimeSignal {
     data class SnapChanged(val connectionId: String) : RealtimeSignal
     /** A pairing request was made, answered, withdrawn or superseded. */
     data class ConnectionChanged(val requestId: String) : RealtimeSignal
+    /** A note this user can see was written, changed, deleted or got a line (live notes, owner 2026-11-26). */
+    data class NotesChanged(val noteId: String) : RealtimeSignal
 }
 
 interface RealtimeSignals {

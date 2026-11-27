@@ -205,6 +205,14 @@ fun VaultChatNavHost(container: AppContainer) {
     // On the notes screens a new message is still announced as "New notes added" (Push.showNewMessage).
     val onNotes = backStack?.destination?.route?.let { it.contains("NotesRoute") || it.contains("NoteEditorRoute") } == true
     LaunchedEffect(onNotes) { Push.onNotesScreen = onNotes }
+    // Quick hide (owner 2026-11-26): on the chat screens, laying the phone screen-down goes straight back to the notes.
+    // Never during a call, and not on the camera, which may well point down.
+    val inChats = backStack?.destination?.route?.let { r ->
+        listOf("HomeRoute", "ChatRoute", "MapRoute", "InboxRoute", "ShowQrRoute", "ScanQrRoute", "SnapViewerRoute").any { r.contains(it) }
+    } == true
+    FaceDownWatcher(enabled = inChats) {
+        if (!navController.popBackStack<NotesRoute>(inclusive = false)) navController.replaceAll(NotesRoute)
+    }
     // Screens of a signed-in user: calls ring and live updates run on all of them (the Map too).
     val signedIn = backStack?.destination?.route?.let { r -> listOf("NotesRoute", "NoteEditorRoute", "HomeRoute", "InboxRoute", "ShowQrRoute", "ScanQrRoute", "ChatRoute", "MapRoute").any { r.contains(it) } } == true
     // Live change signals while signed in. Not tied to the screen's lifecycle, so an incoming call is
@@ -327,7 +335,7 @@ fun VaultChatNavHost(container: AppContainer) {
         }
         composable<NotesRoute> {
             val viewModel: NotesViewModel = viewModel(
-                factory = viewModelFactory { initializer { NotesViewModel(container.notesApi) } },
+                factory = viewModelFactory { initializer { NotesViewModel(container.notesApi, container.realtime) } },
             )
             NotesScreen(
                 viewModel = viewModel,
@@ -341,7 +349,7 @@ fun VaultChatNavHost(container: AppContainer) {
             val route = entry.toRoute<NoteEditorRoute>()
             val viewModel: NoteEditorViewModel = viewModel(
                 factory = viewModelFactory {
-                    initializer { NoteEditorViewModel(container.notesApi, route.id, container.applicationScope, route.checklist) }
+                    initializer { NoteEditorViewModel(container.notesApi, route.id, container.applicationScope, route.checklist, container.realtime) }
                 },
             )
             NoteEditorScreen(
@@ -442,6 +450,18 @@ fun VaultChatNavHost(container: AppContainer) {
                     guard.keepCall = true
                     callSession.minimized = true
                     navController.popBackStack()
+                },
+                // Chat during the call (owner 2026-11-26): minimise, then open this person's chat.
+                onOpenChat = {
+                    guard.keepCall = true
+                    callSession.minimized = true
+                    navController.popBackStack()
+                    scope.launch {
+                        val people = (container.connectionRepository.connections() as? ConnResult.Ok)?.value.orEmpty()
+                        val person = people.firstOrNull { it.id == route.connectionId }
+                            ?: people.firstOrNull { it.peerUsername == route.peerUsername || it.username == route.peerUsername }
+                        if (person != null) navController.navigate(person.chatRoute()) { launchSingleTop = true }
+                    }
                 },
                 viewModel = callSession,
                 permissionPreferences = container.permissionPreferences,

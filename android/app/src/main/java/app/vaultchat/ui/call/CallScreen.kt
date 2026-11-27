@@ -151,6 +151,8 @@ fun CallScreen(
     onCallAgain: (() -> Unit)? = null,
     /** Leaves the call screen while the call goes on in a small floating picture; null hides the button. */
     onMinimize: (() -> Unit)? = null,
+    /** Opens the chat with this person while the call goes on in the small picture (owner 2026-11-26); null hides it. */
+    onOpenChat: (() -> Unit)? = null,
 ) {
     val state by viewModel.controller.state.collectAsStateWithLifecycle()
     val peerMuted = state.remotePresent && !state.remoteMicOn && state.phase != CallPhase.ENDED
@@ -546,6 +548,17 @@ fun CallScreen(
                         modifier = Modifier.align(Alignment.TopStart).safeDrawingPadding().padding(12.dp),
                     ) { Text(stringResource(R.string.call_minimize)) }
                 }
+                // Chat during the call (owner 2026-11-26): the chat opens, the call goes on in the small picture.
+                if (!videoLayout && onOpenChat != null && controlsVisible && state.phase in setOf(CallPhase.ACTIVE, CallPhase.RECONNECTING, CallPhase.CONNECTING)) {
+                    FilledTonalButton(
+                        onClick = onOpenChat,
+                        modifier = Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(12.dp),
+                    ) {
+                        Icon(AppIcons.Chat, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.call_open_chat))
+                    }
+                }
                 if (videoLayout) {
                     AnimatedVisibility(visible = controlsVisible, enter = fadeIn(), exit = fadeOut()) {
                         Column(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
@@ -561,6 +574,7 @@ fun CallScreen(
                                 },
                                 phase = phase,
                                 onMinimize = onMinimize,
+                                onChat = onOpenChat?.takeIf { state.phase in setOf(CallPhase.ACTIVE, CallPhase.RECONNECTING, CallPhase.CONNECTING) },
                                 resolution = resolutionText(liveStats),
                                 quality = quality,
                             )
@@ -780,6 +794,7 @@ private fun RefHeader(
     onMinimize: (() -> Unit)?,
     resolution: String?,
     quality: Int?,
+    onChat: (() -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 12.dp),
@@ -797,6 +812,18 @@ private fun RefHeader(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(Icons.Filled.KeyboardArrowDown, contentDescription = stringResource(R.string.call_minimize), tint = RefOnSurface, modifier = Modifier.size(24.dp))
+                }
+            }
+            if (onChat != null) {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(RefContainer.copy(alpha = 0.9f))
+                        .clickable(role = Role.Button, onClickLabel = stringResource(R.string.call_open_chat), onClick = onChat),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(AppIcons.Chat, contentDescription = stringResource(R.string.call_open_chat), tint = RefOnSurface, modifier = Modifier.size(22.dp))
                 }
             }
             Column {
